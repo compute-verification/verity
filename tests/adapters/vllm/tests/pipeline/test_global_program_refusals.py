@@ -192,7 +192,7 @@ def test_a_configuration_that_states_no_stop_token_is_passed_over_and_the_rule_c
 GEOMETRY = {"schema": "verity/workload-program/v1/sampler-geometry", "relation": "registered"}
 NO_SMS = ("stochastic sampler but the components declare no num_SMs (applicability.num_sms): the registered split count cannot be evaluated "
           "-- the Program does not model this row's sampler geometry")
-OTHER_SPLITS = f"the components declare splits 3, not the registered split count {registered_splits(SMS)} of num_SMs={SMS}: rebuild them (`pipeline.build.sampler_geometry`)"
+OTHER_SPLITS = f"the components declare splits 3, not the registered split count {registered_splits(SMS)} of num_SMs={SMS}: rebuild them (`pipeline.build_sampling.sampler_geometry`)"
 
 
 @pytest.mark.parametrize("declared, message, stated", [

@@ -30,7 +30,6 @@ untraced = [
     "test_a5_tp_store.py",
     "test_a5_network_attester.py",
     "test_composite.py", "test_member_seconds.py", "test_members_tables.py",
-    "test_served_advice_day.py",
     "test_served_overhead.py",
     "test_served_verdicts.py",
     "test_served_door_prove.py",

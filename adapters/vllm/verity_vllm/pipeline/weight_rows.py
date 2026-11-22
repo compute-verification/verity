@@ -7,7 +7,7 @@ bit rows), so the committer, given its weights, commits it by reference to the w
 row template's ``row/v1`` rows, a coordinate's ``w[:, n, :]`` and an s8 unit's ``W[c, :] ‖ sw[c]`` are no such row, and stay
 free.  The window's members are cut where the reads begin and end (`cut`), so each read covers whole members.  The reads
 come from the Programs' rows alone, public structure, never a value, so the registered compiler's record of the advice
-(``prove_path.py circuit``) states the same reads as the prover's."""
+(``prove_path.py window-circuit``) states the same reads as the prover's."""
 from __future__ import annotations
 
 import math

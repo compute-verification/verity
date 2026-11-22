@@ -246,6 +246,8 @@ NO_SIGNED_HEAD_WHY = ("registration: the parameters carry the deployment's regis
 REGISTRATION_DIGEST_WHY = "registration: the record's digest is not the registration the challenger signed for this epoch's lane"
 NO_LEDGER_AFTER_DRAW_WHY = ("registration, after the draw: the registration was taken from the auditor's ledger, and the "
                             "evidence's coins carry no ledger the epoch's session ended with to hold it to")
+PERIOD_CIRCUIT_WHY = ("registration, after the draw: the period holding the epoch's challenger session commits a circuit "
+                      "that is not the docket's program (the program's SHA-512, which R2 holds the record's program to)")
 _LOWER_HEX = re.compile(r"(?:[0-9a-f]{2})*")
 
 
@@ -298,11 +300,12 @@ def registration_parsed(registration: Any, challenger: Any, window_root: Any,
 
 
 def registration_after_draw(registration: Any, challenger: Any, window_root: Any, digest: str, coins: Any,
-                            verify: Ch.Verify) -> None:
+                            verify: Ch.Verify, program: str) -> None:
     """`OneStage.registrationAfterDraw` for a registration `registration_parsed` took from the ledger and held the run
     to ``digest``: on the ledger the epoch's session ends with (``coins``' ``ledger``), the epoch is held to ``digest``,
-    signed for the auditor's lane before the session's first entry (`challenger.registration_held`); with no ledger,
-    refused (`NO_LEDGER_AFTER_DRAW_WHY`)."""
+    signed for the auditor's lane before the session's first entry (`challenger.registration_held`), in a period whose
+    open committed ``program``, the docket's program's SHA-512 (`codec.program_digest`), as its circuit
+    (`challenger.period_circuit`, `PERIOD_CIRCUIT_WHY`); with no ledger, refused (`NO_LEDGER_AFTER_DRAW_WHY`)."""
     if not isinstance(window_root, str):
         raise RegistrationRefused(NO_SIGNED_HEAD_WHY)
     try:
@@ -317,8 +320,11 @@ def registration_after_draw(registration: Any, challenger: Any, window_root: Any
         raise RegistrationRefused(NO_LEDGER_AFTER_DRAW_WHY)
     try:
         Ch.registration_held(ledger, {"root": window_root}, lane, digest, key, verify)
+        circuit = Ch.period_circuit(ledger, {"root": window_root}, key, verify)
     except Ch.CoinError as e:
         raise RegistrationRefused(f"registration, after the draw: {e}") from None
+    if circuit != program:
+        raise RegistrationRefused(PERIOD_CIRCUIT_WHY)
 
 
 def _of_record(of_record: tuple[bytes, str]) -> tuple[list[tuple[str, Any]], dict[str, dict[str, Any]]]:

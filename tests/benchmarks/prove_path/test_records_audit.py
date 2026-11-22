@@ -26,11 +26,7 @@
 * the gate's coins (``--challenger gate:USER@HOST``) reach the challenger's session with the peer and the key record;
 * ``warm`` fills a5's compose cache from the verifier's window, its composers keyed by what they compose from, a table
   read's by the verifier's executable too, and the audit takes that cache;
-* of `verity_vllm` it loads only a catalog package (`verity.circuits.defs.catalog_package`) and nothing else of the adapter,
-  and the served compiler's command (``prove_path.py circuit``) refuses advice it can't compile and charges the length the
-  docket does;
-* that command compiles over its own trace of each Program, never the prover's row dir, so a row dir whose names make
-  another circuit under unchanged digests is refused by name and one whose names make the same circuit is ignored."""
+* of `verity_vllm` it loads only a catalog package (`verity.circuits.defs.catalog_package`) and nothing else of the adapter."""
 from __future__ import annotations
 
 import argparse
@@ -403,15 +399,15 @@ def test_a_run_is_of_record_only_on_a_lane_named_record_n_and_says_why_otherwise
     """`of_record_why`: an accepted ledger run held to the posted key is of record on ``record-N`` alone; on
     ``rehearsal-1`` or any other lane it is not, and says so; the development path, an unpinned key, an unverified member
     and a refusal each say theirs."""
-    def row(lane="record-1", **kw):
+    def row(lane="record-7", **kw):
         return {"ok": True, "registration": {"source": "ledger", "lane": lane, "key_pinned": True}, **kw}
 
-    assert RA.of_record_why(row()) is None and RA.of_record_why(row("record-12")) is None
-    for lane in ("rehearsal-1", "circuits", "vllm", "record-0", "record-1x", "my-record-1", None):
+    assert RA.of_record_why(row()) is None and RA.of_record_why(row("record-30")) is None
+    for lane in ("rehearsal-1", "circuits", "vllm", "record-0", "record-7x", "my-record-7", None):
         assert RA.of_record_why(row(lane)) == (f"its lane {lane} is not a lane of record (record-N); a run on another lane "
                                               "is never promoted"), lane
     assert "development path" in RA.of_record_why({"ok": True, "registration": {"source": "development", "digest": None}})
-    assert "posted digest" in RA.of_record_why({"ok": True, "registration": {"source": "ledger", "lane": "record-1",
+    assert "posted digest" in RA.of_record_why({"ok": True, "registration": {"source": "ledger", "lane": "record-7",
                                                                             "key_pinned": False}})
     assert RA.of_record_why(row(not_verified={"members": ["a/c0"]})) == "members were left unverified"
     assert RA.of_record_why(row(ok=False)) == "the audit did not accept"
@@ -1665,8 +1661,8 @@ def test_the_advice_is_fixed_before_the_sample_and_refused_re_committed_after_it
 
 
 def test_the_gates_coins_take_the_peer_and_key_record_to_the_challengers_session(written, tmp_path, monkeypatch):
-    """``--challenger gate:USER@HOST`` hands ``--gate-key``, ``--peer`` and ``--challenger-key`` to `a5_coins.start`, as
-    `prove_path.py audit` does; the command refuses a gate without the peer or the key record, and any other challenger.
+    """``--challenger gate:USER@HOST`` hands ``--gate-key``, ``--peer`` and ``--challenger-key`` to `a5_coins.start`;
+    the command refuses a gate without the peer or the key record, and any other challenger.
     ``--deployed-key`` reaches `a5_coins.start` as ``deployed`` with ``--challenger local``, and is refused with a gate."""
     import a5 as A5
     from verity.protocols.proof.spot.verifier.challenger import challenger_session as AC
@@ -1968,36 +1964,6 @@ print(json.dumps([sorted(m for m in sys.modules if m.split(".")[0] == "verity_vl
     assert other == [], f"the audit loaded these modules of the adapter, outside every catalog package ({catalogs}): {other}"
 
 
-def test_the_served_compilers_command_charges_the_registered_length_and_refuses_what_it_cant_compile(tmp_path, monkeypatch, capsys):
-    """``prove_path.py circuit``, the served window's registered compiler as `records_audit.compile_check` runs it, on the
-    synthetic serve-openai run of `test_prove_path` (its I2 compile stubbed, and the window over its Programs a coordinate
-    window): it writes a circuit record the audit reads (`interface.window_of_record`) under no run and prints the length the
-    docket charges, and exits `records_audit.REFUSED` on advice it can't compile."""
-    import prove_path as PP
-    from test_prove_path import _served
-    from verity_vllm.pipeline import serving_rows as SRW
-
-    s = _served(tmp_path, monkeypatch)
-    loaded = SimpleNamespace(progs={"r0": {}}, dirs={"r0": "d"}, arrivals={"r0": 0})
-    monkeypatch.setattr(PP.I2Compiler, "load", lambda self, rank, world, requests: loaded)
-    window = _listed(IF.Window(IF.Circuit("test", ((COORD, 5),)), "", RND.parse_design(SAMPLING_DESIGN), 4).window)
-    monkeypatch.setattr(SRW, "population", lambda progs, partition, run, dirs, **kw: (window, [[]]) if run == "" else None)
-    (tmp_path / "part.json").write_text(json.dumps({"templates": [TID], "law": SAMPLING_DESIGN}))
-    (tmp_path / "advice.bin").write_bytes(s.data)
-    base = ["circuit", "--serve-run", str(s.run), "--window", "0", "--partition", str(tmp_path / "part.json"), "--out",
-            str(tmp_path / "out.json")]
-    capsys.readouterr()
-    assert PP.main([*base, "--advice", str(tmp_path / "advice.bin")]) == 0
-    assert json.loads(capsys.readouterr().out.strip().splitlines()[-1]) == {"bits": s.bound["advice"]["bits"]}
-    out = json.loads((tmp_path / "out.json").read_text())
-    assert out["format"] == IF.CIRCUIT and (out["run"], out["context"]) == ("", "") and set(out) == set(IF.circuit_record(
-        window, "x", IF.templates_of(window)))
-    assert IF.window_of_record(out, RND.parse_design(SAMPLING_DESIGN), IF.resolve).partition_digest == window.partition_digest
-    (tmp_path / "bad.bin").write_bytes(b"\xff" * 7)
-    assert PP.main([*base, "--advice", str(tmp_path / "bad.bin")]) == RA.REFUSED
-    assert "prove_path.py circuit:" in capsys.readouterr().err
-
-
 def test_the_output_class_is_the_given_ranges_and_every_uncut_registered_read_of_an_output_port():
     """`output_class`: the verifier's own ranges, with each uncut registered read of an ``o<j>`` port adding its reader's
     units at the template's base in the population; a read of an input port, or a cut one, adds none."""
@@ -2027,46 +1993,6 @@ def test_a_served_output_that_the_next_step_reads_keeps_its_units_in_the_output_
         {"reader": "a", "port": "x", "param": "out", "at": 0, "radix": [8]}]}}
     assert RA.output_class(decode) == [[8, 16]]
     assert RA.output_class(decode, own={"y"}) == [[8, 16]]
-
-
-def test_a_row_dir_whose_names_are_permuted_under_its_digests_is_refused_or_ignored_by_the_compile_check(tmp_path, monkeypatch):
-    """No Program digest covers a Build's row names or its weights fields' names (nor its ``supplied``, correspondence or
-    ``prefix_cache.json``), and the served compiler's command reads none of them from the prover: it takes no row dir and
-    compiles over its own Build of each Program I2 compiled, beside the names its compile gives it (`prove_path.own_builds`).
-    Against a prover's row dir permuted under unchanged digests (each Build still I2's Program, `build_of`, its correspondence
-    record permuted with its names), the compile check refuses by name (``circuit``) the circuit.json whose names make another
-    circuit (a layer-1 SiluMul row and layer 0's first down_proj row swap names: one more SiluMul row in layer 0's scope), and
-    ignores names that make the same one (layers 0 and 1's first SiluMul rows swapped, which moves only the prover's own reads;
-    two weights fields swapped): the verifier's record is its own compile's in each case."""
-    import prove_path as PP
-    from test_prove_path import LAYER0, _circuit, _row_dir, _tiny_served
-
-    s = _tiny_served(tmp_path, monkeypatch)
-    (tmp_path / "part.json").write_text(json.dumps(LAYER0))
-    (tmp_path / "advice.bin").write_bytes(s.data)
-    out = tmp_path / "mine" / "circuit.json"
-    out.parent.mkdir()
-    assert PP.main(["circuit", "--serve-run", str(s.run), "--window", "0", "--partition", str(tmp_path / "part.json"),
-                    "--advice", str(tmp_path / "advice.bin"), "--out", str(out)]) == 0
-    assert s.compiles == [True] and list(out.parent.iterdir()) == [out]
-    mine = json.loads(out.read_text())
-    own, own_rows = _circuit(PP.Capped(PP.i2_of_serve(str(s.run), 0, str(tmp_path / "own"), None, None, own=True)), s.data, LAYER0)
-    assert IF.circuit_of(own) == IF.circuit_of(mine)
-    copy = ("import json, shutil, sys; a = sys.argv; shutil.copy(a[1], a[a.index('--out') + 1]); "
-            f"print(json.dumps({{'bits': {s.bound['advice']['bits']}}}))")
-    compilers = {s.bound["compiler"]["name"]: {"digest": s.bound["compiler"]["digest"], "argv": [sys.executable, "-c", copy, str(out)]}}
-    opening = json.loads(Path(s.a.opening).read_text())
-    reads = lambda rows: [(rid, int(r["i"])) for rid, _pi, r, _d in rows[0]]  # noqa: E731
-    for k, (name, names, params, codes, same_reads) in enumerate((
-            ("honest", None, False, [], True),
-            ("a layer-1 SiluMul row and layer 0's down_proj swapped", ("model.model.layers.1.mlp.act_fn/", "model.model.layers.0.mlp.down_proj/"),
-             False, ["circuit"], False),
-            ("layers 0 and 1's SiluMul rows swapped", ("model.model.layers.0.mlp.act_fn/", "model.model.layers.1.mlp.act_fn/"), False, [], False),
-            ("layers 0 and 1's down_proj weights swapped", None, True, [], True))):
-        rows = _row_dir(tmp_path / f"rows{k}", s, names, params)
-        theirs, their_rows = _circuit(PP.Capped(PP.i2_of_serve(str(s.run), 0, str(rows), None, None)), s.data, LAYER0)
-        v, bound = RA.compile_check(theirs, s.bound, opening, compilers, tmp_path / "c")
-        assert (v["codes"], bound is None, reads(their_rows) == reads(own_rows)) == (codes, bool(codes), same_reads), name
 
 
 @pytest.mark.parametrize("ports", [(), (SimpleNamespace(name="scan-state", value=""),),

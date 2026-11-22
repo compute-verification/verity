@@ -74,9 +74,9 @@ _POLICY_FIELDS = ("kind", "temperature", "top_p", "top_k", "seeded", "splits", "
 
 
 def sampling_of(w: dict, phi: Phi) -> dict:
-    """The row's sampling policy as the Build declares it (`pipeline.build.sampling_policy` over the workload manifest, then
+    """The row's sampling policy as the Build declares it (`pipeline.build_sampling.sampling_policy` over the workload manifest, then
     `sampler_geometry` on the declared target: the registered split count)."""
-    from verity_vllm.pipeline.build import sampler_geometry, sampling_policy
+    from verity_vllm.pipeline.build_sampling import sampler_geometry, sampling_policy
     with tempfile.TemporaryDirectory() as td:
         path = os.path.join(td, "workload.json")
         with open(path, "w") as f:

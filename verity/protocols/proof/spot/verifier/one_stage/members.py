@@ -1059,8 +1059,8 @@ def _wired_rows(program: Program, query: Mapping[str, Any], desc: Mapping[str, A
         ranges = P._template(program, query, "the members' partition").ranges
         cuts = EG.io_cuts(desc, ranges)
         got = EG.edges(desc, ranges, {"templates": {t: {} for _k, t, _a, _c in ranges}, "cuts": cuts})
-    except (ValueError, P.QueryRefused):
-        return {}
+    except (ValueError, P.QueryRefused) as e:
+        got = {"refusal": str(e)}
     if "refusal" in got:
         return {}
     lbase = _local_bases(ranges)

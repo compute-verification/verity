@@ -423,19 +423,28 @@ def NO_LEDGER_AFTER_DRAW_WHY : String :=
   "registration, after the draw: the registration was taken from the auditor's ledger, and the evidence's coins carry " ++
     "no ledger the epoch's session ended with to hold it to"
 
+/-- The refusal of an epoch whose period's open commits a circuit other than the docket's program: the program's
+SHA-512 (`Circuits.Prog.sha512`, Python's `codec.program_digest`), which R2 holds the record's program to. -/
+def PERIOD_CIRCUIT_WHY : String :=
+  "registration, after the draw: the period holding the epoch's challenger session commits a circuit that is not " ++
+    "the docket's program (the program's SHA-512, which R2 holds the record's program to)"
+
 /-- The half after the draw of a registration taken from the ledger (`registrationParsed`), the one an accepted
 run's registration rests on: on the auditor's ledger the epoch's session ends with (`coins`' `ledger`), the epoch is
 held to the digest the run was held to before the draw, signed for the auditor's lane before the session's first entry
-(`Challenger.registrationHeld`); with no ledger, refused (`NO_LEDGER_AFTER_DRAW_WHY`). Nothing to test on the
-development path or with no record, which an accepted run says first (`registrationFirst`). -/
+(`Challenger.registrationHeld`), in a period whose open committed the docket's program as its circuit
+(`Challenger.periodCircuit`, `PERIOD_CIRCUIT_WHY`); with no ledger, refused (`NO_LEDGER_AFTER_DRAW_WHY`). Nothing to
+test on the development path or with no record, which an accepted run says first (`registrationFirst`). -/
 def registrationAfterDraw (p : Params) (coins : Json) : V Unit := do
   let some (.ledger lane) := p.registration | return ()
   let (some (key, _), some w, some (_, digest)) := (p.challenger, p.verifier.windowRoot, p.verifier.weightsOfRecord)
     | throw NO_SIGNED_HEAD_WHY
   let ledger := getD coins "ledger"
   unless ledger matches .arr _ do throw NO_LEDGER_AFTER_DRAW_WHY
-  (Challenger.registrationHeld key lane digest (Json.mkObj [("root", Json.str w)]) ledger).mapError
-    (s!"registration, after the draw: {·}")
+  let window := Json.mkObj [("root", Json.str w)]
+  (Challenger.registrationHeld key lane digest window ledger).mapError (s!"registration, after the draw: {·}")
+  let circuit ← (Challenger.periodCircuit key window ledger).mapError (s!"registration, after the draw: {·}")
+  unless jsonStrIs circuit (Flock.hexOf p.verifier.program.sha512) do throw PERIOD_CIRCUIT_WHY
 
 /-- The parameters as parsed, before `paramsOfJson`'s refusal of the sampling design: the stream's run reads them and
 refuses the sampling design its rule names itself (`Run.run`, `bernoulli`). A partition object in any form but the

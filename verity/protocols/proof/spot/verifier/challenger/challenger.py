@@ -1833,6 +1833,17 @@ def registration_held(ledger: Any, window: Any, lane: str, digest: str, key: Cha
         raise CoinError(REGISTRATION_TWICE)
 
 
+def period_circuit(ledger: Any, window: Any, key: ChallengerKey, verify: Verify) -> Any:
+    """Lean `Challenger.periodCircuit`: the circuit the open of the period holding the session of the epoch whose open
+    root is ``window["root"]`` committed, on ``ledger`` under the pinned key `key`; None when no period holds it."""
+    windows, periods = _checked(ledger, key, verify)
+    w = windows.get(window["root"])
+    if w is None:
+        raise CoinError("the auditor's ledger opens no challenger session for this window")
+    s = w["open"]["session"]
+    return next((p["circuit"] for p in periods.values() if s in p["windows"]), None)
+
+
 def ledger_head(heads: Any, key: ChallengerKey, verify: Verify) -> list[str]:
     """The auditor's ledger as the auditor device's operator published it: every head of `heads` (each its lines; None
     when the verifier has none)

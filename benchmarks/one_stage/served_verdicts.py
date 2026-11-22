@@ -113,8 +113,8 @@ period that closed with its reserves held. ``pearlplus-period rule``, once the c
 (`pearlplus_period_rule`; exit 1 when BROKEN). ``coin``: the verifier's coin record published the moment it is
 sampled (`coin`), ``--run-dir`` naming the run's Attempt as its custody where no put preserves it.
 
-``record``: SPOT's answer from the records audit kept under ``--sampled-proofs`` (`benchmarks/prove_path/run.sh`'s with
-``PP_RECORDS=1``, or V3c's: ``summary.json``, ``window/audit.json``, and ``window/registration.json``, the docket it
+``record``: SPOT's answer from the records audit kept under ``--sampled-proofs`` (`records_audit.py audit`'s,
+or V3c's: ``summary.json``, ``window/audit.json``, and ``window/registration.json``, the docket it
 sampled against), read as `served_integrity.answer` reads it (Pearl+'s window tie from the same files under
 ``--window-tie DIR`` where it is given, the window tied to W); each other subprotocol's from
 ``--pieces/<component>/answer.json`` (`piece_row`), else a ``missing`` row naming why. Each answer is about the server
@@ -1049,7 +1049,6 @@ def registration_hold(record: Path, lane: str | None, ledger: str | None, key: P
     from verity.commitments import docket_digest as DD
     from verity.protocols.proof.spot.verifier.challenger import challenger as CH, challenger_session as AC
     from verity.protocols.proof.spot.verifier.one_stage import docket as DK
-    from verity.protocols.accounting.compute.pouw.prover.serving.coins import window as PHW
 
     if lane is None:
         say(f"REGISTRATION {DK.DEVELOPMENT_WHY}")
@@ -1087,7 +1086,8 @@ def registration_hold(record: Path, lane: str | None, ledger: str | None, key: P
             say(f"REGISTRATION-HOLD refused: {why} (lane {lane}'s period {period} registers {head[:16]}..., this "
                 f"serve's record is {digest[:16]}...)")
             return 2
-        if PHW.open_period(lines, lane) is None:
+        last = [e["body"]["period"] for e in es if e["kind"] == "period-open" and e["body"].get("lane") == lane][-1]
+        if any(e["kind"] == "period-close" and e["body"].get("period") == last for e in es):
             say(f"REGISTRATION-HOLD refused: {REGISTERED_PERIOD_CLOSED} (lane {lane}'s registering period {period})")
             return 2
         say(f"REGISTRATION-HELD digest {digest} lane {lane} key {pinned}: the ledger's line {len(lines) - 1} signs it")

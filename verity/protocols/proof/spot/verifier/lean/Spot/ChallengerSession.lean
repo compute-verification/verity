@@ -976,6 +976,14 @@ def registrationHeld (key : ChallengerKey) (lane digest : String) (window ledger
   unless laneOf w.opened.body == lane do throw REGISTRATION_LANE
   unless r == digest do throw REGISTRATION_TWICE
 
+/-- `period_circuit`: the circuit the open of the period holding the session of the epoch whose open root is `window`
+committed, on the auditor's ledger `ledger` under the pinned key `key`; `null` when no period holds it. -/
+def periodCircuit (key : ChallengerKey) (window ledger : Json) : V Json := do
+  let (wins, periods) ← checked ledger key
+  let root := strOf (getD window "root")
+  let some w := wins.find? (·.root == root) | throw "the auditor's ledger opens no challenger session for this window"
+  return ((periods.find? (·.windows.contains w.opened.session)).map (·.circuit)).getD Json.null
+
 /-- `extends`: whether `ledger` is `published` with entries appended. -/
 def extendsHead (published ledger : Array Json) : Bool :=
   published.size ≤ ledger.size && ledger.extract 0 published.size == published

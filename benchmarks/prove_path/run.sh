@@ -1,26 +1,6 @@
 #!/usr/bin/env bash
-# Prove path (prove_path.py) on a CPU machine: a served window committed over its compiler's Programs for the run's
-# advice, the window registered with the compiler's digest (its cap ℓ in it) and the root of the advice's hiding
-# commitment, sampled through a5's per-rank service.Stream on a challenger's coins, proved by M0 --zk behind the Lean ZK server
-# and verified by Lean, the advice's root then held to the docket the sample followed.
-# M0's flock-circuit and Lean's verity-verify-proof are built from this tree, in scratch.
-#   PP_SERVE_RUN=DIR PP_WINDOW=K PP_SERVE_ROWS=DIR: a serve-openai run's closed Commit window K (default 0), the one
-#     single-GPU (TP1) arm: its advice, requests and engine from the run dir, its Commit from the window's sealed row dir
-#     (commit/replay_bundle_p0, and the Builds of I2's Programs with programs.json, which advice_compile.py RUN --window K
-#     writes there); PP_TARGET=F the serving device's target profile where serve.json records none. The honest partition is
-#     PP_PARTITION (default layer 0's SiluMul_v2{I=8192} at step 1, rate:2/4; every unit of step 1 proved:
-#     PP_PARTITION=benchmarks/prove_path/llama32_1b_silu_mul_v2_i8192_l0_step1_all.json, rate:1/1; with PP_PLAIN=1, whose
-#     sample is stratified, ..._step1_all_stratified.json). The window's compiler lists its
-#     model's transfer gates of record (prove_path.GATES_OF_RECORD, which PP_TRANSFER_GATES may only restate), and its advice is
-#     registered under that compiler (`verity-vllm advice --compiler-name/--compiler-digest`, the inner name and digest
-#     `prove_path.py compiler` prints). With PP_RECORDS=1, each window is
-#     audited from its records alone (records_audit.py: circuit.json, the docket and the values, the advice's opening),
-#     its registered compiler run as a command (prove_path.py circuit), instead of by prove_path.py audit.
-#   PP_SERVE_RUN and PP_SERVE_ROWS name directories on this node, the serve directory's; an art: id is refused,
-#     since a published row dir's sealed bundle and a published run's requests.jsonl hold request values.
-#   PP_VLLM_PYTHON=PY: ignored (prove_path.py audit's and circuit's --vllm-python): a served window's verifier writes its
-#     own Build of each Program I2 compiles from its compile, with no vLLM, since the rows' names, the parameters' names and
-#     types, supplied, the correspondence and prefix_cache.json are no Program digest's and never read from the row dir.
+# Prove path on a CPU machine: the checkpoint tie of vLLM's weights registration, proved by M0 --zk behind the Lean ZK
+# server and verified by Lean. M0's flock-circuit and Lean's verity-verify-proof are built from this tree, in scratch.
 #   PP_WEIGHTS_TIE=1: the checkpoint tie of vLLM's weights registration at TINY (verity_vllm.program.predict.weights_tie;
 #     its inputs tests/program/predict/weights_tie_fixture): the committer registers checkpoint X's weights and records
 #     its tie window, one SHA-512 chain a shard over the registered rows (the embedding table's row-seg rows a chain of
@@ -29,25 +9,7 @@
 #     tie's own design, work:N over its N units in members of PP_TIE_CAP units (default 16), which the audit's rule
 #     samples at the rate N/N, so every unit is proved and no output class is passed, and pins the roots only on an
 #     accepting audit whose sample holds every unit.
-#   PP_PLAIN=1: plain Flock sessions, not --zk (prove_path.py audit --plain, a5's --plain): one table under a stratified
-#     sample, until multi-table coverage lands, so each partition's rule must be a stratified rate over a window of one member.
-#   Which arms pass the rule check: a stream's rule is a rate (service.SamplingDesign: rate:NUM/DEN, stratified-rate:NUM/DEN or
-#     work-rate:NUM/DEN), and each audit states its partition file's text as the rule: prove_path.py audit, and with
-#     PP_RECORDS=1 records_audit.py, which takes the window's sampling design to be the one that rate names over the window's
-#     own proof blocks. Each arm's default partition above (PP_SERVE_RUN) states a rate,
-#     each the rate that samples its window as its text reads at the proof blocks its scope has under
-#     the declared run's advice; a window of more is sampled in proportion. A PP_PARTITION that still
-#     states a fixed design (subset:K, stratified:K or work:K) is refused at the rule check, before any session opens, by
-#     either audit, by name. tests/benchmarks/prove_path/test_run_rules.py holds the stand-in's rules to what a stream takes
-#     and lists the partition files, this benchmark's and the one-stage audit's, that still state a fixed design.
-#   PP_JOBS=N ranks at once (a GLM-5.3 rank: its bundle window ~2.5 min and ~11 GB, its audit ~10 GB); PP_RANKS=0,3 those ranks
-#   only; PP_FLOCK_WORK=DIR keeps M0's
-#   build across runs. A served Llama window's audit peaks at ~20 GB (one process).
-#   PP_TRANSFER_GATES="T ..." the templates the registered compiler lists as holding transfer gates (--transfer-gate, both
-#   sides), every unit of theirs proved beside the partition's work rate's sample of the rest; PP_SETS="SPEC ..." more input sets, a
-#   subcircuit spec each (rope-head/d64/bf16). E.g. a served Llama TP1 window with layer 0's
-#   160 RoPE heads at step 1 as the stand-in transfer gates: PP_PARTITION=benchmarks/prove_path/llama32_1b_tg_l0_step1.json
-#   PP_TRANSFER_GATES='RoPEHead_v1{D=64}' PP_SETS=rope-head/d64/bf16.
+#   PP_FLOCK_WORK=DIR keeps M0's build across runs.
 #   PP_CHALLENGER=local (the default): each window sampled on a local challenger session's coins (--challenger local, a5_coins),
 #   pinned on main's first-parent history fetched from the clone's origin; the verifier flips no coins of its own. PP_CHALLENGER=gate:USER@HOST:
 #   the auditor device's, through its SSH gate with the lane's gate key PP_GATE_KEY, its challenger on PP_PEER's 127.0.0.1 (this
@@ -55,7 +17,7 @@
 #   file, `git rev-list --first-parent` of the gate's pin) is that history instead, for a gate pinned on `next`.
 # From a clone of the tree, with 64 GB of memory, the outputs in $OUT (default $RESEARCH_RUN_DIR/out, outside a research run
 # out/prove_path under the clone); $OUT/ran_with.txt is the line naming the run's coins and parameters (prove_path.py ran-with):
-#   PP_SERVE_RUN=DIR PP_WINDOW=K PP_SERVE_ROWS=DIR/windows/wK bash benchmarks/prove_path/run.sh
+#   PP_WEIGHTS_TIE=1 bash benchmarks/prove_path/run.sh
 # Kept in $OUT: the records and logs, the public files, the sessions (their proofs and records) of a records audit, an
 # audit's summaries in their public form (public_log.py summaries), the binaries' sha256; never the
 # advice or its opening (the prover's, private: the verifier is handed the opening, the named gap), a prover's file (inst-*,
@@ -70,18 +32,8 @@
 set -uxo pipefail
 PUBF=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../one_stage/public_files.py
 PL=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/public_log.py  # a log as it may leave: the fields its reader reads, errors by their class
-for v in PP_SERVE_RUN PP_SERVE_ROWS; do
-  case "${!v:-}" in art:*) echo "$v=${!v}: a published row dir or serve run holds request values; give $v the serve" \
-    "directory on this node (a DIR)"; exit 2;; esac
-done
-[ -z "${PP_TP:-}" ] || { echo "PP_TP=$PP_TP: refused: the deferred TP Commit is deleted; give PP_SERVE_RUN and PP_SERVE_ROWS"; exit 2; }
-[ -n "${PP_SERVE_RUN:-}${PP_WEIGHTS_TIE:-}" ] || { echo "refused: the CPU stand-in TP Commit (tests/pipeline/served_tp) is deleted; give" \
-  "PP_SERVE_RUN and PP_SERVE_ROWS, or PP_WEIGHTS_TIE"; exit 2; }
-if [ -n "${PP_SERVE_RUN:-}" ]; then
-  [ -d "$PP_SERVE_RUN" ] || { echo "PP_SERVE_RUN=$PP_SERVE_RUN: no serve-openai run directory on this node"; exit 8; }
-  [ -d "${PP_SERVE_ROWS:-}" ] || { echo "PP_SERVE_ROWS=${PP_SERVE_ROWS:-}: no sealed window row dir on this node (the serve run's" \
-    "windows/w<K>)"; exit 8; }
-fi
+[ -z "${PP_TP:-}" ] || { echo "PP_TP=$PP_TP: refused: the deferred TP Commit is deleted; give PP_WEIGHTS_TIE"; exit 2; }
+[ -n "${PP_WEIGHTS_TIE:-}" ] || { echo "refused: the served arm is deleted; give PP_WEIGHTS_TIE"; exit 2; }
 REPO=$(pwd); O=${OUT:-${RESEARCH_RUN_DIR:+$RESEARCH_RUN_DIR/out}}; W=$(mktemp -d); trap 'rm -rf "$W"' EXIT
 [ -n "$O" ] || { O=$REPO/out/prove_path; echo "OUT unset outside a research run: the outputs go to $O"; }
 mkdir -p $O
@@ -108,9 +60,6 @@ command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh >/de
 command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
 uv sync --all-packages --extra torch-cpu > $K/sync.log 2>&1 || { tail -20 $K/sync.log; exit 5; }
 PY=$REPO/.venv/bin/python
-PLAIN=(); SAMPLING_DESIGN=rate; [ -n "${PP_PLAIN:-}" ] && PLAIN=(--plain) SAMPLING_DESIGN=stratified-rate
-STEP1=benchmarks/prove_path/llama32_1b_silu_mul_v2_i8192_l0_step1.json
-
 (cd verity/protocols/proof/flock/verifier && lake build verity-verify-proof flock-zk-server flock-read-tmpl) > $K/build-lean.log 2>&1 &
 LP=$!
 mkdir -p $K/m0-build
@@ -126,11 +75,6 @@ PP_CHALLENGER=${PP_CHALLENGER:-local}   # the sample's coins are a challenger's:
 $PY benchmarks/prove_path/prove_path.py ran-with --challenger "$PP_CHALLENGER" ${PP_CHALLENGER_KEY:+--challenger-key "$PP_CHALLENGER_KEY"} \
   | tee $O/ran_with.txt || exit 4
 
-for I in 256 1536 8192 ${PP_SETS:-}; do   # the verifier's lowering: a synthetic input set per template (its values are never read)
-  case $I in */*) SUB=$I SET=${I//\//_};; *) SUB=silu-mul-v2/i$I/bf16 SET=i$I;; esac
-  $PY -m verity_numerical.bench.generate --subcircuit $SUB --n 4 --seed 1 --out $W/sets/$SET > $K/sets-$SET.log 2>&1 || exit 9
-done
-TG=(); for t in ${PP_TRANSFER_GATES:-}; do TG+=(--transfer-gate "$t"); done
 CH=()
 if [ -n "${PP_CHALLENGER:-}" ] && [ -n "${PP_MAIN:-}" ]; then   # the run's first-parent list, which holds the gate's pin
   [ -s "$PP_MAIN" ] || { echo "PP_MAIN $PP_MAIN is missing or empty"; exit 4; }
@@ -154,7 +98,6 @@ export RAYON_NUM_THREADS=$(nproc)
 # node; its own worker and verifier threads take 64 MiB
 export RUST_MIN_STACK=$((64 << 20))
 TIME=$([ -x /usr/bin/time ] && echo "/usr/bin/time -v")
-PP="$PY benchmarks/prove_path/prove_path.py"
 
 keep() {  # NAME [public]: $W/NAME's records into $O/NAME, among them the circuit each drawn member was proved on
           # (window/m<k>/circuit.txt); with public, into $K/NAME, and $O/NAME gets only their summaries' public form
@@ -174,79 +117,8 @@ for f in sys.argv[3:]:
         open(f, "w").write(json.dumps(c, sort_keys=True))' "$W/$1/" "$(cd $to && pwd)/")
   [ "${2:-}" != public ] || python3 "$PL" summaries $to $O/$1
 }
-run() {  # NAME RUN ADVICE PARTITION RANKS: the prover's windows, then the verifier's audit; RUN is the committed
-         # run's arguments (--tp-commit DIR --build-root DIR, or --serve-run DIR
-         # --window K --row-dir DIR, whose advice and opening are the server's: ADVICE -)
-  local name=$1 src=$2 advice=$3 part=$4 ranks=$5; shift 5
-  local adv="--advice $advice" op="--opening $W/$name-opening.json"
-  case "$src" in *--serve-run*) adv=; op=;; esac
-  mkdir -p $O/$name $K/$name
-  $TIME $PP commit $src $adv $op --partition $part \
-    ${ranks:+--ranks $ranks} "${TG[@]}" \
-    --jobs ${PP_JOBS:-1} --out $W/$name-windows "$@" > $K/$name/commit.log 2>&1
-  local crc=$?
-  python3 "$PL" $K/$name/commit.log > $O/$name/commit.log
-  [ $crc = 0 ] || { tail -30 $O/$name/commit.log; return 1; }
-  # its circuit public; its registration and commit.json (each a binding made from the advice's true length), its partition
-  # and the files beside them kept
-  for d in $W/$name-windows/rank*; do
-    mkdir -p $K/$name/windows/$(basename $d) && cp $d/{registration,window,partition,index}.json $d/m*-public.bin $K/$name/windows/$(basename $d)/
-    [ ! -e $d/circuit.json ] || { mkdir -p $O/$name/windows/$(basename $d) && cp $d/circuit.json $O/$name/windows/$(basename $d)/; }
-  done
-  cp $W/$name-windows/commit.json $K/$name/windows/
-  if [ -n "${PP_RECORDS:-}" ] && [ -n "${REC_RUN:-}" ]; then   # the window's audit from its records alone
-    records $name $part
-    local rc=$?
-    keep $name public   # served_verdicts.sh reads the served arm's records audit in the keep
-    return $rc
-  fi
-  $TIME $PP audit $src $op --windows $W/$name-windows --partition $part \
-    ${ranks:+--ranks $ranks} ${PP_JOBS:+--jobs $PP_JOBS} ${PP_SESSION_TIMEOUT:+--session-timeout $PP_SESSION_TIMEOUT} "${TG[@]}" "${CH[@]}" "${PLAIN[@]}" \
-    ${PP_VLLM_PYTHON:+--vllm-python $PP_VLLM_PYTHON} --template-sets $W/sets --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN --zk-server $FWL --out $W/$name > $K/$name/audit.log 2> $K/$name/audit.err
-  local rc=$?
-  python3 "$PL" $K/$name/audit.log > $O/$name/audit.log
-  grep '^PROVE-PATH' $O/$name/audit.log | cut -c1-6000; python3 "$PL" $K/$name/audit.err | tail -25
-  keep $name public
-  return $rc
-}
-records() {  # NAME PARTITION: records_audit.py on the served window REC_RUN's window REC_K, the registered compiler
-             # the served one as a command (prove_path.py circuit), the run root the one windows.jsonl publishes
-  local name=$1 part=$2
-  $PY -c 'import json, sys
-c = json.load(open(sys.argv[1]))
-print(json.dumps({c["name"]: {"digest": c["digest"], "argv": sys.argv[2:]}}))' $O/$REC_NAME-records/compiler.json \
-    $PY $REPO/benchmarks/prove_path/prove_path.py circuit --serve-run $REC_RUN --window $REC_K --vllm-python ${PP_VLLM_PYTHON:-$PY} \
-    ${PP_TARGET:+--target $PP_TARGET} --partition $(realpath $part) "${TG[@]}" > $K/$name/compilers.json || return 1
-  local root sampling_design
-  root=$($PY -c 'import json, sys
-print(next(w["run_root"] for w in map(json.loads, open(sys.argv[1])) if int(w["window"]) == int(sys.argv[2])))' $REC_RUN/windows.jsonl $REC_K) || return 1
-  sampling_design=$($PY -c 'import json, sys; print(json.load(open(sys.argv[1]))["law"])' $part) || return 1
-  $TIME $PY benchmarks/prove_path/records_audit.py audit --window $W/$name-windows/rank0 --sampling-design $sampling_design --run $root \
-    --opening $REC_RUN/advice/w$REC_K/private/opening.json --compilers $K/$name/compilers.json --template-sets $W/sets \
-    ${PP_SESSION_TIMEOUT:+--session-timeout $PP_SESSION_TIMEOUT} "${CH[@]}" \
-    --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN --zk-server $FWL --out $W/$name > $K/$name/audit.log 2> $K/$name/audit.err
-  local rc=$?
-  python3 "$PL" $K/$name/audit.log > $O/$name/audit.log
-  grep '^RECORDS' $O/$name/audit.log | cut -c1-6000; python3 "$PL" $K/$name/audit.err | tail -25
-  return $rc
-}
-
 rc=0
-if [ -n "${PP_SERVE_RUN:-}" ]; then
-  D=$PP_SERVE_ROWS
-  served() {  # NAME SERVE_RUN K: the served window's audit, its registration's public form and its compiler
-              # kept; serve.json and windows.jsonl stay in SERVE_RUN, where records() reads them
-    mkdir -p $O/$1-records
-    python3 "$(dirname "$PUBF")/served_verdicts.py" public-registration $2/advice/w$3/registration.json \
-      > $O/$1-records/registration.json || { rm -f $O/$1-records/registration.json; return 1; }
-    $PP compiler --serve-run $2 ${PP_TARGET:+--target $PP_TARGET} "${TG[@]}" | tee $O/$1-records/compiler.json || return 1
-    local src="--serve-run $2 --window $3 --row-dir $D ${PP_TARGET:+--target $PP_TARGET}"
-    REC_NAME=$1 REC_RUN=$2 REC_K=$3
-    run $1 "$src" - ${PP_PARTITION:-$STEP1} "" || rc=1
-    REC_RUN=
-  }
-  served served $PP_SERVE_RUN ${PP_WINDOW:-0} || rc=1
-elif [ -n "${PP_WEIGHTS_TIE:-}" ]; then
+if [ -n "${PP_WEIGHTS_TIE:-}" ]; then
   TCAP=${PP_TIE_CAP:-16} F=$W/tie-fixture
   (cd tests/adapters/vllm && $PY -m tests.program.predict.weights_tie_fixture $F) > $O/tie-fixture.json 2> $K/tie-fixture.err \
     || { tail -20 $K/tie-fixture.err; exit 8; }
