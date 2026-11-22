@@ -70,6 +70,22 @@ open Claims.SamplingGeneric (Arg Compiled)
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
+/-- **The good event with the registered inputs' condition written out**: `RegisteredInputsHeld` unfolds to it, so
+naming the condition neither narrows nor widens the event. -/
+theorem executionPhaseGood_iff_inline {H : Msg → Msg} {D : Compiled Coin A} {L K S : ℕ}
+    {lay : AuditStatement → BoundaryGates L S} {k : AuditStatement → ℕ} {δ : ℝ} {reg : AuditStatement → Finset ℕ}
+    {Dj : ℕ} {s₀ : AuditStatement} {ρ : ℕ → Bool} {tops : AuditStatement → List (Opening Bool)} {x : Msg} {w : Wit}
+    {o : List (Obs L K S)} :
+    ExecutionPhaseGood H D L K S lay k δ reg Dj s₀ ρ tops x w o ↔
+      RLeakCertifier H D.commit D.parse D.partition L K S lay k δ (fun s => AsReg s.prog (lay s) (k s) (reg s)) Dj tops x
+          w ∧
+        ScopeAcc D lay k x ∧
+        ∃ s, D.parse x = some s ∧ SameRegistration D lay k reg s₀ s ∧
+          (∀ g ∈ reg s, traceVal s.prog (w.val H D.commit s) g = ρ g) ∧ Covered (k s) o ∧ o.length = k s ∧
+          ∀ y ∈ o, y.jitter < Dj :=
+  Iff.rfl
+
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 /-- **A window that meets its good event is registered at a layout that fits.** -/
 theorem fits_of_executionPhaseGood {H : Msg → Msg} {D : Compiled Coin A} {L K S : ℕ}
     {lay : AuditStatement → BoundaryGates L S} {k : AuditStatement → ℕ} {δ : ℝ} {reg : AuditStatement → Finset ℕ}
