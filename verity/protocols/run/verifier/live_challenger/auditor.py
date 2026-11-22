@@ -111,10 +111,11 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   none (part of them is refused): `--policy ID` (`policy`), the id of the
   protocol whose params read α and Γ, which names their form and unit (`POLICIES`; another id is refused);
   `--alpha N/D` (`alpha`, ``[N, D]``) and `--gamma G` (`gamma`), naturals as those params read them
-  (`InferenceOnlyCheck.Protocol`), signed as given, with no default. Any period's open may commit, on its own,
+  (`InferenceOnlyCheck.Protocol`), signed as given, with no default. Any period's open may commit
   `--registration SHA512` (`registration`): the digest of the registration log's head, the deployment's registration
-  record, the log's first record (`InferenceOnlyCheck.Theta.digest`). The open's `by` is who gave them, the lane's key or vy-admin; an open with none of the
-  three commits no policy. With
+  record, the log's first record (`InferenceOnlyCheck.Theta.digest`); an open with a policy must, and one without a
+  policy may commit it on its own. The open's `by` is who gave them, the lane's key or vy-admin; an open with none of
+  the three commits no policy. With
   `--policy-name NAME` in place of the first three, the open signs the id, α and Γ of the policy vy-admin registered
   under that name (the policy registry) and the name (`policy_name`), which no open carries otherwise: the auditor's
   policy, whoever opens the period. Its windows are
@@ -1975,7 +1976,8 @@ USAGE = ("verbs: reserve --peer NAME --scheme S --families JSON [--epoch E] [--m
          "| open --session S --root R "
          "| period-open --name P --cap N --circuit SHA512 [--draw-k K] [--rows T] [--model M | --weights-root W] [--circuit-files JSON] "
          "[--length JSON] [--policy ID --alpha N/D --gamma G | --policy-name NAME: a registered policy's; an "
-         "inference-only period's, all of them] [--registration SHA512: the registration log's head] [--lane LANE: vy-admin's] "
+         "inference-only period's, all of them, with --registration] [--registration SHA512: the registration log's head] "
+         "[--lane LANE: vy-admin's] "
          "| period-close --name P "
          "| policy-register --name NAME --policy ID --alpha N/D --gamma G (vy-admin's) "
          "| declare --program SHA512 [--blocks K,...] [--day D] [--for LANE: vy-admin's] "
@@ -2251,8 +2253,8 @@ def period(host: Host, args: list[str], *, signer, pinned: str, now: datetime, a
     the registry has no entry of the model alone, from core's pin in `tree`), its fixed length (`length`) and each K's
     circuit file's SHA-512
     (`circuit_files`), an inference-only period's policy (`policy`, `alpha`, `gamma`: all three or none,
-    `POLICY_FIELDS`; with `policy_name`, as the policy registry states them under that name, and the name), and on its
-    own the registration log's head (`registration`); it closes once none of its windows
+    `POLICY_FIELDS`; with `policy_name`, as the policy registry states them under that name, and the name), and the
+    registration log's head (`registration`), which a policy requires and which may stand alone; it closes once none of its windows
     still runs, its close listing each window with its outcome."""
     if len(args) not in (range(6, 6 + len(PERIOD_FIELDS) + 1) if args[:1] == ["period-open"] else (4,)):
         raise Refused(f"period: {args}")
@@ -2278,6 +2280,10 @@ def period(host: Host, args: list[str], *, signer, pinned: str, now: datetime, a
             raise Refused(f"period-open {name}: {' and '.join(missing)} missing: an inference-only period's open signs "
                           f"its policy together ({', '.join(POLICY_FIELDS.values())}), and a period that is not "
                           "inference-only none of them")
+        if not missing and "registration" not in given:
+            raise Refused(f"period-open {name}: --registration SHA512 missing: an inference-only period's open signs its "
+                          f"policy and its registration together ({', '.join(POLICY_FIELDS.values())}, --registration "
+                          "SHA512)")
         model, root = given.pop("model", None), given.pop("weights_root", None)
         if model is not None or root is not None:
             M = registry()

@@ -446,15 +446,19 @@ def test_an_inference_only_periods_open_commits_its_policy_and_registration_as_g
         "p2": ("hash", 1, CIRCUIT, [])}
 
 
-def test_a_period_opens_registration_stands_on_its_own(host, signer):
+def test_a_period_opens_registration_stands_on_its_own_and_a_policy_requires_one(host, signer):
     """The registration log's head is signed with or without a policy: a period that is not inference-only signs it
-    alone, and an inference-only period's policy needs none."""
+    alone. An inference-only period's policy, given or registered, is refused without it, and nothing is signed."""
     body = ok(ssh(host, signer, f"period-open --name p1 --cap 2 --circuit {CIRCUIT} {REG}", "hash"))["body"]
     assert body["registration"] == REGISTRATION and not set(A.POLICY_FIELDS) & set(body)
     ok(ssh(host, signer, "period-close --name p1", "hash"))
-    body = ok(ssh(host, signer, f"period-open --name p2 --cap 2 --circuit {CIRCUIT} {' '.join(POLICY.values())}",
-                  "hash"))["body"]
-    assert body["policy"] == V0 and "registration" not in body
+    seq = len(A.read_ledger(host.ledger))
+    ok(admin(host, signer, REGISTER))
+    for policy in (" ".join(POLICY.values()), "--policy-name llama-1b"):
+        refused(ssh(host, signer, f"period-open --name p2 --cap 2 --circuit {CIRCUIT} {policy}", "hash"),
+                "period-open p2: --registration SHA512 missing: an inference-only period's open signs its policy and its "
+                "registration together")
+    assert len(A.read_ledger(host.ledger)) == seq
 
 
 @pytest.mark.parametrize("given", [c for n in range(1, len(POLICY)) for c in itertools.combinations(POLICY, n)],
@@ -520,7 +524,7 @@ def test_a_period_open_that_names_a_registered_policy_signs_the_auditors_policy_
     body = ok(admin(host, signer, f"period-open --name k1 --lane kernels --cap 1 --circuit {CIRCUIT} "
                                   f"--registration {REGISTRATION} --policy-name wide.2"))["body"]
     assert (body["alpha"], body["gamma"], body["policy_name"], body["by"]) == ([2, 4], most, "wide.2", "vy-admin")
-    own = ok(ssh(host, signer, f"period-open --name p2 --cap 2 --circuit {CIRCUIT} {' '.join(POLICY.values())}",
+    own = ok(ssh(host, signer, f"period-open --name p2 --cap 2 --circuit {CIRCUIT} {' '.join(POLICY.values())} {REG}",
                  "hash"))["body"]
     assert "policy_name" not in own and own["by"] == "hash"
     assert sorted(checked(host)) == ["k1", "p1", "p2"]
