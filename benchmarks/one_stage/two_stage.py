@@ -1095,14 +1095,16 @@ def round_two(python: Mapping[str, Any] | None, lean: Sequence[str] | None) -> d
 def second_stage(a: argparse.Namespace, sets: dict, window: CS.Binding, window_dir: Path, source: Callable[[dict], dict],
                  brec: dict, irec: dict, sample: list[int], second: tuple[dict, dict, dict], reads: dict[str, dict],
                  proofs: dict, out: Path, provenance: dict, *, replay: tuple[Program, str],
-                 tie: Mapping[str, Any] | None = None) -> tuple[dict, bool, dict, dict, list[dict] | None]:
+                 tie: Mapping[str, Any] | None = None,
+                 returned: Mapping[tuple[str, str], list[int | None]] | None = None) -> tuple[dict, bool, dict, dict, list[dict] | None]:
     """The second stage over the interior docket ``irec`` of ``window`` (written at ``window_dir``), chained after
     the boundary docket ``brec`` and its replay sample: `a5.audit` of the stream's second sample ``second`` (its
     sample, sampling design and the interior docket's receipt), each member's session verified against ``reads`` (by member
     key, the verifier's own ``--registered`` files), the audit record, and each session's statement held to round 2
     (round 2, over the replay block ``replay``, its Program and descriptor id) at the params ``proofs``. ``tie``:
     the verifier's other copies the interior docket's check takes beside the boundary record (`a5.tie`: the
-    values it registers, their schemas, its window root). -> (a5's summary, its acceptance, the audit record, what the
+    values it registers, their schemas, its window root). ``returned``: by template and output port, the row of round 1's
+    port each unit writes (`returned_rows`), which a linked output is read at. -> (a5's summary, its acceptance, the audit record, what the
     run reports, the sessions' statements: None without a sample). The audit record is a5's own of the interior, decided
     as the stream decides the interior's before round 2's check is attached to it (a5's ``drawn``), so it is not the
     run's outcome: the report's ``accepted`` and ``record`` are that record's (``record``: the checks it fails, and
@@ -1117,7 +1119,7 @@ def second_stage(a: argparse.Namespace, sets: dict, window: CS.Binding, window_d
     port = a.port or RA.free_ports(a5.RANK_PORTS)
     linked = SS.round_one_held(SS.replay_links(replay[0], replay[1], brec) or (), brec)
     s, ok = a5.audit(a, sets, out / "audit", window, window_dir, source, port, provenance, registered=reads, drawn=second,
-                     run_inputs=IR.run_input_ports(window), linked=linked)
+                     run_inputs=IR.run_input_ports(window), linked=linked, returned=returned)
     rec_file = out / "audit" / "audit.json"
     record = json.loads(rec_file.read_text()) if rec_file.exists() else {}
     got = {"audit": {x: s.get(x) for x in ("checks_before_draw", "refused", "audit", "draw", "draw_counts", "negatives",
@@ -1219,8 +1221,23 @@ def prove(a: argparse.Namespace, r: Replayed, out: Path,
         (r.draw.draw, r.draw.law, r.docket.receipt), verifier_reads(d, mine, r.record, r.first.record, sample),
         dict(proofs), out,
         {"two_stage": "interior", "class": [layout.prompt, layout.outputs], "window": r.first.pub["window"]},
-        replay=(layout.program, d.key), tie=r.tie)
+        replay=(layout.program, d.key), tie=r.tie, returned=returned_rows(d, mine, sample))
     return s, got, stmts, dict(proofs)
+
+
+def returned_rows(d: Design, window: CS.Binding, sample: Sequence[int]) -> dict[tuple[str, str], list[int | None]]:
+    """By template and output port, each return round 1's record commits with the row of round 1's port each unit of
+    ``window``'s population writes (`interior_rows.Return.rows`), None at a unit of another template."""
+    out = {}
+    for x in d.returns:
+        if not x.held:
+            continue
+        rows: list[int | None] = [None] * window.population
+        for m in window.members:
+            if m.template == x.template:
+                rows[m.base:m.base + m.n] = x.rows(sample)
+        out[x.template, x.port] = rows
+    return out
 
 
 def _refusal(pub: Mapping[str, Any], e: Exception) -> dict[str, Any]:

@@ -993,8 +993,10 @@ def stage(served: Path, mm: dict, files: tuple[dict, dict], tmpl_unit_bin: str |
 
 def own_files(served: Path, mine: CS.Binding, rec: dict, form: tuple[list, dict] | str,
               registered: dict | None, publics: Mapping[str, bytes], roots: Mapping[str, dict], want: Mapping[str, dict],
-              door: bool, summary: dict, members: Sequence[dict], checks: dict) -> dict[str, dict]:
-    """Each member's registered file, built once (the reads by member key returned): the file the Lean executable is given (``registered.json``) and the one
+              door: bool, summary: dict, members: Sequence[dict], checks: dict,
+              returned: Mapping[tuple[str, str], Sequence[int | None]] | None = None) -> dict[str, dict]:
+    """Each member's registered file, built once (the reads by member key returned): the file the Lean executable is given (``registered.json``),
+    with ``linked.json`` beside it where ``returned`` gives an output of its template round 1's rows (`Registered.linkedOf`), and the one
     its header test holds its public file to (`members.population_why` at `Member.reads`, `Member.held`), its verdict
     folded into ``checks[f"m{k}"]`` beside the staging's codes.
 
@@ -1024,6 +1026,10 @@ def own_files(served: Path, mine: CS.Binding, rec: dict, form: tuple[list, dict]
                                                           for p in fv_roots if mine.tree(m, p) in roots})
             mm["st"]["registered_file"] = mm["st"]["dir"] / "registered.json"
             mm["st"]["registered_file"].write_text(json.dumps(own, sort_keys=True))
+            rows = {p: list(r) for (t, p), r in (returned or {}).items() if t == m.template}
+            if rows:
+                mm["st"]["linked_file"] = mm["st"]["dir"] / "linked.json"
+                mm["st"]["linked_file"].write_text(json.dumps(rows, sort_keys=True))
             if iface is not None:
                 mm["st"]["interface_file"] = iface
         why = header_why(mine, rec, form, mm, own)
@@ -1077,7 +1083,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
           history: Callable[[dict[str, bytes]], dict | None] | None = None,
           session: threading.Thread | None = None,
           run_inputs: Mapping[str, Any] | None = None,
-          linked: Sequence[Mapping[str, Any]] | None = None) -> tuple[dict, bool]:
+          linked: Sequence[Mapping[str, Any]] | None = None,
+          returned: Mapping[tuple[str, str], Sequence[int | None]] | None = None) -> tuple[dict, bool]:
     """One window's audit: serving's window ``served`` held to the verifier's own ``mine`` (and its docket's ``window`` to
     ``source``; a window with row tables, its tables to its linked members' strings, its registered `row-table` root and
     ``step_roots``, what serving recorded before each step's coin, `tables.check_row_tables`), one Lean sample by its sampling design
@@ -1102,7 +1109,9 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     of record; None for a window with none. ``session``: the thread of the challenger session the audit samples on
     (`a5_coins.start`'s, which the caller holds), ended before a negative's worker is forked (`session_ended`); None
     where the caller hands none, and its thread is then one more the workers' fork refuses while it lives. ``linked``:
-    a second stage's linked ports at round 1's record (`second_stage.round_one_held`), which its case's params carry."""
+    a second stage's linked ports at round 1's record (`second_stage.round_one_held`), which its case's params carry.
+    ``returned``: by template and output port, the row of round 1's port each unit writes, which Lean's `verify` reads a
+    linked output at (``--linked``)."""
     out.mkdir(parents=True, exist_ok=True)
     t_audit = time.time()
     program, query, part, pd, n_all, sampling_design = mine.program, mine.query, mine.partition, mine.partition_digest, mine.population, mine.law
@@ -1270,7 +1279,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     if mine.row_tables:
         bad = TB.check_row_tables(mine, publics, {r["port"]: r["root"] for r in rec["roots"]}, step_roots)
         checks["row_tables"] = {"ok": not bad, "codes": sorted(bad), "detail": bad}
-    reads = own_files(served, mine, rec, form, registered, publics, roots, want, door, summary, members, checks)
+    reads = own_files(served, mine, rec, form, registered, publics, roots, want, door, summary, members, checks,
+                      returned)
     w = rec.get("window", {})
     checks["source"] = source(w)
     summary["source"], summary["commitment"] = w.get("kind"), w.get("commitment")
@@ -1319,7 +1329,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     after: dict[str, dict] = {}
     served_units, proved, instances, verdicts, statement, sessions, counts, session_roots = [], [], 0, {}, {}, [], {}, {}
     proving: dict[str, dict] = {}   # by member key, what the summary's timing adds to its statement (`proving_of`)
-    linked = None       # the first sampled chunk whose registered reads name a value of more than one row (`many_rows`),
+    chunk = None        # the first sampled chunk whose registered reads name a value of more than one row (`many_rows`),
     #                     else the first with registered reads: its session, for the registered-reads negatives
     row_verdicts: dict[str, dict] = {}      # each sampled chunk's Lean verdict with registered reads, whose finding the record carries
     if (why := port_refusal(mine, union_sample, port, ports)) is not None:
@@ -1532,8 +1542,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         verdicts.update(got["verdicts"])
         if mm["m"].key in reads:
             row_verdicts[mm["m"].key] = got["lean_verify"]
-            if linked is None or (not many_rows(reads, linked[0]) and many_rows(reads, mm)):
-                linked = (mm, got["sdir"])
+            if chunk is None or (not many_rows(reads, chunk[0]) and many_rows(reads, mm)):
+                chunk = (mm, got["sdir"])
         statement[mm["m"].key] = got["statement"]
         proving[mm["m"].key] = proving_of(got["handle"])
         sessions += got["sessions"]
@@ -1654,8 +1664,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         workers.run()
         for part in parts:
             neg.update(workers.entries([part]) if isinstance(part, Negative) else part)
-        if linked is not None:
-            neg.update(registered_negatives(a, *linked, workers=workers.workers))
+        if chunk is not None:
+            neg.update(registered_negatives(a, *chunk, workers=workers.workers))
             key = next(iter(row_verdicts))
             other = {p: {**e, "root": "00" * 64} for p, e in (row_verdicts[key].get("registered") or {}).items()}
             neg["verdict-reports-another-registered-root"] = {

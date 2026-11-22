@@ -282,3 +282,9 @@ def test_under_archive_link_a_circuit_that_cannot_be_linked_is_put_as_without_it
     assert (out / "archive" / "sha512" / key).stat().st_ino != (st["dir"] / "circuit.txt").stat().st_ino
     files = [v for k, v in st["archived"].items() if k[:1] != ("archiving",)]  # `a0.archiving` keeps its locks there too
     assert files and files[0][0] == key
+
+
+def test_round_1s_rows_of_a_linked_output_are_verified_against_only_beside_registered_reads(tmp_path):
+    st = {"dir": tmp_path, "linked_file": tmp_path / "linked.json"}
+    assert a0.bound_files(st) == []
+    assert a0.bound_files({**st, "registered_file": tmp_path / "registered.json"}) == ["registered", "linked"]

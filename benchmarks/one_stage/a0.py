@@ -294,9 +294,10 @@ def identity(f: Path) -> tuple | None:
 def bound_files(st: dict) -> list[str]:
     """What statement ``st`` is verified against besides its circuit, public file and tables, each by `verify`'s flag
     for it (the file is ``st["<flag>_file"]``): its partition, program and registered reads where it has them, and with
-    registered reads the window's registered circuit record (``interface``) where it has one."""
-    return [x for x in ("partition", "program", "registered", "interface")
-            if st.get(f"{x}_file") and (x != "interface" or st.get("registered_file"))]
+    registered reads the window's registered circuit record (``interface``) and round 1's rows of its linked outputs
+    (``linked``) where it has them."""
+    return [x for x in ("partition", "program", "registered", "interface", "linked")
+            if st.get(f"{x}_file") and (x not in ("interface", "linked") or st.get("registered_file"))]
 
 
 def archive_files(st: dict, n: int) -> list[Path]:

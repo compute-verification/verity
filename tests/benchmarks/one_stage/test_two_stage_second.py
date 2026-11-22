@@ -19,6 +19,7 @@ import os
 import sys
 from dataclasses import replace
 from pathlib import Path
+from types import SimpleNamespace as NS
 
 import numpy as np
 import pytest
@@ -33,7 +34,7 @@ from verity_vllm.pipeline import boundary_rows as BR, interior_rows as IR, servi
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "one_stage"))
-sys.path.insert(0, str(HERE.parents[2] / "tests" / "verity" / "protocols" / "proofs" / "spot" / "verifier"))
+sys.path.insert(0, str(HERE.parents[2] / "tests" / "verity" / "protocols" / "proof" / "spot" / "verifier"))
 TS = importlib.import_module("two_stage")
 SM = importlib.import_module("two_stage_small")
 FC = importlib.import_module("fake_challenger")
@@ -758,3 +759,10 @@ def test_round_two_of_record_holds_the_twin_to_the_leans_codes():
     assert TS.round_two({"codes": ["second-read"]}, ["second-read"]) == {"ok": False, "codes": ["second-read"]}
     for python, lean in (({"codes": []}, ["second-read"]), ({"codes": ["second-read"]}, []), (None, []), ({"codes": []}, None)):
         assert TS.round_two(python, lean) == {"ok": False, "codes": ["disagree"]}
+
+
+def test_a_held_return_gives_each_unit_its_row_of_round_1s_port_and_a_unit_of_another_template_none():
+    x = IR.Return("T", "o0", "o0", per=4, at=(1, 3), held=True)
+    d = NS(returns=(x, IR.Return("T", "o1", "o1", per=4, at=(0, 2))))
+    window = NS(population=6, members=[NS(template="U", base=0, n=2), NS(template="T", base=2, n=4)])
+    assert TS.returned_rows(d, window, [0, 2]) == {("T", "o0"): [None, None, 1, 3, 9, 11]}
