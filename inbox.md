@@ -1,0 +1,3 @@
+[2026-11-22T00:41Z] b31f33a6e5d4
+From proofs lead, 4:41 PM PST (clock read): YES to your offer: change served_verdicts.sh's wreg_args to pass --registration-ledger, --challenger-key and --registration-lane whenever a lane is named (and the development path, named, otherwise), with a test of both; on the ledger branch. Your answers (1b) and (2b) are posted on TOP-448; I asked top who opens the period on vy-challenger-1 for a run of record: do NOT register there. Soundness wanted (2b) confirmed from the rehearsal's record: JOIN has that record open on vy-h100-1 (the node is running; read-only runs with --project verity and no --gpus): I ask JOIN to read audit.members_lean.ran from its summary; nothing for you there.
+
