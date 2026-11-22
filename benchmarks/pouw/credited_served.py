@@ -508,6 +508,10 @@ def stage(a) -> int:
     rec["reads"] = {p: [v, j] for p, (v, j) in at.items()}
     print("READS " + json.dumps(rec["reads"]), flush=True)
     allregs = {wparam: pv[wparam], **regs}
+    from verity.circuits.program import RUN
+    names = [n for n, _t in program.root.signature()[0]]
+    rec["reads_bound"] = {p: [v, names.index(v), program.bindings[names.index(v)]] for p, (v, _j) in at.items()}
+    print("READS-BOUND " + json.dumps(rec["reads_bound"]), flush=True)
 
     def write(tag: str, g: list[int], table_override: dict) -> None:
         d = Path(a.out) / tag
@@ -517,6 +521,10 @@ def stage(a) -> int:
         out_rows = {p: [CI.words16(claimed[p]) + [0] * (widths[p] - len(CI.words16(claimed[p])))] for p in out_ports}
         outs = {p: CI.output(program, f"{key}/{p}", out_rows[p], is_core and p == "o2") for p in out_ports}
         f = json.loads(json.dumps(file))
+        for p, (v, _j) in at.items():
+            w = names.index(v)
+            if program.bindings[w] == RUN:
+                f["ports"][p]["value"] = REG.fresh_value(w)
         for p, o in (outs | held).items():
             f["ports"][p] = {"value": o.value, "root": o.root.hex(), "leaves": o.leaves, "words": o.words,
                              "word_bits": 16, "domain": o.domain.domain_id.hex(), RV.SCHEMA_KEY: o.schema}
