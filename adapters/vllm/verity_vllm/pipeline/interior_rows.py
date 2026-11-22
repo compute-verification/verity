@@ -8,9 +8,6 @@ sampled span ``sample[i]``'s units at [i·n_rho, (i+1)·n_rho), chained after th
 * `span`: one sampled span's units of the stream's template, read from its `Replay` (`check.replay.request_replay`: one
   request's values replayed on the CPU, a request served from the prefix cache with its hit recomputed) exactly as the
   serving rows read the committed store (`serving_rows.population`, `serving_rows.read_all`).
-* `port_map`: which committed element or weight each of those units' port words is, read off the same `read_all` over a
-  store that answers each element with its own place, so a replay on the GPU gathers them from the recorded tensors;
-  `gather` is that gather on the host.
 * `captured`: a span of a token-select template from what a replay at the served step shapes took at the sampler
   (`engine.sampler_capture`: each sampled token's logits row and id), laid out as `span` lays a token select's units out.
   A replay on the GPU writes it for a served model the CPU `Replay` is too slow for; tests write it from a `Replay`.
@@ -45,10 +42,10 @@ import hashlib
 import json
 import os
 import time
-from collections.abc import Callable, Collection, Mapping, Sequence
+from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 import numpy as np
 
@@ -60,7 +57,7 @@ from verity_vllm.definitions.numerics.token_select_rows import token_select_chun
 from verity_vllm.definitions.registry import greedy_stages as GS
 from verity_vllm.definitions.registry.dead_free import CHUNK
 from verity.commitments.periods import interface as IF, links as LK, rows as CS, wiring as WI
-from verity_vllm.check.replay.index import SAMPLER_OP, ProgramIndex
+from verity_vllm.check.replay.index import SAMPLER_OP
 from verity_vllm.engine.sampler_capture import CAPTURE
 from verity_vllm.pipeline import chunk_rows as CR, interior_links as IL, serving_rows as SRW
 from verity_vllm.pipeline.interior_links import (DIGEST, HELD, INDEX, READ, TABLE, Cells, Input, Link, Members, Operand,
@@ -121,91 +118,6 @@ def span(inst: dict[str, Any], replay: Any, template: str, *, program_dir: str |
     (data, entries), = SRW.read_all(m, rows, replay, replay.weights, arrivals)
     return Span(rid, m[0], data, entries, str(inst["digest"]),
                 {"index_s": round(t1 - t0, 3), "read_s": round(time.perf_counter() - t1, 3)})
-
-
-#: the layouts whose words `serving_rows.read` only moves (slices, reorders, repeats), so a trace of its reads is their map
-MOVED = ("row", "part", "rope", "cols")
-
-
-class _Trace:
-    """A store and registered weights whose every element read is digit ``d`` (16 bits) of its place among all the elements
-    read, in read order: `serving_rows.read_all` over it says which element each word it lays out is."""
-
-    def __init__(self, d: int) -> None:
-        self.calls: list[Any]
-        self.d, self.calls, self.n = d, [], 0
-
-    def _next(self, source: tuple[Any, ...], lo: int, hi: int) -> np.ndarray:
-        self.calls.append((self.n, source, lo))
-        at = np.arange(self.n, self.n + hi - lo, dtype=np.uint64)
-        self.n += hi - lo
-        return ((at >> np.uint64(16 * self.d)) & np.uint64(0xFFFF)).astype(np.uint16)
-
-    def words(self, rid: str, step: int, op_path: str, member: str, elo: int, ehi: int) -> tuple[np.ndarray, str]:
-        return self._next(("store", str(rid), int(step), str(op_path), str(member)), int(elo), int(ehi)), "u16"
-
-    def weights(self, field: str, lo: int, hi: int) -> np.ndarray:
-        return self._next(("weights", str(field)), int(lo), int(hi))
-
-
-def port_map(inst: dict[str, Any], template: str, rid: str, *, arrive: int = 0, program_dir: str | None = None,
-             index: Mapping[str, Any] | None = None, reuse: Sequence[ProgramIndex] = ()) -> dict[str, Any]:
-    """Which committed element or registered weight each port word of request ``rid``'s units of ``template`` is, in its
-    Program ``inst``, read off `serving_rows.read_all` itself: fixed by the Program, before serving or a replay. ``sources``:
-    each ``["store", rid, engine step, op_path, member]`` as `CommittedStore.words` reads it, or ``["weights", field]`` as
-    the registered weights' reader; ``members``: each member's template, units and ports, a port its words a unit and its
-    runs ``[unit, word, source, lo, hi]`` (that unit's words from ``word`` on are the source's elements [lo, hi), each its
-    low 16 bits as `read` takes it). `gather` applies it. Refused for a template whose read computes its words."""
-    tp = SRW.template(template)
-    if tp.packed or tp.layout not in MOVED:
-        raise ValueError(f"{template}: a {'packed ' if tp.packed else ''}{tp.layout} template's words are computed by its "
-                         f"read, not moved; a port map is read off the layouts {MOVED}")
-    arrivals = {rid: int(arrive)}
-    window, rows = SRW.population({rid: inst}, {"templates": [template], "law": "subset:1"}, "00" * 64,
-                                  program_dirs={rid: program_dir} if program_dir else None, index=index, arrivals=arrivals,
-                                  reuse=reuse)
-    traces = [_Trace(d) for d in range(3)]
-    reads = [SRW.read_all(window.members, rows, t, t.weights, arrivals) for t in traces]
-    calls = traces[0].calls
-    place = {s: i for i, s in enumerate(dict.fromkeys(s for _b, s, _lo in calls))}
-    sources, which = list(place), np.array([place[s] for _b, s, _lo in calls], dtype=np.int64)
-    bases = np.array([b for b, _s, _lo in calls], dtype=np.uint64)
-    los = np.array([lo for _b, _s, lo in calls], dtype=np.int64)
-    members = []
-    for k, m in enumerate(window.members):
-        ports = {}
-        for kind, ps in (("rows", m.rows), ("outs", m.outs)):
-            for p, _w in ps:
-                at = cast(np.ndarray, sum(np.asarray(r[k][0][kind][p], dtype=np.uint64) << np.uint64(16 * d)
-                                          for d, r in enumerate(reads)))
-                n, w = at.shape
-                flat = at.reshape(-1)
-                c = np.searchsorted(bases, flat, side="right") - 1
-                off = (flat - bases[c]).astype(np.int64) + los[c]
-                j = np.arange(flat.size)
-                cut = np.flatnonzero((j % w == 0) | np.r_[True, (c[1:] != c[:-1]) | (off[1:] != off[:-1] + 1)])
-                ends = np.r_[cut[1:], flat.size]
-                ports[p] = {"words": w, "runs": [[int(a // w), int(a % w), int(which[c[a]]), int(off[a]), int(off[a]) + int(e - a)]
-                                                 for a, e in zip(cut, ends, strict=True)]}
-        members.append({"template": m.template, "units": m.n, "ports": ports})
-    return {"rid": rid, "sources": [list(s) for s in sources], "members": members}
-
-
-def gather(pm: Mapping[str, Any], store: Any, weights: Callable) -> list[dict[str, np.ndarray]]:
-    """Each member's port words of `port_map` ``pm``, read from ``store`` (`CommittedStore.words`) and ``weights``: what a
-    GPU gather of the same runs must lay out."""
-    out = []
-    for m in pm["members"]:
-        got = {}
-        for p, d in m["ports"].items():
-            a = np.zeros((m["units"], d["words"]), dtype=np.uint16)
-            for unit, word, s, lo, hi in d["runs"]:
-                src = pm["sources"][s]
-                v = store.words(*src[1:], lo, hi)[0] if src[0] == "store" else weights(src[1], lo, hi)
-                a[unit, word:word + hi - lo] = np.asarray(v).reshape(-1).astype(np.uint16)
-            got[p] = a
-        out.append(got)
-    return out
 
 
 def captured(directory: Path, rid: str, served: Sequence[int] | None = None) -> Span:
@@ -869,8 +781,8 @@ def register(stream: Any, first: Any, it: Interior, **copies: Any) -> Any:
                                      leaf_layer=copies.pop("leaf_layer", it.leaf_layer), **copies)
 
 
-__all__ = ["DIGEST", "HELD", "INDEX", "MOVED", "READ", "TABLE", "DeviceCommit", "Input", "Interior", "Link", "Operand",
-           "Return", "Span", "Supply", "captured", "committed", "gather", "history", "inputs", "interior", "interior_ports",
+__all__ = ["DIGEST", "HELD", "INDEX", "READ", "TABLE", "DeviceCommit", "Input", "Interior", "Link", "Operand",
+           "Return", "Span", "Supply", "captured", "committed", "history", "inputs", "interior", "interior_ports",
            "interior_run", "interior_window", "run_input_ports", "run_inputs", "kept_table", "link_schemas", "link_values", "link_words", "links", "member",
-           "named", "pieces", "port_map", "register", "returns", "sources", "span", "span_values", "supplied", "table_reads",
+           "named", "pieces", "register", "returns", "sources", "span", "span_values", "supplied", "table_reads",
            "whole", "write"]
