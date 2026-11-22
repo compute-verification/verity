@@ -2,6 +2,7 @@ module
 
 public import Spot.OneStageZk
 public import Properties.Spot
+public import Properties.Spot.RootHeld
 
 /-!
 # The per-member form holds every port of every member's statement (`Spot.OneStageZk.headerHeldAt`)

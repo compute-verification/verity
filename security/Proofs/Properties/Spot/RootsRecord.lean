@@ -2,6 +2,7 @@ module
 
 public import Properties.Spot.PortsHeld
 public import Proofs.Properties.Spot
+public import Proofs.Properties.Spot.RootHeld
 public import Proofs.Flock.Soundness.Refine.Rep
 import Spot.PortsOnce
 import Mathlib.Data.List.Nodup
