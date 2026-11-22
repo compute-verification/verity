@@ -94,9 +94,10 @@ OUT=${OUT:-${RESEARCH_RUN_DIR:-$SR}/out}
 #   every entry tested under the pinned key record REGISTRATION_KEY (else PP_CHALLENGER_KEY) and the chain
 #   (`served_verdicts.py registration-hold`); the period-open line printed before it names REGISTRATION_CAP (no
 #   default) and, as --circuit, the epoch's Program digest computed before the serve from the class (fixed_circuit.py),
-#   which the closed epoch's docket must name. With PP_CHALLENGER=gate:USER@HOST (and PP_GATE_KEY) the ledger is fetched
-#   from the gate's `ledger` at each look into REGISTRATION_LEDGER (ledger_fetch.py). Unset: the development path.
-HOLD=(benchmarks/one_stage/served_verdicts.py registration-hold) FETCH=()
+#   which the closed epoch's docket must name. REGISTRATION_LEDGER is the ledger's path, or with PP_CHALLENGER=gate:USER@HOST
+#   (and PP_GATE_KEY) the gate itself, read through its `ledger` verb (its default there); REGISTRATION_KEY_SHA512, where
+#   given, the posted SHA-512 the key record's public key must have. Unset: the development path.
+HOLD=(benchmarks/one_stage/served_verdicts.py registration-hold)
 if [ -n "${REGISTRATION_LANE:-}" ]; then
   [ -z "${H1_LANE:-}" ] || [ "$H1_LANE" = "$REGISTRATION_LANE" ] || { echo "SMOKE REFUSED lane: REGISTRATION_LANE" \
     "$REGISTRATION_LANE is not H1_LANE $H1_LANE, the lane the epochs reserve on"; exit 3; }
@@ -107,16 +108,17 @@ if [ -n "${REGISTRATION_LANE:-}" ]; then
     "first request at most REGISTRATION_HOLD_S seconds, a positive integer with no default"; exit 3; }
   [ -r "${REGISTRATION_KEY:-${PP_CHALLENGER_KEY:-}}" ] || { echo "SMOKE REFUSED registration: REGISTRATION_LANE needs" \
     "the challenger's pinned key record, REGISTRATION_KEY or PP_CHALLENGER_KEY"; exit 3; }
+  [[ "${PP_CHALLENGER:-}" != gate:* ]] || REGISTRATION_LEDGER=${REGISTRATION_LEDGER:-$PP_CHALLENGER}
   [ -n "${REGISTRATION_LEDGER:-}" ] || { echo "SMOKE REFUSED registration: REGISTRATION_LANE needs REGISTRATION_LEDGER"; exit 3; }
   if [[ "${PP_CHALLENGER:-}" = gate:* ]]; then
-    g=(ssh -o BatchMode=yes); [ -z "${PP_GATE_KEY:-}" ] || g+=(-o IdentitiesOnly=yes -i "$PP_GATE_KEY")
-    FETCH=(adapters/vllm/tools/served_run/ledger_fetch.py --gate "$(printf '%q ' "${g[@]}" "${PP_CHALLENGER#gate:}")" \
-      --out "$REGISTRATION_LEDGER")
+    [ "$REGISTRATION_LEDGER" = "$PP_CHALLENGER" ] || { echo "SMOKE REFUSED registration: REGISTRATION_LEDGER" \
+      "$REGISTRATION_LEDGER is not PP_CHALLENGER $PP_CHALLENGER, the gate whose ledger the epochs' sessions are on"; exit 3; }
   else
     [ -r "$REGISTRATION_LEDGER" ] || { echo "SMOKE REFUSED registration: REGISTRATION_LEDGER is unreadable and no" \
-      "PP_CHALLENGER=gate:USER@HOST fetches it"; exit 3; }
+      "PP_CHALLENGER=gate:USER@HOST names the gate"; exit 3; }
   fi
-  HOLD+=(--lane "$REGISTRATION_LANE" --ledger "$REGISTRATION_LEDGER" --key "${REGISTRATION_KEY:-${PP_CHALLENGER_KEY:-}}")
+  HOLD+=(--lane "$REGISTRATION_LANE" --ledger "$REGISTRATION_LEDGER" --key "${REGISTRATION_KEY:-${PP_CHALLENGER_KEY:-}}"
+         ${REGISTRATION_KEY_SHA512:+--key-sha512 "$REGISTRATION_KEY_SHA512"} ${PP_GATE_KEY:+--gate-key "$PP_GATE_KEY"})
 elif [ "${1:-}" != card ]; then
   "$PY" "${HOLD[@]}" /dev/null
 fi
@@ -298,10 +300,8 @@ if [ "${1:-}" = card ]; then  # under the lease: the wipe where the application 
       "--lane $REGISTRATION_LANE --cap $REGISTRATION_CAP --circuit $FIXED" \
       "--registration $("$PY" -c 'import json, sys; from verity.commitments import docket_digest as DD; print(DD.digest(json.load(open(sys.argv[1]))))' "$DREG")"
   fi
-  if [ ${#FETCH[@]} -gt 0 ]; then "$PY" "${FETCH[@]}" > "$SR/ledger_fetch.log" 2>&1 & FETCHER=$!; fi
   rc=0; ${REGISTRATION_LANE:+timeout -k 10s "$REGISTRATION_HOLD_S"} "$PY" "${HOLD[@]}" "$DREG" 2>&1 \
     | tee "$SR/registration_hold.log" || rc=$?
-  [ -z "${FETCHER:-}" ] || { kill "$FETCHER" 2> /dev/null; wait "$FETCHER" 2> /dev/null || true; }
   [ "$rc" = 0 ] || { say "SMOKE FAILED registration hold, exit $rc: $(tail -1 "$SR/registration_hold.log")"; exit 1; }
   "$PY" adapters/vllm/tools/served_run/inputs.py tokenize --port "$PORT" --dataset "$DATASET" > "$SR/tokenize.log" 2>&1 \
     || echo "TOKENIZE FAILED ($SR/tokenize.log): $(tail -1 "$SR/tokenize.log")" >> "$SR/tokenize.log"
