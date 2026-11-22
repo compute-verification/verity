@@ -16,6 +16,10 @@ the sample's chance of hitting them, until accounting blocks can always be prove
 The guarantee, stated: `NetTiming.Guarantees.MonitoringPeriodLeakAccepted` (`security/Definitions/Certifier/Guarantees/MonitoringPeriod.lean`),
 on what a period the check accepts can leak; the lock lists it as deployed, but its honest witness is a toy code that
 accepts no run, and it rests on four open premises (`Compiled.KS`, `CertifierRegisters`, `ScopeAcc`, `TrustedDevice`).
+Its count is only over secrets whose every window meets a good event (`ExecutionPhaseGood`), and the check's accepting
+gives neither of two parts of it: that the trace holds the registration's values at the registered inputs, which no
+theorem discharges and no check tests by opening them, and that every observation's jitter is below the bound, which the
+check never compares. It bounds each window alone; the union over a period's windows is not stated.
 The network attester is the auditor's hardware on a machine the developer does not control; trust in it and its host is
 the named assumption `trusted-device`.
 
