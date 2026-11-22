@@ -1530,6 +1530,16 @@ theorem entries_values {d : Flock.TemplateQuery.Desc} {ps : Array Registered.Par
   repeat' split at hb
   all_goals (cases hb <;> rfl)
 
+theorem expectedEntries_ok {v : Docket.Verifier} {mine : Array Registered.Entry}
+    (h : Docket.expectedEntries v = .ok mine) :
+    ∃ mine0, Docket.ownEntries v = .ok mine0 ∧ mine = mine0 ++ Docket.tableEntries v := by
+  unfold Docket.expectedEntries at h
+  cases h0 : Docket.ownEntries v with
+  | error e => simp [h0, bind, Except.bind] at h
+  | ok m0 =>
+    simp only [h0, bind, Except.bind, pure, Except.pure, Except.ok.injEq] at h
+    exact ⟨m0, rfl, h.symm⟩
+
 theorem find_of_values {mine : Array Registered.Entry} {values : Array (String × Nat)}
     (h : mine.toList.map (·.value) = values.toList.map (·.1)) {u : String} (hu : values.any (·.1 == u) = true) :
     ∃ w, mine.find? (·.value == u) = some w := by
@@ -1673,7 +1683,9 @@ theorem history_of_R7 (rec : Json) (v : Docket.Verifier) (h : R7 rec v) (u p : S
           jeq (getD e "root") (getD r "root") = true ∧ jeq (getD e "domain") (getD r "domain") = true ∧
           int? (getD e "leaves") = int? (getD r "leaves") := by
   obtain ⟨mine, es, mine', held', hown, hes, hearly, happ, -, -, hentry, -⟩ := h
-  obtain ⟨want0, hw0⟩ := find_of_values (entries_values hown) hreg
+  obtain ⟨mine0, hown0, hm⟩ := expectedEntries_ok hown
+  obtain ⟨want0, hw00⟩ := find_of_values (entries_values hown0) hreg
+  have hw0 : mine.find? (·.value == u) = some want0 := by simp [hm, Array.find?_append, hw00]
   obtain ⟨r, hr, hleaves, ⟨dom, hdom⟩, ⟨root, hroot⟩⟩ := hearly _ hu want0 hw0
   have hor := outputRoot_of hr hleaves hdom hroot
   have hheld := applyOutputs_heldAs v.log u dom root _ rfl #[] mine

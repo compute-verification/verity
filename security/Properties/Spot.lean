@@ -271,7 +271,9 @@ def EarlierIs (log : Array Json) (leaves words bits : Nat) (record : String) : D
 
 /-- R7, for a v2 record (`Docket.checkOutputs`): the verifier derives its own entries for the values it expects
 registered (`Docket.ownEntries`: `Registered.entries`, counting each value's rows in the row format it holds for
-it, `v.schemas`, with each value's domain under its window's open root but the values it holds across windows); each
+it, `v.schemas`, with each value's domain under its window's open root but the values it holds across windows), then
+one for each table a table input of C names that the weights' registration of record pins, built from that pin
+(`Docket.expectedEntries`, `Docket.tableEntries`); each
 output value it has an entry for has its earlier port, with the value's leaf count, or its earlier registered value,
 with the value's leaves, words and word bits (`EarlierIs`), and takes that port's or entry's domain and root
 (`Docket.applyOutputs`: `mine'` and `held'`); the
@@ -282,10 +284,10 @@ naming it, as Python's dict reads it) as derived, or as certified, and held (`En
 its output's root,
 else to the root it pinned before the record, else to the root the log first registered it under with the domain it
 takes now (`Docket.heldRoots`), and one it fills to none (`heldFor`); and each value it fills has the root it
-recomputes from the record, the log and its binding, in the row format it names for it (`SuppliedIs`, `Supplied.root`).
-A certified value's root is `CertifiedHeld`'s. -/
+recomputes from the record, the log, its binding and the tables it holds (`Docket.heldTables`), in the row format it
+names for it (`SuppliedIs`, `Supplied.root`). A certified value's root is `CertifiedHeld`'s. -/
 def R7 (rec : Json) (v : Docket.Verifier) : Prop :=
-  ∃ mine es mine' held', Docket.ownEntries v = .ok mine ∧
+  ∃ mine es mine' held', Docket.expectedEntries v = .ok mine ∧
     getD rec "registered" = .arr es ∧
     (∀ o ∈ v.outputs, ∀ want, mine.find? (·.value == o.1) = some want →
       EarlierIs v.log want.leaves want.words want.wordBits o.2.1 o.2.2) ∧
@@ -298,12 +300,13 @@ def R7 (rec : Json) (v : Docket.Verifier) : Prop :=
       es.reverse.find? (fun e => jeq (getD e "value") (.str want.value)) = some e →
         EntryIs e want (heldFor v.supplied held' want.value)) ∧
     SuppliedIs es (mine' ++ v.certified.map (·.1)) v.supplied
-      (Supplied.root rec v.log v.binding v.params (Flock.hexOf v.program.desc.sha512) (v.supplied.map (·.1)) v.schemas)
+      (Supplied.root rec v.log v.binding (Docket.heldTables v) v.params (Flock.hexOf v.program.desc.sha512)
+        (v.supplied.map (·.1)) v.schemas)
 
 /-- R7's holds beside its entries, for a v2 record: no registered value, a supplied one included, whose parameter's
 gates hold a run Input node (`Docket.runInputNamed`: a run Input's rows are committed once, in its one tree); no
 supplied anchor whose value neither the verifier's `pinned` nor the weights' registration of record pins
-(`Docket.anchorUnpinned`, which reads a field no circuit description carries yet, so it refuses nothing today); and
+(`Docket.anchorUnpinned`, over C's marks); and
 every value the weights' registration of record pins has the record's entry that pin in
 root, leaf count, words and domain, and an anchor's value it pins an entry (`Docket.offPin`). -/
 def R7Pins (rec : Json) (v : Docket.Verifier) : Prop :=
@@ -311,7 +314,8 @@ def R7Pins (rec : Json) (v : Docket.Verifier) : Prop :=
     (Docket.offPin rec v).isEmpty = true
 
 /-- Every parameter bound as a supplied input has a source, whatever the record registers: the parameters' `supplied`
-or an earlier record's output (`Docket.unsourced`). -/
+or an earlier record's output, and a table input's source is a table the weights' registration of record pins, a mark
+being no source (`Docket.unsourced`, `Docket.anchorsUnheld`). -/
 def SuppliedSourced (v : Docket.Verifier) : Prop := (Docket.unsourced v).isEmpty = true
 
 /-- The pool chain the caller's check holds (`VStar.Recursive.Caller.poolChained`), a caller's fact (`CallerHeld`): for a verifier with a

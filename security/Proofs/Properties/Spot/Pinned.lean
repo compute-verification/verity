@@ -73,9 +73,10 @@ namespace Properties.Spot
 values that it pinned, neither fills nor takes from an earlier run, has its pinned root (`PinnedHeld`). -/
 theorem pinnedHeld_of_R7 {rec : Json} {v : Docket.Verifier} (h : R7 rec v) : PinnedHeld rec v := by
   obtain ⟨mine, es, mine', held', hown, hes, -, happ, -, -, hentry, -⟩ := h
-  intro mine0 hmine want hw hs ho x hx e he
-  rw [hown] at hmine
-  cases hmine
+  intro mine0 hmine want hw0 hs ho x hx e he
+  have hm : mine0 ++ Docket.tableEntries v = mine := by
+    simpa [Docket.expectedEntries, hmine, bind, Except.bind, pure, Except.pure] using hown
+  have hw : want ∈ mine := hm ▸ Array.mem_append_left _ hw0
   obtain ⟨hkeep, hfind⟩ := Pinned.applyOutputs_keeps v.log #[] mine
     (v.pinned ++ Docket.heldRoots v.log (Docket.ownEntries v)) v.outputs want.value ho
   rw [happ] at hkeep hfind
