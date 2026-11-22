@@ -1,9 +1,11 @@
 # Verity
 
 Verity represents AI datacenter computations exactly as Boolean circuits, proves claims about them, and derives compute,
-memory and network accounting from those proofs. `ARCHITECTURE.md` has the architecture and `GLOSSARY.md` the Glossary,
-whose terms code, docs and output use. This file states what holds on `main` now; what a package contains is read from
-its code. Your checkout and your prompt can be older than `main`: `git show origin/main:AGENTS.md` wins.
+memory and network accounting from those proofs. `ARCHITECTURE.md` has the architecture and `GLOSSARY.md` the Glossary.
+The same words everywhere: code, Lean, docs and output use its terms. One meaning per word: registered is said only of
+information, declared only of the declared circuit, incorrect only of a proof block, and hidden only of hardware. This
+file states what holds on `main` now; what a package contains is read from its code. Your checkout and your prompt can
+be older than `main`: `git show origin/main:AGENTS.md` wins.
 
 ## Map and commands
 
@@ -279,28 +281,27 @@ The rules in force, each stated as itself; the friction skill has the standing r
 
 ## Tests
 
-Every test is under the root `tests/`: the tests of X in `tests/X`, one suite each, run in its own process and cached by
-input; the top of `tests/` holds only invariants of the whole tree. How to run them, what a suite may read, and the rules for slow tests, fixtures
-and dummy credentials: the testing skill.
+Every test is under `tests/`: X's in `tests/X`, one suite each, run in its own process and cached by input; `tests/`'s
+top holds only whole-tree invariants. Running them, what a suite may read, slow tests, fixtures and dummy credentials:
+the testing skill.
 
-No test reads wall-clock time (no sleeps, clock readings or timeouts:
-wait on the event or inject the clock; `tests/test_no_wall_clock.py`, its exceptions in `ALLOWED`). A test that flakes is
-deleted, not rerun. A test that adds more than about a minute to `check` says in its docstring what it catches that a
-cheaper test can't.
+No test reads wall-clock time (no sleeps, clock readings or timeouts: wait on the event or inject the clock;
+`tests/test_no_wall_clock.py`, exceptions in `ALLOWED`). A test that flakes is deleted, not rerun. A test adding over
+about a minute to `check` says in its docstring what it catches that a cheaper one can't.
 
-**No dishonest runs** (Daniel, 20 Nov). That a cheating prover fails is what the guarantees say and the Lean proofs
-establish; nobody runs one end to end to see it. No benchmark, application or served run has a dishonest arm, no gate
-asks for one, and none is a goal. An end-to-end run is one honest run the verifier accepts, a smoke test; a benchmark
-measures. A verifier's named refusal keeps one small test or Lean `#guard` in its package's suite. A demo that shows a
-cheat refused is built when Daniel asks for one.
+**No dishonest runs.** That a cheating prover fails, the guarantees say and the Lean proofs establish; nobody runs one
+end to end to see it. No benchmark, application or served run has a dishonest arm, and no gate or goal asks for one. An
+end-to-end run is one honest run the verifier accepts, a smoke test; a benchmark measures. A verifier's named refusal
+keeps one small test or Lean `#guard` in its package's suite. A demo of a refused cheat waits for Daniel to ask.
 
-**A test run shows that the code runs; its size carries no guarantee** (Daniel, 21 Nov). Run each variant at the smallest
-size that executes its code: a sample that takes every proof block is no reason to hold a run back or enlarge it. The
-proofs give the guarantee, and a result extrapolates it to all compute.
+**A test run shows the code runs; its size carries no guarantee.** Run each variant at the smallest size that runs its
+code: a sample taking every proof block is no reason to hold a run back or enlarge it. The proofs give the guarantee; a
+result extrapolates it to all compute.
 
-Bookkeeping warns and a later PR fixes it: what can be put right after landing without any claim being false meanwhile. The root suite's bookkeeping tests (`BOOKKEEPING` in `tests/conftest.py`: lane text, retired terms, doc
-paths, naming, stale allowlists, Markdown caps) and ruff's style findings warn. Ruff's errors, a crashed scan and
-everything that can make a claim false or can't be undone still fail.
+Bookkeeping, fixable after landing with no claim false meanwhile, warns for a later PR to fix: the root suite's
+bookkeeping tests (`BOOKKEEPING` in `tests/conftest.py`: lane text, retired terms, doc paths, naming, stale allowlists,
+Markdown caps) and ruff's style findings. Ruff's errors, a crashed scan and whatever can make a claim false or can't be
+undone fail.
 
 ## Circuits
 
