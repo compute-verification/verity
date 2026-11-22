@@ -16,7 +16,8 @@ public import Circuits.Program
 or null: a refusal is an output, so which refusal is compared, and not only the fact of one. `encode` answers with
 `Flock.Program.Prog.encode` of the decoded Program, which the same test holds to `codec.descriptor_chunks` byte for byte.
 `build_eq` and `build_product` answer with the bytes `Flock.Program.Build.finish` writes for the word equality on bits and
-for `Gemm_v2{K, N}` at a size, each held to its Python twin's. -/
+for `Gemm_v2{K, N}` at a size, each held to its Python twin's. `input_bits` answers with `Flock.Program.inputBits`,
+held to `program.input_bits_of` (`tests/tools/difftest/test_input_bits_port.py`). -/
 
 @[expose] public section
 
@@ -123,8 +124,31 @@ def buildProduct : Difftest.Fn := fun j => do
   return written (Flock.Program.Build.finish s!"Root[Gemm_v2\{K={k},N={n},DOT={dot}}]_v1"
     s!"Gemm_v2\{K={k},N={n},DOT=\{\"fn\":\"{dot}\"}}" (product src k n))
 
+/-- `Flock.Program.inputBits` of what `decode` reads, with `rebind` (`{"node", "key", "binding"}`, `binding` a string or
+null), where given, setting the key and binding of root node `node`'s callee first, a description no decoder gives:
+`{"ok": true, "run", "registration", "supplied"}`, or `{"ok": false, "error": CODE}`, CODE the refusal's text before its
+first colon. -/
+def inputBits : Difftest.Fn := fun j => do
+  let text ← match j.getObjValAs? String "descriptor" with
+    | .ok s => pure s
+    | .error _ => throw "descriptor: not a string"
+  let P ← match Flock.Program.decode text.toUTF8 with
+    | .ok P => pure P
+    | .error e => throw s!"descriptor: {e}"
+  let P ← match j.getObjVal? "rebind" with
+    | .error _ => pure P
+    | .ok r => do
+      let (.ok k, .ok key) := (r.getObjValAs? Nat "node", r.getObjValAs? String "key")
+        | throw "rebind: {node, key, binding}"
+      let binding := (r.getObjValAs? String "binding").toOption
+      let some f := ((P.defs[P.root]?).bind (·.body.nodes[k]?)).map (·.fn) | throw "rebind: no such root node"
+      pure { P with defs := P.defs.modify f fun d => { d with key, binding } }
+  return match Flock.Program.inputBits P with
+    | .ok b => Json.mkObj [("ok", true), ("run", b.run), ("registration", b.registration), ("supplied", b.supplied)]
+    | .error e => Json.mkObj [("ok", false), ("error", Json.str ((e.splitOn ":").headD e))]
+
 def table : String → Option Difftest.Fn :=
   Difftest.table [("decode", decode), ("decode_text", decodeText), ("decode_with", decodeWithText), ("encode", encode),
-    ("build_eq", buildEq), ("build_product", buildProduct)]
+    ("build_eq", buildEq), ("build_product", buildProduct), ("input_bits", inputBits)]
 
 end ProgramDifftest

@@ -16,7 +16,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
-untraced = ["test_example_port.py", "test_protocol_port.py", "test_program_decode_port.py"]
+untraced = ["test_example_port.py", "test_protocol_port.py", "test_program_decode_port.py", "test_input_bits_port.py"]
 # Test-only: `lake` builds lean/ (in this directory) and, through its path requires, the base packages (`Base.Canon`
 # and what it imports; `Base.JsonParse`, the JSON parser's port). The annotation port's test builds `annot-difftest`,
 # which reads `Circuits.Annot`, `Circuits.AnnotExpand` and what they import (`verity_difftest.annot.INPUTS`), and holds
@@ -44,4 +44,6 @@ inputs = ["verity/protocols/interface", "verity/protocols/proof/flock/verifier/l
           # the program decoder's port (`program-difftest`, `Circuits.Program`) on the format's cases: decode_difftest.py with
           # the format test, its vectors and stand-in bodies it imports, and the chain it builds from the GEMM and the periods
           "tests/verity/circuits/decode_difftest.py", "tests/verity/circuits/test_format_spec.py", "tests/verity/circuits/stand_in.py",
-          "tests/verity/circuits/format_vectors.json", "tests/verity/circuits/conftest.py", "verity/commitments", "verity/errors.py"]
+          "tests/verity/circuits/format_vectors.json", "tests/verity/circuits/conftest.py", "verity/commitments", "verity/errors.py",
+          # the input bits' port (`program-difftest`'s `input_bits`, `Circuits.Descriptor`) on the cases it builds
+          "tests/verity/circuits/input_bits_cases.py"]

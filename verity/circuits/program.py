@@ -20,7 +20,7 @@ commitment.
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import Any, Callable
 
 from . import ports
@@ -118,6 +118,34 @@ def input_id(fid: str) -> tuple[str, int] | None:
         if m is not None:
             return when, int(m[1])
     return None
+
+
+def input_bits(root: Any) -> dict[str, int]:
+    """A declared circuit's input bits by binding (`Flock.Program.inputBits`), from its root's nodes alone; see
+    `input_bits_of`."""
+    return input_bits_of([(nd.fn.id, input_id(nd.fn.id)[0] if is_input(nd.fn) else None, nd.form, nd.n)
+                          for nd in root.body.nodes])
+
+
+def input_bits_of(nodes: Sequence[tuple[str, str | None, str, int]]) -> dict[str, int]:
+    """``{run, registration, supplied}``: over the root's nodes, each ``(callee id, its binding or None, form, n)``, each
+    input node's width times its members (``n`` for a batch or a scan, else 1), summed by its binding. It counts a whole
+    input node: which of a registered node's bits are held to a pin, and which leaves are read, are for its callers.
+    Refused (ValueError) by name where a callee's binding is not its id's (``input-binding``) or a bound callee's id has
+    no width (``input-width``)."""
+    out = dict.fromkeys(BINDINGS, 0)
+    for k, (key, binding, form, n) in enumerate(nodes):
+        named = input_id(key)
+        if named is None and binding is None:
+            continue
+        if named is None:
+            raise ValueError(f"input-width: root node {k}: {key} is bound at {binding} but its id names no width")
+        if binding is None:
+            raise ValueError(f"input-binding: root node {k}: {key} is an input id ({named[0]}) with no binding")
+        if binding != named[0]:
+            raise ValueError(f"input-binding: root node {k}: {key} is bound at {binding}, not its id's {named[0]}")
+        out[binding] += named[1] * (n if form in ("batch", "scan") else 1)
+    return out
 
 
 def input_prim(w: int, binding: str = RUN) -> PrimitiveDefinition:
