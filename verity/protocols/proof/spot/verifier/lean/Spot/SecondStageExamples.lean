@@ -778,6 +778,23 @@ private def exParts1 : Array Part := #[⟨"Pair_v0", 0, 3⟩]
 #guard (placingFailures { exReg [] with links := some #[] } exParts1).map (·.1) == ["second-place-none"]
 #guard (placingFailures (exReg []) exParts1).map (·.1) == ["second-place-none"]
 
+/-- `exReg []` with round 1's record holding `logits` under run `round-1`: a link reads round 1's own tree. -/
+private def exRound1 : Own :=
+  { exReg [] with boundary := exRec 4 [("bx", 5, 6), ("logits", 8, 9)] (exExecutionPhase (natsJson #[]) (.str "round-1")) }
+
+-- a link to a port of round 1's record, with no tree of its own and no registered value: round 1's tree, bound as
+-- round 1 committed it, in round 1's run
+#guard match placings exRound1 false "Pair_v0" "x" with | [.round1 q] => q == "logits" | _ => false
+#guard (placingFailures exRound1 exParts1).isEmpty
+#guard placedBinding exRound1 false "Pair_v0" "x" exV2 exRun == portBinding exRound1.boundary "logits" exV2 "round-1"
+#guard (portBinding exRound1.boundary "logits" exV2 "round-1").isSome
+#guard placedBinding exRound1 false "Pair_v0" "x" exV2 exRun != portBinding exRound1.boundary "logits" exV2 exRun
+-- the fallback only: a registered value, or a tree of its own, places the port as before
+#guard match placings { exRound1 with interior := (exReg [exLogits "program-0" (some (exRoot 7))]).interior } false
+  "Pair_v0" "x" with | [.registered _] => true | _ => false
+-- round 1's record naming no run: unbound
+#guard placedBinding { exRound1 with boundary := exRec 4 [("logits", 8, 9)] } false "Pair_v0" "x" exV2 exRun == none
+
 /-- `exWired` with `Triple_v0`'s reference header naming `x`, `x` also linked to read `logits`, which the interior
 registers. -/
 private def exWiredReg : Own :=

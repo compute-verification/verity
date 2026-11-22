@@ -14,6 +14,7 @@ import pytest
 from verity.circuits import population as PN
 from verity.circuits import codec
 from verity.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
+from verity.circuits.ops.argmax import U16
 from verity.circuits.refs import array_of, coll_concat
 from verity.circuits.types import Array
 from verity_vllm.definitions.registry import greedy_stages as G
@@ -24,7 +25,7 @@ from verity.protocols.proof.spot.verifier.one_stage import partition as P
 SERVED_V = 154880
 #: a replay block's served tokens and a replay sample's blocks
 TOKENS, Q = 256, 3
-WORDS = Array(2, G.U16)
+WORDS = Array(2, U16)
 
 
 def _inlined(template: SpecializedDefinition, n: int) -> SpecializedDefinition:

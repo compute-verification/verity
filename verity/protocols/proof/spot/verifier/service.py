@@ -2194,7 +2194,9 @@ class Stream:
             v = self._public(record, interior=True)
             if v.ok and not (type(n := record.get("population")) is int and n == m):
                 v = _refuse("interior-population", {"population": n, "replay_sample": q, "n_rho": self.n_rho}).verdict
-            program = self.interior_program(q) if v.ok else None
+            entry = self._entries[first.docket.order]
+            program = self.interior_program(q, self.interior_reads(entry.program, first.docket.record, first.units)) \
+                if v.ok else None
             if program is not None:
                 try:
                     strata = P.strata(program, query)
@@ -2239,17 +2241,44 @@ class Stream:
         e.interior_seed_salt, e.interior_history = seed_salt, history
         return reg
 
-    def interior_program(self, q: int) -> Program:
+    def interior_program(self, q: int, reads: Sequence[tuple[str, int, int, str, Sequence[int]]] = ()) -> Program:
         """The challenger's interior program over a replay sample of `q`: `unit`'s Q·n_rho instances, or a window's mixed
         population of its templates at Q·n_t each, in the check's order, taking the stream's `values` (which its proof
         blocks read as registered values, an earlier record's among them: `register_interiors`' `outputs`), then its
-        `span_values`, each at its leaves times Q."""
+        `span_values`, each at its leaves times Q, then `reads` (`interior_reads`), round 1's ports bound at
+        registration."""
         assert self.n_rho is not None
-        if self.templates is None:
+        if self.templates is None and not reads:
             return PN.population_program(self.unit, q * self.n_rho)
         spans = tuple((name, leaves * q, width) for name, leaves, width in self.span_values)
-        return PN.mixed_population_program([(t, q * n) for t, n in zip(self.templates, self.cells)],
-                                          values=self.values + spans)
+        return PN.mixed_population_program([(t, q * n) for t, n in zip(self.templates or (self.unit,), self.cells or
+                                                                        (self.n_rho,))],
+                                          values=self.values + spans, reads=reads)
+
+    def interior_reads(self, program: Program, record: Mapping[str, Any],
+                       sample: Sequence[int]) -> tuple[tuple[str, int, int, str, tuple[int, ...]], ...]:
+        """The parameters of the replay block that round 1's record `record` (the boundary docket's, as this challenger
+        logged it) commits as ports, as the interior program reads them (`population.mixed_population_program`'s
+        `reads`): each link at a template's parameter (`second_stage.replay_links` over round 1's `program`) whose
+        value is a port of `record`, of that port's leaves there, unit j of the i-th sampled replay block reading its row
+        `sample[i]·per + row_at(runs, j)` (`second_stage.replay_rows`). None for a stream with no replay block."""
+        if self.replay is None:
+            return ()
+        key = descriptor_id(self.replay)
+        rows = {(r.template, r.port): r for r in SS.replay_rows(program, key)}
+        leaves = {r.get("port"): r.get("leaves") for r in record.get("roots", ())}
+        out = []
+        for j, (t, n) in enumerate(zip(self.templates or (self.unit,), self.cells or (self.n_rho,))):
+            tid, params = descriptor_id(t), dict(t.signature()[0])
+            for x in SS.replay_links(program, key, record) or ():
+                r = rows.get((x.template, x.port))
+                if x.template != tid or x.port not in params or type(leaves.get(x.value)) is not int or r is None:
+                    continue
+                at = [SS.row_at(r.runs, u) for u in range(n)]
+                if any(a is None for a in at):
+                    continue
+                out.append((x.value, leaves[x.value], j, x.port, tuple(int(s) * r.per + a for s in sample for a in at)))
+        return tuple(out)
 
     def _sampled_op(self, draw: Draw) -> dict[str, Any]:
         """What an op names a sample by: its docket's order and token and its token; for a two-stage design's

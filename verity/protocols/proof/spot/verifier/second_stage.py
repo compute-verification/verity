@@ -143,12 +143,12 @@ KEY_WHY = ("the interior registration registers the opened row of a read at a ke
 #: service reads sets the field. Only development plays set it on, never an accept of record. It turns on only once
 #: the statement that a sampled reader unit's key is its writer unit's committed output row is proved.
 WIRED_KEY = False
-#: The three rules that place a session port's binding (`placings`): its own tree of the interior record, its writer's
-#: tree there, a value the interior registration registers.
-OWN_TREE, WRITER_TREE, REGISTERED = "own", "writer", "registered"
-PLACE_NONE_WHY = ("a port of a template's reference header is placed by none of the three rules: its own tree of the "
+#: The four rules that place a session port's binding (`placings`): its own tree of the interior record, its writer's
+#: tree there, a value the interior registration registers, round 1's tree of a boundary port.
+OWN_TREE, WRITER_TREE, REGISTERED, ROUND1_TREE = "own", "writer", "registered", "round1"
+PLACE_NONE_WHY = ("a port of a template's reference header is placed by none of the four rules: its own tree of the "
                   "interior record, its writer's tree where a wire names it, a value the interior registration "
-                  "registers where a link names it")
+                  "registers where a link names it, round 1's tree of the boundary port a link names it to read")
 PLACE_TWO_WHY = ("a port of a template's reference header is placed by more than one of the three rules: its own tree of "
                  "the interior record, its writer's tree where a wire names it, a value the interior registration "
                  "registers where a link names it")
@@ -542,13 +542,17 @@ def _key_failure(own: Own, t: str) -> str | None:
 def placings(own: Own, named: bool, t: str, p: str) -> list[tuple[str, Any]]:
     """`SecondStage.placings`: every rule that places template `t`'s session port `p`, by the interior record and the
     design alone: `OWN_TREE` at its own port of the record, `WRITER_TREE` at its writer's output port where a wire names
-    it, and `REGISTERED` at the interior registration's entry of the value a link names it to read. A port is placed
-    where exactly one holds (`placing_failures`)."""
+    it, and `REGISTERED` at the interior registration's entry of the value a link names it to read; where none of
+    those does, `ROUND1_TREE` at the boundary record's port a link names it to read. A port is placed where exactly one
+    holds (`placing_failures`)."""
     w, x = _wire_of(own, t, p), _link_of(own, t, p)
     e = None if x is None else _registered_entry(own.interior, x.value)
-    return ([(OWN_TREE, _port_of(named, t, p))] if _port_of(named, t, p) in _by_port(own.interior) else []) + (
+    three = ([(OWN_TREE, _port_of(named, t, p))] if _port_of(named, t, p) in _by_port(own.interior) else []) + (
         [] if w is None else [(WRITER_TREE, _port_of(named, w.writer, w.wport))]) + (
         [] if e is None else [(REGISTERED, e)])
+    if three or x is None:
+        return three
+    return [(ROUND1_TREE, x.value)] if x.value in _by_port(own.boundary) else []
 
 
 def _put_at(v: Any, j: Any, path: Sequence[str]) -> Any:
@@ -630,6 +634,9 @@ def _placed_binding(own: Own, named: bool, t: str, p: str, schema: str, run: str
     if len(ps) != 1:
         return None
     (rule, at), = ps
+    if rule == ROUND1_TREE:
+        r1 = _run_of(own.boundary)
+        return None if r1 is None else port_binding(own.boundary, at, schema, r1)
     return registered_binding(own.held, at) if rule == REGISTERED else port_binding(own.interior, at, schema, run)
 
 
@@ -1346,7 +1353,7 @@ def attach(rec: Mapping[str, Any], v: Verdict, reads: Sequence[Mapping[str, str]
 
 
 __all__ = ["OWN_TREE", "PLACE_NONE_WHY", "PLACE_TWO_WHY", "READ_ROW_FIELDS", "READ_RUN_FIELDS", "REGISTERED", "RETURN_WHY",
-           "WIRED_KEY", "WRITER_TREE", "Checked", "Held", "Link", "Own", "Part",
+           "ROUND1_TREE", "WIRED_KEY", "WRITER_TREE", "Checked", "Held", "Link", "Own", "Part",
            "Rows", "Run", "Width", "Wire",
            "at_run", "attach", "blank_reads", "blank_run", "check", "check_twin", "complete", "complete_twin", "held_to_lean",
            "inputs_failure", "interior_order_ok",

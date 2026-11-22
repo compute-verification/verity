@@ -157,13 +157,15 @@ class Input:
     its link (`second_stage.replay_links`). The port holds ``per`` rows a replay block, each of ``words`` u16 words, and
     unit j of a block's n_t reads its row ``at[j]``: row ``sample[i]·per + at[j]`` of the port for the i-th sampled
     block, where round 2 holds a link's read of a port of round 1's record (`second_stage`'s linked row). The serve
-    committed those rows before the first stage's sample, so the interior registers no value for it."""
+    committed those rows before the first stage's sample, so the interior registers no value for it. ``leaves``: the
+    port's rows in round 1's record (0 where the record names none), which the interior program takes it as."""
     template: str
     port: str
     value: str
     per: int
     at: tuple[int, ...]
     words: int
+    leaves: int = 0
 
     def __post_init__(self) -> None:
         _places(self.value, self.per, self.at)
@@ -342,7 +344,8 @@ def inputs(program: Any, key: str, record: Mapping[str, Any], members: Members, 
         at = tuple(RL.row_at(r.runs, j) for j in range(n))
         if any(a is None for a in at):
             raise ValueError(f"{x.template}: its {x.port!r} rows place other than its {n} units a span")
-        out.append(Input(x.template, x.port, x.value, r.per, at, dict(m.rows)[x.port]))
+        leaves = next((int(e.get("leaves") or 0) for e in record.get("roots", ()) if e.get("port") == x.value), 0)
+        out.append(Input(x.template, x.port, x.value, r.per, at, dict(m.rows)[x.port], leaves))
     return tuple(out)
 
 

@@ -12,16 +12,18 @@ from verity.circuits.population import mixed_population_program, population_prog
 
 
 def population_program(templates: Sequence[tuple[Any, int]], several: bool = False,
-                       values: Sequence[tuple[str, int, int]] = ()) -> tuple[Any, dict[str, Any]]:
+                       values: Sequence[tuple[str, int, int]] = (),
+                       reads: Sequence[tuple[str, int, int, str, Sequence[int]]] = ()) -> tuple[Any, dict[str, Any]]:
     """The verifier's population program and query over ``(template Definition, instances)`` in order: ``TemplateInstances`` and
     ``Q_template_instance`` for one template, ``TemplatePopulations`` and ``Q_template_instances`` for several (or, ``several``,
     for one). ``values``, the values the period registers that no unit reads but through its registered reads (``(name,
-    leaves, width)`` each), are parameters of a ``TemplatePopulations`` alone (`mixed_population_program`), so a period with
-    values has one for one template too."""
-    if len(templates) == 1 and not several and not values:
+    leaves, width)`` each), and ``reads``, an earlier period's committed values its units read at given rows
+    (`mixed_population_program`'s), are parameters of a ``TemplatePopulations`` alone, so a period with either has one for
+    one template too."""
+    if len(templates) == 1 and not several and not values and not reads:
         (t, n), = templates
         return template_population(t, n), PO.template_instance_query(t)
-    return (mixed_population_program(list(templates), values=values),
+    return (mixed_population_program(list(templates), values=values, reads=reads),
             PO.template_instances_query([t for t, _ in templates]))
 
 

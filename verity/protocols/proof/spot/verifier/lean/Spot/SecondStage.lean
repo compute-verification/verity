@@ -229,8 +229,9 @@ sampled reader unit's key is its writer unit's committed output row is proved. -
 def WIRED_KEY : Bool := false
 
 def PLACE_NONE_WHY : String :=
-  "a port of a template's reference header is placed by none of the three rules: its own tree of the interior " ++
-    "record, its writer's tree where a wire names it, a value the interior registration registers where a link names it"
+  "a port of a template's reference header is placed by none of the four rules: its own tree of the interior " ++
+    "record, its writer's tree where a wire names it, a value the interior registration registers where a link names " ++
+    "it, round 1's tree of the boundary port a link names it to read"
 
 def PLACE_TWO_WHY : String :=
   "a port of a template's reference header is placed by more than one of the three rules: its own tree of the " ++
@@ -879,21 +880,28 @@ def registeredEntry (rec : Json) (v : String) : Option Json :=
   (match getD rec "registered" with | .arr es => es | _ => #[]).find? fun e => jsonStrIs (getD e "value") v
 
 /-- One rule that places a session port's binding (`placings`): its own tree of the interior record, its writer's tree
-there, or a value the interior registration registers, at its entry. -/
+there, a value the interior registration registers, at its entry, or round 1's tree of a boundary port. -/
 inductive Placing where
   | own (port : String)
   | writer (port : String)
   | registered (entry : Json)
+  | round1 (port : String)
 
 /-- **The rules that place** template `t`'s session port `p`, by the interior record and the design alone: its own
 port of the record, its writer's output port where a wire names it, and the interior registration's entry of the value
-a link names it to read. A port is placed where exactly one holds (`placingFailures`). -/
+a link names it to read; where none of those does, round 1's own tree of the port of the boundary record a link names
+it to read, which round 2 reads at round 1's root and commits no tree of. A port is placed where exactly one holds
+(`placingFailures`). -/
 def placings (own : Own) (named : Bool) (t p : String) : List Placing :=
-  (if (Record.byPort own.interior).any (·.1 == portOf named t p) then [.own (portOf named t p)] else []) ++
+  let three : List Placing := (if (Record.byPort own.interior).any (·.1 == portOf named t p) then [.own (portOf named t p)] else []) ++
     (match wireOf own t p with | some w => [.writer (portOf named w.writer w.wport)] | none => []) ++
     match (linkOf own t p).bind fun x => registeredEntry own.interior x.value with
     | some e => [.registered e]
     | none => []
+  if !three.isEmpty then three else
+  match linkOf own t p with
+  | some x => if (Record.byPort own.boundary).any (·.1 == x.value) then [.round1 x.value] else []
+  | none => []
 
 /-- **The run's fields** of a statement's header, each a path of keys: the only ones a header may differ from its
 template's reference placed in the run in, which other checks hold instead: `instances` and `units.indices`
@@ -995,6 +1003,7 @@ def placedBinding (own : Own) (named : Bool) (t p schema run : String) : Option 
   | [.own q] => portBinding own.interior q schema run
   | [.writer q] => portBinding own.interior q schema run
   | [.registered e] => registeredBinding own.held e
+  | [.round1 q] => (runOf own.boundary).bind (portBinding own.boundary q schema)
   | _ => none
 
 /-- Template `t`'s reference header `r` placed in the run, for the session of the `k`-th part: its `set`
