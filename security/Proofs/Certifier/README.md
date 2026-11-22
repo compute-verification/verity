@@ -81,7 +81,7 @@ content and order. Conventions follow POUS's package (`tools/pous_grader/`): the
     (SampledLeakCarried, PooledLeakCarried)
 ../../Definitions/Certifier/MonitoringPeriodConditions.lean  trusted: a period statement's conditions (ExecutionPhasesPlaced,
     RecordFormat.ReadsBy, MonitoringPeriodChannelReg) and the windows' count (executionPhasesCount)
-../../Definitions/Certifier/Assumptions/RegisteredInputs.lean  trusted: RegisteredInputsHeld, an open premise
+../../Definitions/Certifier/RegisteredInputs.lean  trusted: RegisteredInputsHeld, an open premise
 ../../Definitions/Certifier/MonitoringPeriodChecked.lean  trusted: the run at the network attester's rows
     (certifierRun) and the leak relation there (RLeakCertifierChecked)
 ../../Definitions/Certifier/Guarantees/MonitoringPeriodChecked.lean  trusted: ExecutionPhaseGoodChecked and MonitoringPeriodLeakChecked
