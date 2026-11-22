@@ -137,6 +137,7 @@ theorem Composition : Guarantees.Composition := by
         rw [sum_mul]
         exact sum_le_sum fun i _ => each i
 
+open Classical in
 /-- **One set of feasible runs is the constant family**: `Sound` at `fun _ => 𝓕` says what a guarantee sound against
 the one set `𝓕` says, so a guarantee stated against one set keeps its meaning. -/
 theorem sound_const_iff {L : Type*} [LinearOrder L] (Ω : Type) [Fintype Ω] (𝓕 : Set (Actual.Run L)) (V : Finset L)
