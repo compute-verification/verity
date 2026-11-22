@@ -105,7 +105,7 @@ HISTORIES = {f"2x3 {what}": stage for what, (stage, _) in vectors.HISTORIES.item
 #: of those, the one the form takes that the interface refuses, and the one whose opening is against a history
 LOOSE, OPENED = f"2x3 {vectors.LOOSE}", "2x3 the opening against a history"
 #: the cases on `registered.run`, each with the stage that refuses it, None where the form takes it
-RUN = {f"2x3 {what}": stage for what, (stage, _) in vectors.RUN_BOUND.items()}
+RUN_CASES = {f"2x3 {what}": stage for what, (stage, _) in vectors.RUN_BOUND.items()}
 #: the cases on a row format, each with the stage that refuses it, or None
 FORMATS = {(f"2x3 {what}" if shape is None else what): stage for what, (stage, shape, _) in vectors.FORMATS.items()}
 #: the cases on an opening that declares its row, each with the stage that refuses it, None where the form takes it
@@ -178,7 +178,7 @@ def test_the_served_shape(shaped):
     with none registered or committed, under another root, with an opening that reads no root, with an opening whose
     reader is another Definition under the pinned one's name, and with one wire from the next slot."""
     got = {what: vectors.results(m["case"]) for what, m in shaped.items()
-           if what not in LAYOUT | ROWS | TEXT | TWICE | BITLESS | KEYED | HISTORIES | FORMATS | ROW_ROLE | SPLITS | RUN}
+           if what not in LAYOUT | ROWS | TEXT | TWICE | BITLESS | KEYED | HISTORIES | FORMATS | ROW_ROLE | SPLITS | RUN_CASES}
     verdicts = {what: (r["detail"]["failure"], r["count"]["failure"]) for what, r in got.items()}
     refused = ("nci", "fresh")
     assert verdicts == {
@@ -248,7 +248,7 @@ def test_a_pinned_readers_layout(shaped, monkeypatch):
     The layout's stage alone refuses them: without it the reference refuses none, and accepts the token among the
     ports with a block's fresh bits those of the case that wires it."""
     assert {what for what, m in shaped.items() if m["broken"]} == {
-            what for what, v in (LAYOUT | ROWS | TEXT | TWICE | BITLESS | KEYED | HISTORIES | FORMATS | ROW_ROLE | SPLITS | RUN).items()
+            what for what, v in (LAYOUT | ROWS | TEXT | TWICE | BITLESS | KEYED | HISTORIES | FORMATS | ROW_ROLE | SPLITS | RUN_CASES).items()
             if isinstance(v, str)}
     got = {what: vectors.results(shaped[what]["case"]) for what in LAYOUT}
     for what, want in LAYOUT.items():
