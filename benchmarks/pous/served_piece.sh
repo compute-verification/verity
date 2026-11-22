@@ -143,8 +143,8 @@ builds() {  # each of BUILDS in order, its lock released as it ends: B/EXE.ok, o
       eval "exec ${LOCKS[$i]}>&-"
     else
       { tail -20 "$DIR/lake-build.log"; echo "POUS: no answer: ${b#* } doesn't build (lake-build.log)"; } > "$B/failed.tmp"
-      mv "$B/failed.tmp" "$B/failed"
       stamp "${b#* } didn't build"
+      mv "$B/failed.tmp" "$B/failed"
       [ ! -e "$B/sessions.pid" ] || kill -TERM "$(cat "$B/sessions.pid")" 2> /dev/null
       exit 7
     fi
