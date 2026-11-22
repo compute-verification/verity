@@ -113,8 +113,7 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   `--alpha N/D` (`alpha`, ``[N, D]``) and `--gamma G` (`gamma`), naturals as those params read them
   (`InferenceOnlyCheck.Protocol`), signed as given, with no default. Any period's open may commit, on its own,
   `--registration SHA512` (`registration`): the digest of the registration log's head, the deployment's registration
-  record, the log's first record (`InferenceOnlyCheck.Theta.digest`), which every epoch of the lane is held to
-  (`Challenger.registrationOf`). The open's `by` is who gave them, the lane's key or vy-admin; an open with none of the
+  record, the log's first record (`InferenceOnlyCheck.Theta.digest`). The open's `by` is who gave them, the lane's key or vy-admin; an open with none of the
   three commits no policy. With
   `--policy-name NAME` in place of the first three, the open signs the id, α and Γ of the policy vy-admin registered
   under that name (the policy registry) and the name (`policy_name`), which no open carries otherwise: the auditor's
@@ -903,8 +902,7 @@ def registration_of(s: str) -> str:
     """A period-open's registration (`--registration`, written as `registration`), with or without a policy: the digest
     of the registration log's head, the deployment's registration record, the log's first record
     (`InferenceOnlyCheck.Theta.digest`: SHA-512 of the record's format, a zero byte and its canonical JSON), in lowercase
-    hex, or Refused. The verifier holds every epoch of the lane to the first one the ledger signs
-    (`Challenger.registrationOf`), and refuses a second."""
+    hex, or Refused."""
     if not ROOT.fullmatch(s):
         raise Refused(f"--registration {s[:200]!r}: the digest of the registration log's head, the deployment's "
                       "registration record, a SHA-512 digest in 128 lowercase hex")
