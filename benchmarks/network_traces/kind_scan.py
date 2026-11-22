@@ -183,8 +183,8 @@ AUDIT_RECORD = {
     "registered_reads.ok": O, "registered_reads.chunks.*.ok": O,
 }
 #: V3c's audit as one compute audit of the network attester's period (`records_audit.period`): its answer, its free
-#: input bits and steps, the Program and the registration
-PERIOD = {**under("answer", ONE_STAGE), "free": S, "steps": S, **under("program", DESCRIPTOR),
+#: input bits, the Program and the registration
+PERIOD = {**under("answer", ONE_STAGE), "free": S, **under("program", DESCRIPTOR),
           **under("registration", REGISTRATION)}
 #: V3c's audit as the run publishes it (``v3c-audit``: `served_integrity.public_copy`, the registration it audited and
 #: its period audit)

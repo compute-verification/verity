@@ -48,15 +48,15 @@ on the requests the scan read; and each scan's ok bits must be at the roots the 
 
 **Params**, JSON with exactly these keys (and each nested object exactly its own)
 
-    {"audits": [{"free": f, "program": descriptor, "steps": k}, …], "cells": [cap, …], "first": w₀, "jitter": Dj,
+    {"audits": [{"free": f, "program": descriptor}, …], "cells": [cap, …], "first": w₀, "jitter": Dj,
      "circuit": hex, "keys": [{"key": hex(I ‖ T[1]), "session": hex(session), "start": a}, …], "link": name,
      "lms": {"H": h, "N": n, "W": w, "toy": bool}, "program": hex, "scan": descriptor,
      "schedule": {"bucket_ms", "cell_bytes", "delay", "egress_cells", "every", "ingress_buckets", "ingress_cells",
                   "lanes", ["max_tokens_cap",] "queue", "slots", "window"},
      "windows": m}
 
-each compute audit's layout terms (`free`, the free inputs it doesn't register, `#(freeInputs \ reg)`; `steps`, its
-monitoring period `k`) and its Program, the descriptor (`verity-ir/descriptor/v2`) of the window's population program,
+each compute audit's layout term (`free`, the free inputs it doesn't register, `#(freeInputs \ reg)`) and its Program,
+the descriptor (`verity-ir/descriptor/v2`) of the window's population program,
 which must decode (`Flock.Program.decode`) with a template in its root: the audit's proof blocks are the root's template
 instances, and each commits its template's return, the outputs it computes that other proof blocks or the client read, which
 can be wider than a proof block's 16-bit public output; each network attester connection's cell cap over the period
@@ -1326,7 +1326,7 @@ def protocol : Core.Protocol where
 -- and its eps is the scan's δ = 2^-64 and δ_i: 2^-63
 #guard
   let scan : Scan := ⟨32, 0, 300, 512, 8 * 112, 0⟩
-  let p : Params := ⟨#[⟨0, 0, "", 16, #[]⟩], #[], 0, 1, "", Lms.deployed, #[], "",
+  let p : Params := ⟨#[⟨0, "", 16, #[]⟩], #[], 0, 1, "", Lms.deployed, #[], "",
     .rows ⟨0, 0, 0, 0, 16, 0, 0, 4, 0, 0, 32, none, none, none, false⟩ .empty scan, 1, none⟩
   let at_ := fun (q : String) => Json.mkObj [("roots", Json.arr #[
     Json.mkObj [("port", .str q), ("root", .str "r"), ("domain", .str "d")]])]
@@ -1450,7 +1450,7 @@ private def statedSample (size : Nat) (d : Core.SamplingDesign) : Json :=
 -- and the scan's lane-1 tree alone ties the audit
 #guard
   let s : Schedule := ⟨0, 0, 0, 0, 2, 0, 0, 2, 0, 0, 4, none, none, none, false⟩
-  let a : Audit := ⟨0, 0, "", 4, #[("SlotEntry_v1{KO=1}", 4, slotEntryPins[0]!)]⟩
+  let a : Audit := ⟨0, "", 4, #[("SlotEntry_v1{KO=1}", 4, slotEntryPins[0]!)]⟩
   let port := fun (q root : String) (l : Nat) =>
     Json.mkObj [("port", .str q), ("leaves", toJson l), ("root", .str root), ("domain", .str "d")]
   let reg := fun (os : Array Json) => Json.mkObj [("roots", Json.arr os)]

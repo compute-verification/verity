@@ -121,7 +121,7 @@ the ``audits`` entry `scan_period.rows_case` reads (`scan_zk.answers` writes the
 docket (``--window``'s ``registration.json``), the population Program's descriptor the audit sampled (``--audit``'s
 ``window/program.json``, the one the docket names), the audit's one-stage answer (`served_integrity.answer`:
 undecided for an accepted audit whose record names no challenger key and session a check verified its coins under, or
-doesn't say whether it wrote the case for the compiled check), and its terms, ``free`` and ``steps`` 0. ``free`` is the count `audit` reports (`declared_count` at the pins, with the window's own
+doesn't say whether it wrote the case for the compiled check), and its term, ``free``, which is the count `audit` reports (`declared_count` at the pins, with the window's own
 values pinned, its untied ones free) but for the scan's state (``--tied``): the period refuses an audit whose state isn't
 the scan's state tree (``stateTied``), so its reads count registered. Refused where the window commits no scan state.
 
@@ -877,7 +877,7 @@ def composer(fn: Any, st: Mapping[str, Any]) -> Callable[[Path, str, str], dict[
 
 def period(window: Path, audit: Path, pins: Mapping[str, str], tied: str) -> dict[str, Any]:
     """The window's audit as one compute audit of the network attester's period (module docstring's ``period``):
-    ``{answer, free, program, registration, steps}``. ``pins`` are the verifier's (`pins_of`). ``tied`` is the window
+    ``{answer, free, program, registration}``. ``pins`` are the verifier's (`pins_of`). ``tied`` is the window
     value the period ties to its scan's state tree (``stateTied``): the network attester's scan-state value, which the
     caller passes, since SPOT reads the attester's output as a certified input and never imports it. ValueError where the
     circuit isn't the one the docket binds, the window commits no ``tied`` value its circuit reads, the audit wrote no
@@ -903,7 +903,7 @@ def period(window: Path, audit: Path, pins: Mapping[str, str], tied: str) -> dic
     answer = SI.answer(audit, rec)
     if answer["commitment"] != DD.digest(rec):
         raise ValueError("the audit's answer commits to another registration than the window's")
-    return {"answer": answer, "free": count["free"], "program": program, "registration": rec, "steps": 0}
+    return {"answer": answer, "free": count["free"], "program": program, "registration": rec}
 
 
 def verifier_window(window_dir: Path, sampling_design: Mapping[str, Any] | str, template_sets: Path | None) -> tuple[Any, dict, dict]:

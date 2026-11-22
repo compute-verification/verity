@@ -66,13 +66,12 @@ def cellHeader : Nat := 9
 cell's payload holds at least this much, so the network attester reads the field off the request's first cell. -/
 def maxTokensEnd : Nat := 130
 
-/-- A compute audit's layout terms, its free inputs it doesn't register and its monitoring period, and what its Program
+/-- A compute audit's layout term, its free inputs it doesn't register, and what its Program
 gives: its SHA-512, its units (its root's template instances) and its slot entries'
 templates (`entries`: each root template node calling a `SlotEntry_v1` or `SelectEntry_v1` Definition, `entryIds`, by
 its descriptor id, members and closure digest, `closureDigest`). -/
 structure Audit where
   free : Nat
-  steps : Nat
   program : String
   units : Nat
   entries : Array (String × Nat × String)
@@ -561,7 +560,7 @@ canonical bytes): its units are its root's template instances, each committing i
 template is refused. Its slot entries' templates are its root's template nodes whose Definition is `SlotEntry_v1` or
 `SelectEntry_v1` (`entryIds`), each with its closure digest (`closureDigest`). -/
 def auditOf (a : Json) (ctx : String) : V Audit := do
-  exactly a ["free", "program", "steps"] ctx
+  exactly a ["free", "program"] ctx
   let pj ← Flock.J.get a "program" ctx
   let prog ← match Flock.Program.decode (← Flock.canon pj).toUTF8 with
     | .ok prog => pure prog
@@ -576,7 +575,7 @@ def auditOf (a : Json) (ctx : String) : V Audit := do
     | none => none
   let entries ← slots.mapM fun (k, n) => do
     pure (k, n, ← (closureDigest pj k).mapError (s!"{ctx}: " ++ ·))
-  pure { free := ← Flock.J.nat a "free" ctx, steps := ← Flock.J.nat a "steps" ctx, program := Flock.hexOf prog.sha512,
+  pure { free := ← Flock.J.nat a "free" ctx, program := Flock.hexOf prog.sha512,
          units := templates.foldl (· + ·) 0, entries }
 
 /-- Whether a batch node of ingress buckets `t0, t0 + 1, …` reads the slot entries at their slots: for each lane `j`

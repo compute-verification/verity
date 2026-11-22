@@ -258,12 +258,11 @@ SELECT_ENTRY_PINS = ("f817250e0ac1d5028ea992bbe0c1ab12925bc1b709f020fdc54a57a0eb
 
 @dataclasses.dataclass(frozen=True)
 class Audit:
-    """`Audit`: a compute audit's layout terms (its free inputs and monitoring period) and what its Program gives: its
+    """`Audit`: a compute audit's layout term (its free inputs) and what its Program gives: its
     SHA-512, its units (its root's template instances) and its slot entries'
     templates (`entries`: each root template node calling `SlotEntry_v1` or `SelectEntry_v1`, by descriptor id, members
     and closure digest, `slot_entry_digest`)."""
     free: int
-    steps: int
     program: str
     units: int
     entries: tuple[tuple[str, int, str], ...] = ()
@@ -652,12 +651,12 @@ def slot_entry_digest(j: dict, key: str) -> str:
 
 
 def _audit(a, ctx: str) -> Audit:
-    """`auditOf`: the layout terms and the Program's descriptor, whose root's template instances are the audit's units,
+    """`auditOf`: the layout term and the Program's descriptor, whose root's template instances are the audit's units,
     each committing its template's return; a root with no template refused; its slot entries' templates
     (`ENTRY_IDS`) with their closure digests. It reads the descriptor's root nodes, signatures and the slot entries'
     Definitions; Flock's decoder, which Lean runs on it, refuses no descriptor this module writes."""
-    _exactly(a, ["free", "program", "steps"], ctx)
-    free, steps, j = _nat(a["free"], ctx), _nat(a["steps"], ctx), a["program"]
+    _exactly(a, ["free", "program"], ctx)
+    free, j = _nat(a["free"], ctx), a["program"]
     if not isinstance(j, dict) or j.get("schema") != SCHEMA:
         raise D.Reject(f"{ctx}: program: not a Program's descriptor")
     defs, callees = j["definitions"], j["callees"]
@@ -667,7 +666,7 @@ def _audit(a, ctx: str) -> Audit:
         raise D.Reject(f"{ctx}: program: no template")
     entries = tuple((k, _members(x), slot_entry_digest(j, k)) for x in nodes
                     if (d := defs[k := callees[x["fn"]]])["form"] != "primitive" and d.get("id") in ENTRY_IDS)
-    return Audit(free, steps, program_sha512(j), sum(units), entries)
+    return Audit(free, program_sha512(j), sum(units), entries)
 
 
 def _scan(j, program: str, s: NetworkAttesterParams) -> Scan:
@@ -2851,7 +2850,7 @@ def build(m: str, seed: int, small: bool = False) -> dict:
             elif m == "audit-bound":
                 answer["public"] = r.choice([{"drawn": []}, answer["public"] | {"bound": -1},
                                              answer["public"] | {"bound": "3"}, []])
-        audit_params.append({"free": r.randint(0, 5), "program": desc, "steps": r.randint(0, 4)})
+        audit_params.append({"free": r.randint(0, 5), "program": desc})
         audit_regs.append(rec)
         audits.append(answer)
 
@@ -2921,7 +2920,7 @@ def build(m: str, seed: int, small: bool = False) -> dict:
         case_params["cells"] = bound.rows_cells(case_params["windows"])
     elif m == "count-audits":
         case_params["audits"] = r.choice([audit_params[1:], [*audit_params, {
-            "free": 0, "program": json.loads(audit_descriptor(((1, 2),))), "steps": 0}]])
+            "free": 0, "program": json.loads(audit_descriptor(((1, 2),)))}]])
     elif m == "evidence-count":
         e_json = showing | r.choice([
             {"audits": audits, "windows": windows[1:]}, {"audits": audits, "windows": windows + windows[:1]},
@@ -3072,13 +3071,13 @@ def bad_lengths(p: dict) -> list[dict]:
 
 
 def bad_audits(p: dict) -> list[dict]:
-    """Parameters whose audits `auditOf` refuses, each one change to `p`: an audit without its monitoring period, with a
+    """Parameters whose audits `auditOf` refuses, each one change to `p`: an audit with a key it doesn't read, with a
     negative free count, not a list, and an audit whose Program isn't a descriptor, is of another schema, or has no
     template in its root (the stand-in unit alone)."""
     good = json.loads(audit_descriptor(((1, 2),)))
     bare = json.loads(D.canonical(codec.encode_program(Program(bind(AUDIT_UNIT, OUT=2)))))
-    one = lambda **kw: p | {"audits": [{"free": 0, "program": good, "steps": 0} | kw]}  # noqa: E731
-    return [p | {"audits": [{"free": 0, "program": good}]}, one(free=-1), p | {"audits": "x"}, one(program="x"),
+    one = lambda **kw: p | {"audits": [{"free": 0, "program": good} | kw]}  # noqa: E731
+    return [one(steps=0), one(free=-1), p | {"audits": "x"}, one(program="x"),
             one(program=good | {"schema": "verity-ir/v0"}), one(program=bare)]
 
 
