@@ -18,9 +18,10 @@ of a ``cuda`` store's card in use that counts as idle), and:
   ``foreign_bytes`` and ``foreign_past_bound``, the prover a cheat that keeps that much prior content (``"fM"``, one
   label past the bound). A record made under any of them, or under a key the configuration doesn't pin, says why in
   ``served.development`` (`period.development_of`), its piece writes ``development.json`` and no ``answer.json``
-  (`period.publish`), and its placement's
-  premise never holds (`wipe_party.placement`: a key the run made, or a challenger on the developer's node, reads
-  rehearsal), so it never reads as a wipe.
+  (`period.publish`), and its placement's premise never holds (`wipe_party.placement`: a key the run made, or a
+  challenger on the developer's node, reads rehearsal), so it never reads as a wipe. A wipe of a store not on a GPU is a
+  development run too: no card file states its fill floor, the executable holds it to 0 bytes, and
+  ``served.development`` says so first (`NO_FILL_FLOOR`).
 
 The scheme hands it ``party``, the memory challenger's party name (``MEMORY_ATTESTER``), and ``development_of``
 (`period.development_of`, why a run is a development run), so that this prover file loads no verifier file. What else its launcher hands it in ``ctx`` (`LAUNCHER`), beside ``settings``, ``private`` and
@@ -76,6 +77,9 @@ FACTS = {k: wipe_run.CONFIG[k] for k in ("device", "links", "foreign_bytes")} | 
     "simulated": False, "foreign_past_bound": False}
 #: the facts that make a run a development run, named in its record's ``served.development``
 DEVELOPMENT = ("run_keys", "simulated", "foreign_bytes", "foreign_past_bound")
+#: the development fact, first of any, of a wipe the executable held to a fill floor of 0 bytes: a store not on a GPU
+NO_FILL_FLOOR = ("no fill floor: the store ({store}) is not on a GPU, so no card file states one, and the executable "
+                 "held the wipe to a floor of 0 bytes, which every wipe passes")
 BINDING = ("host", "address", "command")
 #: what a launcher hands the wipe in ``ctx``, beside ``settings``, ``private`` and ``process``
 LAUNCHER = ("side_of", "pins", "configuration", "trusted", "node", "fill", "judge", "wipe_stream", "ready")
@@ -216,9 +220,11 @@ def refusals(ctx: Mapping[str, Any]) -> tuple[str, ...]:
 @dataclass(frozen=True)
 class Wiped:
     """The wipe's report: ``answer``, the verifier's, and ``wipe``, the record `wipe_run.subprotocol` wrote with
-    ``served`` beside it: the wiped server, the card (a cuda store's UUID), ``key_pin``, ``configuration`` where the
-    trusted key is the one the pins give the wipe, else ``run``, and ``development``, why the run is a development run
-    (the facts of `DEVELOPMENT` it ran under, a key no pin gives: `period.development_of`), None where it isn't."""
+    ``served`` beside it: the wiped server, the store, the fill floor in bytes the executable held the wipe to
+    (``fill_floor_bytes``, `wipe_run.fill_floor`), the card (a cuda store's UUID), ``key_pin``, ``configuration`` where
+    the trusted key is the one the pins give the wipe, else ``run``, and ``development``, why the run is a development
+    run (a floor of 0, `NO_FILL_FLOOR`, the facts of `DEVELOPMENT` it ran under, a key no pin gives:
+    `period.development_of`), None where it isn't."""
 
     answer: Mapping[str, Any]
     wipe: Mapping[str, Any]
@@ -261,12 +267,15 @@ def attach(exchange: Any, ctx: Mapping[str, Any]) -> Wiped:
                                       side_of=ctx["side_of"], ready=ctx.get("ready") or built)
     (private / "wipe.case.json").chmod(0o600)
     pin = pin_of(pins, ctx["party"])
-    served = {"server": node, "fill": ctx.get("fill"), "card": card, "key_pin": "configuration" if key and key == pin else "run",
-              "development": development_of(key, {pin} - {None}, [k for k in DEVELOPMENT if s[k]])}
+    floor = wipe_run.fill_floor(doc[NAME])
+    facts = ([NO_FILL_FLOOR.format(store=s["store"])] if floor == 0 else []) + [k for k in DEVELOPMENT if s[k]]
+    served = {"server": node, "store": s["store"], "fill_floor_bytes": floor, "card": card,
+              "key_pin": "configuration" if key and key == pin else "run",
+              "development": development_of(key, {pin} - {None}, facts)}
     record = json.loads((private / "wipe.json").read_text()) | {"served": served}
     (private / "wipe.json").write_text(json.dumps(record, indent=1, sort_keys=True))
     return Wiped(answer, record)
 
 
-__all__ = ["BINDING", "DEVELOPMENT", "FACTS", "LAUNCHER", "NAME", "SMI", "UNSET", "Wiped", "attach", "built", "busy", "card_of", "check", "check_settings", "facts_of",
+__all__ = ["BINDING", "DEVELOPMENT", "FACTS", "LAUNCHER", "NAME", "NO_FILL_FLOOR", "SMI", "UNSET", "Wiped", "attach", "built", "busy", "card_of", "check", "check_settings", "facts_of",
            "period_wipe", "pin_of", "refusals"]

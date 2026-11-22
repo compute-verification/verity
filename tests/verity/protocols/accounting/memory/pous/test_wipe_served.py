@@ -206,3 +206,23 @@ def test_a_record_names_the_development_facts_it_ran_under(tmp_path, monkeypatch
     got = WIPE.attach(None, _ctx(tmp_path, facts | {"store": "python"}))
     assert got.record()["served"]["development"] == development
     assert json.loads((tmp_path / "wipe.json").read_text()) == got.record()
+
+
+@pytest.mark.parametrize("store, fill, floor, development", [
+    ("cuda", 1 << 25, 1 << 25, None),
+    ("python", None, 0, "development run: ran with " + WS.NO_FILL_FLOOR.format(store="python"))])
+def test_the_record_states_the_fill_floor_the_executable_holds_the_wipe_to(tmp_path, smi, store, fill, floor,
+                                                                           development) -> None:
+    """A GPU store's record states the card file's fill floor, the bytes `wipe-protocol --fill` holds the wipe to; a
+    store not on a GPU, which no card file gives one, states a floor of 0 and is a development run whose line says
+    first that no fill floor applies and why."""
+    def subprotocol(period, node, out, *, side_of, ready):
+        (out / "wipe.case.json").write_text("{}")
+        (out / "wipe.json").write_text("{}")
+        return {"verdict": "accept"}
+
+    smi.setattr(WS, "card_of", lambda ordinal: "GPU-1234")
+    smi.setattr(wipe_run, "subprotocol", subprotocol)
+    served = WIPE.attach(None, _ctx(tmp_path, BOUND | {"store": store}, fill=fill)).record()["served"]
+    assert (served["store"], served["fill_floor_bytes"], served["development"]) == (store, floor, development)
+    assert wipe_run.fill_floor(json.loads((tmp_path / "period.json").read_text())["wipe"]) == floor

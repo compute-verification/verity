@@ -32,12 +32,16 @@
 # a card of its own), and one that doesn't build ends the piece after the wipe with its own error and exit 7.
 # Inside the serve's gpu-lease (GPU_LEASE_UUID) it wipes that card; outside one it takes a card of its own (`gpu-lease 1
 # --wait`, else the tree's gpu_lease.sh) and gives it back after. DIR gets period.json, wipe.json, summary.json,
-# answer.json (wipe.json's answer), served.json (the serve dir and window, the server, the fill floor, the card, the
+# answer.json (wipe.json's answer), served.json (the serve dir and window, the server, the store, the card, the
 # lease, the run, the key's pin), lake-build.log and stamps.txt (`UTC EVENT` lines). summary.json, served.json and
-# the `WIPE` line state `uncovered_card_bytes` beside the answer (a core answer, which holds its own fields alone): the
-# card file's store.dram less its fill floor, the card's memory no label fills, which the wipe does not cover (null for
-# a store on no card). The node's other storage the wipe does not fill is not known here and is not stated. The case
-# goes to SERVE_DIR/private/wipe (0700), and served_case.py writes the composite's piece beside it. Its last line is `WIPE {...}`.
+# the `WIPE` line state beside the answer (a core answer, which holds its own fields alone) `fill_floor_bytes`, the
+# fill floor in bytes the executable held the wipe to (`wipe-protocol --fill`: the card file's store.wipe_fill, 0 for
+# a store not on a GPU), and `uncovered_card_bytes`, the card file's store.dram less its fill floor, the card's memory
+# no label fills, which the wipe does not cover (null for a store on no card). A store not on a GPU is a development
+# run: DIR gets development.json and no answer.json, its `why` first saying no fill floor applies and why
+# (`wipe_served.NO_FILL_FLOOR`), and summary.json and the `WIPE` line carry it as `development`. The node's other
+# storage the wipe does not fill is not known here and is not stated. The case goes to SERVE_DIR/private/wipe (0700),
+# and served_case.py writes the composite's piece beside it (an answer.json's alone). Its last line is `WIPE {...}`.
 # A refusal, the attach's or this launcher's, each by name, writes its one sentence to DIR/refused.txt and no
 # answer.json, and exits 3. Exit 0 on accept, 1 on another verdict or a wipe that failed, 7 when the judge or the
 # streamer doesn't build.
@@ -157,13 +161,14 @@ finally:
 private = Path(serve_dir) / "private" / wipe.name
 shutil.copy(private / "period.json", d / "period.json")
 (d / "wipe.json").write_text(json.dumps(got.record(), sort_keys=True, indent=1))
-(d / "summary.json").write_text(json.dumps(s := got.summary() | {"uncovered_card_bytes": uncovered}, indent=1,
-                                          sort_keys=True))
 answer, ran = got.answer, got.record()["served"]
+stated = {"uncovered_card_bytes": uncovered, "fill_floor_bytes": ran["fill_floor_bytes"]}
+(d / "summary.json").write_text(json.dumps(s := got.summary() | stated | {"development": ran["development"]}, indent=1,
+                                          sort_keys=True))
 card = lease.split(",")[0] or ran["card"]
 (d / "served.json").write_text(json.dumps({
-    "serve_dir": serve_dir, "window": window, "server": ran["server"], "fill": ran["fill"], "card": card,
-    "uncovered_card_bytes": uncovered, "key_pin": ran["key_pin"],
+    "serve_dir": serve_dir, "window": window, "server": ran["server"], "store": ran["store"], "card": card,
+    **stated, "key_pin": ran["key_pin"],
     "run": os.environ.get("RESEARCH_RUN_ID"),
     "lease": "its own (gpu-lease 1 --wait), given back before the serve takes one" if own else
              "the serve's: its engine loads on this card after the wipe"}, indent=1, sort_keys=True) + "\n")
@@ -172,7 +177,7 @@ print("WIPE " + json.dumps({"verdict": answer["verdict"], "reason": answer["reas
                             "decided_by": s.get("decided_by"), "executables": s.get("executables"), "k": s.get("k"), "segments": s.get("segments"),
                             "fill_GBps": (s.get("challenger") or {}).get("fill_GBps"), "t0": s.get("t0"),
                             "t1": s.get("t1"), "server": mc.PROVER_MACHINE, "card": card, "key_pin": ran["key_pin"],
-                            "uncovered_card_bytes": uncovered,
+                            **stated, "development": ran["development"],
                             "exit": 0 if answer["verdict"] == "accept" else 1}, sort_keys=True), flush=True)
 sys.exit(0 if answer["verdict"] == "accept" else 1)
 EOF

@@ -213,7 +213,8 @@ def _wipe_window(tmp_path: Path, *, protocol: str = WIPE_ID, egress_mib: int | N
     (window / "answer.json").write_text(json.dumps(answer, sort_keys=True) + "\n")
     (window / "wipe.case.json").write_text(json.dumps(w.case, sort_keys=True))
     (window / "served.json").write_text(json.dumps({"serve_dir": str(serve), "window": "all", "server": "n0",
-                                                    "fill": 64 * sw.LABEL_BYTES, "card": "GPU-0"}))
+                                                    "store": "cuda", "fill_floor_bytes": 64 * sw.LABEL_BYTES,
+                                                    "uncovered_card_bytes": 7, "card": "GPU-0"}))
     return window, serve, w
 
 
@@ -288,7 +289,8 @@ def test_a_served_wipe_with_no_fill_floor_is_refused_before_the_lean_runs(tmp_pa
     """``served.json`` naming the server but no positive fill floor is refused by name, and the executable, which would
     hold the wipe to a floor of 0 bytes, never starts."""
     window, serve, _ = _wipe_window(tmp_path)
-    _edit(window / "served.json", lambda d: d.pop("fill") if fill == "absent" else d.update(fill=fill))
+    _edit(window / "served.json",
+          lambda d: d.pop("fill_floor_bytes") if fill == "absent" else d.update(fill_floor_bytes=fill))
     ran = tmp_path / "ran"
     exe = tmp_path / "lean"
     exe.write_text(f"#!/bin/sh\ntouch {ran}\n")
@@ -297,6 +299,17 @@ def test_a_served_wipe_with_no_fill_floor_is_refused_before_the_lean_runs(tmp_pa
                                          r"file of the SKU the card GPU-0 is .* and make the serve again"):
         SC.wipe_piece(window, exe=exe)
     assert not ran.exists() and not (serve / "private" / "wipe" / "case.json").exists()
+
+
+def test_the_case_line_states_a_gpu_stores_fill_floor_in_bytes(tmp_path, capsys):
+    """The wipe of a store on a GPU: its ``CASE`` line states the fill floor the executable held it to, as the number of
+    bytes ``served.json`` gives, beside the card's memory it does not cover."""
+    window, _, _ = _wipe_window(tmp_path, protocol=W.PROTOCOL)
+    assert SC.main(["--window", str(window)]) == 0
+    line = capsys.readouterr().out.strip().splitlines()[-1]
+    assert line.startswith("CASE ")
+    said = json.loads(line.removeprefix("CASE "))
+    assert (said["fill_floor_bytes"], said["uncovered_card_bytes"]) == (64 * sw.LABEL_BYTES, 7)
 
 
 def _fake_lean(tmp_path: Path, answer: dict) -> Path:
