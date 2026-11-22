@@ -72,8 +72,10 @@ eight items:
    call at the deployed shape (one inner table at `m = 35`; 69.4 at `C_DE`'s weight), below the 100-bit floor and the
    `2^-128` target under every weight: its KS is stated and proved at that level, not at the floor. `BitsLin2`'s
    level λ₂ (`lamLin2`) evaluates to at least 100 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep`, about
-   165.8) as a number, and `KSLin2` at the deployment's dense statements (`KSLin2On` at `RecDeploy.DenseAt`) is proved
-   with no hypothesis at the deployed reader's record, the challenger's live-coin part's (`Flock.Guarantees.RecursiveKS`);
+   165.8) as a number, and `KSLin2` at the deployment's dense statements (`KSLin2On` at `RecDeploy.DenseAt`) is stated
+   at the deployed reader's record, the challenger's live-coin part's (`Flock.Guarantees.RecursiveKS`), and no theorem
+   proves it there (`RecDeploy.ksLin2_route` proves `KSLin2On` at `DenseAt` from V\*'s facts at the dense shape and the
+   readers, taken as hypotheses);
    `RecDeploy.ksLin2_deployed_open`, at the earlier `finOpen` layout, still takes `PartChecksBV`, `PartOpensB` and
    `DecompB`. Holo statements have a model of their own (`Model.holoTable`),
    and `BitsLin2` at the dense statements follows from it (`bitsLin2On_of_ksLin2On`).
@@ -684,8 +686,10 @@ it is about 65.2 bits per SHA-512 call at the deployed shape (one inner table at
 `coverW`; 69.4 at `C_DE`'s weight), the third term binding: below the 100-bit floor and the `2^-128` target
 under every weight. `BitsLin2`'s level λ₂ (`lamLin2`) evaluates to at least 100 at the deployed records
 (`RecDeploy.lamLin2_deployed_ge_dep`, about 165.8) as a number, and `KSLin2` at the deployment's dense statements
-(`KSLin2On` at `RecDeploy.DenseAt`) is proved with no hypothesis at the deployed reader's record, the challenger's live-coin part's
-(`Flock.Guarantees.RecursiveKS`); `RecDeploy.ksLin2_deployed_open`, at the earlier `finOpen` layout, still takes
+(`KSLin2On` at `RecDeploy.DenseAt`) is stated at the deployed reader's record, the challenger's live-coin part's
+(`Flock.Guarantees.RecursiveKS`), and no theorem proves it there (`RecDeploy.ksLin2_route` proves `KSLin2On` at
+`DenseAt` from V\*'s facts at the dense shape and the readers, taken as hypotheses); `RecDeploy.ksLin2_deployed_open`,
+at the earlier `finOpen` layout, still takes
 `PartChecksBV`, `PartOpensB` and `DecompB`. Holo statements have a model of their own, and `BitsLin2` at the dense
 statements follows from it (`bitsLin2On_of_ksLin2On`). -/
 noncomputable def lam (D : Deploy Coin) (I : Inner Coin W) (x : Msg) : ℝ :=
@@ -743,8 +747,9 @@ noncomputable def γzk (D : Deploy Coin) (t : ℕ) (x : Msg) : ℝ := D.nS x * (
 about 65 bits per SHA-512 call at the deployed shape (one inner table at `m = 35`), below the 100-bit floor and the
 `2^-128` target under every weight. `BitsLin2`'s level λ₂ (`lamLin2`) evaluates to at least 100 at the deployed records
 (`RecDeploy.lamLin2_deployed_ge_dep`), as a number, and `KSLin2` at the deployment's dense statements (`KSLin2On` at
-`RecDeploy.DenseAt`) is proved with no hypothesis at the deployed reader's record (`Flock.Guarantees.RecursiveKS`), Holo
-statements having a model of their own, and `BitsLin2` at those statements follows from it (`bitsLin2On_of_ksLin2On`).
+`RecDeploy.DenseAt`) is stated at the deployed reader's record (`Flock.Guarantees.RecursiveKS`), and no theorem
+proves it there, Holo statements having a model of their own, and `BitsLin2` at those statements follows from it
+(`bitsLin2On_of_ksLin2On`).
 -/
 def KS [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T) : Prop :=
   ∀ decO, decOK DO decO → ∀ (x : Msg) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω),
@@ -757,9 +762,9 @@ calls per run (both parties') has `Pr[acc ∧ ¬R] ≤ t · 2^{−λ(x)}`, where
 `Be` the linear expected-time bound. `λ` (`lam`) is about 65 bits per SHA-512 call at the deployed shape (one inner
 table at `m = 35`), below the 100-bit floor and the `2^-128` target under every weight. `BitsLin2`'s level λ₂
 (`lamLin2`) evaluates to at least 100 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep`), as a number, and
-`KSLin2` at the deployment's dense statements (`KSLin2On` at `RecDeploy.DenseAt`) is proved with no hypothesis at the
-deployed reader's record (`Flock.Guarantees.RecursiveKS`), Holo statements having a model of their own, and `BitsLin2`
-at those statements follows from it (`bitsLin2On_of_ksLin2On`). -/
+`KSLin2` at the deployment's dense statements (`KSLin2On` at `RecDeploy.DenseAt`) is stated at the deployed reader's
+record (`Flock.Guarantees.RecursiveKS`), and no theorem proves it there, Holo statements having a model of their own,
+and `BitsLin2` at those statements follows from it (`bitsLin2On_of_ksLin2On`). -/
 def Bits [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T) : Prop :=
   ∀ decO, decOK DO decO → ∀ (x : Msg) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (t : ℕ), 1 ≤ t →
     (∀ ω r, (run H P D.V x ω r).pLog.length + (run H P D.V x ω r).vLog.length ≤ t) →
@@ -807,8 +812,9 @@ def Nontrivial (H : Msg → Msg) (D : Deploy Coin) (recs : List (Recorded D.V)) 
 call at the deployed shape (one inner table at `m = 35`), below the 100-bit floor and the `2^-128` target under every
 weight. `BitsLin2`'s level λ₂ (`lamLin2`) evaluates to at least 100 at the deployed records
 (`RecDeploy.lamLin2_deployed_ge_dep`), as a number, and `KSLin2` at the deployment's dense statements (`KSLin2On` at
-`RecDeploy.DenseAt`) is proved with no hypothesis at the deployed reader's record (`Flock.Guarantees.RecursiveKS`), Holo
-statements having a model of their own, and `BitsLin2` at those statements follows from it (`bitsLin2On_of_ksLin2On`).
+`RecDeploy.DenseAt`) is stated at the deployed reader's record (`Flock.Guarantees.RecursiveKS`), and no theorem
+proves it there, Holo statements having a model of their own, and `BitsLin2` at those statements follows from it
+(`bitsLin2On_of_ksLin2On`).
 -/
 def KSPriv [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T) : Prop :=
   ∀ decO, decOK DO decO → ∀ (x : Msg) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω),
@@ -891,8 +897,8 @@ the outer `DO` each on its own columns and traces (the deployed inner session is
 level (`lam`) is about 65 bits per SHA-512 call at the deployed shape (one inner table at `m = 35`), below the 100-bit
 floor and the `2^-128` target under every weight. `BitsLin2`'s level λ₂ (`lamLin2`) evaluates to at least 100 at the
 deployed records (`RecDeploy.lamLin2_deployed_ge_dep`), as a number, and `KSLin2` at the deployment's dense statements
-(`KSLin2On` at `RecDeploy.DenseAt`) is proved with no hypothesis at the deployed reader's record
-(`Flock.Guarantees.RecursiveKS`), Holo statements having a model of their own, and `BitsLin2` at those statements
+(`KSLin2On` at `RecDeploy.DenseAt`) is stated at the deployed reader's record (`Flock.Guarantees.RecursiveKS`), and no
+theorem proves it there, Holo statements having a model of their own, and `BitsLin2` at those statements
 follows from it (`bitsLin2On_of_ksLin2On`). -/
 def KSFlock [Zero Col] [Zero Col'] (H : Msg → Msg) (D : Deploy Coin) (DI : Flock.Deploy Coin Col T)
     (DO : Flock.Deploy Coin Col' T') : Prop :=
@@ -902,9 +908,9 @@ def KSFlock [Zero Col] [Zero Col'] (H : Msg → Msg) (D : Deploy Coin) (DI : Flo
 its own columns and traces. `λ` (`lam`) is about 65 bits per SHA-512 call at the deployed shape (one inner table at
 `m = 35`), below the 100-bit floor and the `2^-128` target under every weight. `BitsLin2`'s level λ₂ (`lamLin2`)
 evaluates to at least 100 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep`), as a number, and `KSLin2` at the
-deployment's dense statements (`KSLin2On` at `RecDeploy.DenseAt`) is proved with no hypothesis at the deployed reader's
-record (`Flock.Guarantees.RecursiveKS`), Holo statements having a model of their own, and `BitsLin2` at those statements
-follows from it (`bitsLin2On_of_ksLin2On`). -/
+deployment's dense statements (`KSLin2On` at `RecDeploy.DenseAt`) is stated at the deployed reader's record
+(`Flock.Guarantees.RecursiveKS`), and no theorem proves it there, Holo statements having a model of their own, and
+`BitsLin2` at those statements follows from it (`bitsLin2On_of_ksLin2On`). -/
 def BitsFlock [Zero Col] [Zero Col'] (H : Msg → Msg) (D : Deploy Coin) (DI : Flock.Deploy Coin Col T)
     (DO : Flock.Deploy Coin Col' T') : Prop :=
   ∀ decI, decOK DI decI → Bits H D (Inner.ofFlock DI decI) DO
@@ -1198,10 +1204,10 @@ ASK-72), where (P3) holds (`RecDeploy.ksBoundRouteCols_cover`). Its level (`lam`
 deployed shape (one inner table at `m = 35`), below the 100-bit floor and the `2^-128` target under every weight
 (ASK-73). `BitsLin2`'s level λ₂ (`lamLin2`) evaluates to at least 100 at the deployed records
 (`RecDeploy.lamLin2_deployed_ge_dep`), as a number, and `KSLin2` at the deployment's dense statements (`KSLin2On` at
-`RecDeploy.DenseAt`) is proved with no hypothesis at the deployed reader's record (`Flock.Guarantees.RecursiveKS`), Holo
-statements having a model of their own, and `BitsLin2` at those statements follows from it (`bitsLin2On_of_ksLin2On`).
-`KSFlock` at the deployed framed Flock is false at the deployed record (an honest view's held rounds are free-element
-rows, never its framed bytes). -/
+`RecDeploy.DenseAt`) is stated at the deployed reader's record (`Flock.Guarantees.RecursiveKS`), and no theorem
+proves it there, Holo statements having a model of their own, and `BitsLin2` at those statements follows from it
+(`bitsLin2On_of_ksLin2On`). `KSFlock` at the deployed framed Flock is false at the deployed record (an honest view's
+held rounds are free-element rows, never its framed bytes). -/
 def KSBound [Zero Col] [Zero Col'] (H : Msg → Msg) (D : RecAt Coin) (Bd : Bound Coin Col T)
     (DO : Flock.Deploy Coin Col' T') : Prop :=
   KSFlock H (D.record Bd.IVStar) Bd.deploy DO
@@ -1211,8 +1217,9 @@ over the bound record, at every inner and outer decoder that meets the spec. Its
 SHA-512 call at the deployed shape (one inner table at `m = 35`), below the 100-bit floor and the `2^-128` target under
 every weight. `BitsLin2`'s level λ₂ (`lamLin2`) evaluates to at least 100 at the deployed records
 (`RecDeploy.lamLin2_deployed_ge_dep`), as a number, and `KSLin2` at the deployment's dense statements (`KSLin2On` at
-`RecDeploy.DenseAt`) is proved with no hypothesis at the deployed reader's record (`Flock.Guarantees.RecursiveKS`), Holo
-statements having a model of their own, and `BitsLin2` at those statements follows from it (`bitsLin2On_of_ksLin2On`).
+`RecDeploy.DenseAt`) is stated at the deployed reader's record (`Flock.Guarantees.RecursiveKS`), and no theorem
+proves it there, Holo statements having a model of their own, and `BitsLin2` at those statements follows from it
+(`bitsLin2On_of_ksLin2On`).
 -/
 def KSPrivBound [Zero Col] [Zero Col'] (H : Msg → Msg) (D : RecAt Coin) (Bd : Bound Coin Col T)
     (DO : Flock.Deploy Coin Col' T') : Prop :=

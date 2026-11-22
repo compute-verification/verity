@@ -124,8 +124,9 @@ The fix is the knowledge form the claims API states recursion in; `EndToEndHidde
 knowledge form, `Claims.Recursion.KS`, is at the recursion's level `Claims.Recursion.lam`, which no theorem evaluates
 at the deployment. Route 2C's bound λ₂ (`lamLin2`) evaluates to at least 135.7 at the deployed records
 (`RecDeploy.lamLin2_deployed_ge_dep_tight`), and `KSLin2` at the deployment's dense statements (`KSLin2On` at
-`RecDeploy.DenseAt`) is proved (`Flock.SecurityProofs.RecursiveKS`), Holo statements being candidate 3's own model, and
-`BitsLin2` at those statements follows from it (`bitsLin2On_of_ksLin2On`). This fork form states no bits. -/
+`RecDeploy.DenseAt`) is stated (`Flock.Guarantees.RecursiveKS`), and no theorem proves it; Holo statements being
+candidate 3's own model, and `BitsLin2` at those statements follows from it (`bitsLin2On_of_ksLin2On`). This fork form
+states no bits. -/
 def PublicAudit : Prop :=
   (∀ {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)] [∀ k, Inhabited (CT k)]
     -- the registration's samples, a finite space with an element, and the units each samples

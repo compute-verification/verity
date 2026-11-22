@@ -163,8 +163,9 @@ inner view runs `IVStar` at V*'s bound layout (`recBoundAt`), the deployed bound
 outer `--zk` record (`deployZkRec`). At `γ`'s weight `wCover` at `IVStar` it is `KSBoundCover`. No theorem
 evaluates its level (`Claims.Recursion.lam`) at the deployment. Route 2C's bound λ₂ (`lamLin2`) evaluates to at least
 135.7 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep_tight`), and `KSLin2` at the deployment's dense
-statements (`KSLin2On` at `RecDeploy.DenseAt`) is proved (`Flock.SecurityProofs.RecursiveKS`), Holo statements being
-candidate 3's own model, and `BitsLin2` at those statements follows from it (`bitsLin2On_of_ksLin2On`). -/
+statements (`KSLin2On` at `RecDeploy.DenseAt`) is stated (`Flock.Guarantees.RecursiveKS`), and no theorem proves it;
+Holo statements being candidate 3's own model, and `BitsLin2` at those statements follows from it
+(`bitsLin2On_of_ksLin2On`). -/
 def KSBoundDeployed (rel relO : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings)
     (L : Claims.Recursion.VStarB.LayoutB) (nextE : Msg → List Msg → List Coin → Claims.OC Out)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)

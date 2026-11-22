@@ -76,10 +76,9 @@ smaller.
 collision assumptions. At the deployed records `λ₂ ≥ 135.7` (`RecDeploy.lamLin2_deployed_ge_dep_tight`; `λ₂ ≥ 100`,
 `RecDeploy.lamLin2_deployed_ge_dep`), and at the deployment's sizes `κ ≤ 2^{−167.7}` and `ε ≤ 2^{−174.95}`
 (`RecDeploy.kappa_eps_deployed`). `KSLin2On` at `RecDeploy.DenseAt` at the deployed reader is
-`Flock.Guarantees.RecursiveKS`, proved with no hypothesis (`Flock.SecurityProofs.RecursiveKS`), so there
-`Pr[acc ∧ ¬R] ≤ t·2^{−λ₂}` and `Pr[acc ∧ ¬R] ≤ κ + t·ε` follow under those assumptions (`bitsLin2On_of_ksLin2On`,
-`bitsLin2KOn_of_ksLin2On`, with `RecDeploy.sessionAccepts`; `RecDeploy.recursiveBitsK`). Holo statements are candidate
-3's own model.
+`Flock.Guarantees.RecursiveKS`, which no theorem proves; where it holds, `Pr[acc ∧ ¬R] ≤ t·2^{−λ₂}` and `Pr[acc ∧ ¬R] ≤
+κ + t·ε` follow under those assumptions (`bitsLin2On_of_ksLin2On`, `bitsLin2KOn_of_ksLin2On`, with
+`RecDeploy.sessionAccepts`; `RecDeploy.recursiveBitsK`). Holo statements are candidate 3's own model.
 -/
 
 @[expose] public section
@@ -710,9 +709,9 @@ variable {Coin Col T Col' T' : Type} [Fintype Coin] [Nonempty Coin] [Inhabited C
 `KSLin2` at `M = 2^256` and `R = 2^257`, and `lin2_bound_le`. `BitsLin2` takes `StrictBirthday` at `B` and `ExpectedCR`
 at `B_I`, `Fdev`, `FCI` and `F0I` as premises, the named SHA-512 collision assumptions. At the deployed records, where
 `λ₂ ≥ 135.7` (`RecDeploy.lamLin2_deployed_ge_dep_tight`) and `SessionAccepts` holds (`RecDeploy.sessionAccepts`), this
-makes `Pr[acc ∧ ¬R] ≤ t·2^{−135.7}` follow from `KSLin2` there. At the deployment `KSLin2` is shown at the dense
-statements (`Flock.Guarantees.RecursiveKS`, `KSLin2On` at `RecDeploy.DenseAt`, proved with no hypothesis), so the
-deployed form is `bitsLin2On_of_ksLin2On`. -/
+makes `Pr[acc ∧ ¬R] ≤ t·2^{−135.7}` follow from `KSLin2` there. At the deployment `KSLin2` is stated at the dense
+statements (`Flock.Guarantees.RecursiveKS`, `KSLin2On` at `RecDeploy.DenseAt`), which no theorem
+proves; where it holds, the deployed form is `bitsLin2On_of_ksLin2On`. -/
 theorem bitsLin2_of_ksLin2 [Zero Col] [Zero Col'] {H : Msg → Msg} {D : RecAt Coin} {Bd : Bound Coin Col T}
     {DO : Flock.Deploy Coin Col' T'} {Cp : Caps Coin} (hS : SessionAccepts (D.record Bd.IVStar))
     (h : KSLin2 H D Bd DO Cp) : BitsLin2 H D Bd DO Cp := by
