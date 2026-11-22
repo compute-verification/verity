@@ -1,0 +1,48 @@
+# The memory wipe's own directory: what `tools/move/layout.py --map tools/move/wipe_directory_map.toml` moves and
+# rewrites. The wipe's Python and C leave PoUS's directory for `verity/protocols/accounting/memory/wipe/`, with the same
+# inner layout, and its scheme declaration becomes `wipe/scheme.py`. Its Lean stays in the memory attester's Lake
+# package (`pous/attester/lean/`), whose modules the onsite composition and Security read; its tests stay in PoUS's
+# suites, whose helpers they share. The format is `layout_map.toml`'s.
+
+[roots]
+old = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proof/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", verity_torch = "adapters/torch/verity_torch", input_datasets = "library/datasets/input_datasets", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "calibration/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter", slowdown = "benchmarks/slowdown/slowdown" }
+new = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proof/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", verity_torch = "adapters/torch/verity_torch", input_datasets = "library/datasets/input_datasets", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "calibration/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter", slowdown = "benchmarks/slowdown/slowdown" }
+
+[paths]
+"verity/protocols/accounting/memory/pous/wipe_scheme.py" = "verity/protocols/accounting/memory/wipe/scheme.py"
+"verity/protocols/accounting/memory/pous/attester/wipe_challenger.py" = "verity/protocols/accounting/memory/wipe/attester/wipe_challenger.py"
+"verity/protocols/accounting/memory/pous/attester/wipe_stream.c" = "verity/protocols/accounting/memory/wipe/attester/wipe_stream.c"
+"verity/protocols/accounting/memory/pous/attester/wipe_stream.py" = "verity/protocols/accounting/memory/wipe/attester/wipe_stream.py"
+"verity/protocols/accounting/memory/pous/prover/wipe_prover.py" = "verity/protocols/accounting/memory/wipe/prover/wipe_prover.py"
+"verity/protocols/accounting/memory/pous/prover/wipe_run.py" = "verity/protocols/accounting/memory/wipe/prover/wipe_run.py"
+"verity/protocols/accounting/memory/pous/prover/wipe_served.py" = "verity/protocols/accounting/memory/wipe/prover/wipe_served.py"
+"verity/protocols/accounting/memory/pous/prover/wipe_store.py" = "verity/protocols/accounting/memory/wipe/prover/wipe_store.py"
+"verity/protocols/accounting/memory/pous/verifier/streamed_wipe.py" = "verity/protocols/accounting/memory/wipe/verifier/streamed_wipe.py"
+"verity/protocols/accounting/memory/pous/verifier/wipe_parties.py" = "verity/protocols/accounting/memory/wipe/verifier/wipe_parties.py"
+"verity/protocols/accounting/memory/pous/verifier/wipe_party.py" = "verity/protocols/accounting/memory/wipe/verifier/wipe_party.py"
+"verity/protocols/accounting/memory/pous/verifier/wipe_period.py" = "verity/protocols/accounting/memory/wipe/verifier/wipe_period.py"
+
+[retired]
+paths = []
+
+[drop]
+paths = []
+
+[rewrite]
+exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
+           "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "tools/move/**", "archive/**",
+           "tools/check/tests/test_move_check.py", "tools/check/move_check.py",
+           "tools/research/src/research/store/moves.json"]
+
+[modules]
+"verity.protocols.accounting.memory.pous.wipe_scheme" = "verity.protocols.accounting.memory.wipe.scheme"
+"verity.protocols.accounting.memory.pous.attester.wipe_challenger" = "verity.protocols.accounting.memory.wipe.attester.wipe_challenger"
+"verity.protocols.accounting.memory.pous.attester.wipe_stream" = "verity.protocols.accounting.memory.wipe.attester.wipe_stream"
+"verity.protocols.accounting.memory.pous.prover.wipe_prover" = "verity.protocols.accounting.memory.wipe.prover.wipe_prover"
+"verity.protocols.accounting.memory.pous.prover.wipe_run" = "verity.protocols.accounting.memory.wipe.prover.wipe_run"
+"verity.protocols.accounting.memory.pous.prover.wipe_served" = "verity.protocols.accounting.memory.wipe.prover.wipe_served"
+"verity.protocols.accounting.memory.pous.prover.wipe_store" = "verity.protocols.accounting.memory.wipe.prover.wipe_store"
+"verity.protocols.accounting.memory.pous.verifier.streamed_wipe" = "verity.protocols.accounting.memory.wipe.verifier.streamed_wipe"
+"verity.protocols.accounting.memory.pous.verifier.wipe_parties" = "verity.protocols.accounting.memory.wipe.verifier.wipe_parties"
+"verity.protocols.accounting.memory.pous.verifier.wipe_party" = "verity.protocols.accounting.memory.wipe.verifier.wipe_party"
+"verity.protocols.accounting.memory.pous.verifier.wipe_period" = "verity.protocols.accounting.memory.wipe.verifier.wipe_period"
