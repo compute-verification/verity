@@ -163,6 +163,7 @@ module
 public import Flock.FV3
 public import Flock.Program
 public import Spot.Bits
+public import Spot.Docket
 public import Spot.Record
 public import Spot.Registered
 public import Spot.Schedule
@@ -887,6 +888,15 @@ def keyFailure (own : Own) (t : String) : Option String :=
         r.runs.all fun x => decide (x.row + (x.count - 1) * x.step < p.n)) then some KEY_BOUNDS_WHY
     else none
   | _ => some KEY_WIRES_WHY
+
+/-- **The linked ports, held to round 1's record**: each link of `links` whose value is a port of round 1's record
+`boundary`, with that record's entry of the port (`Record.byPort`: root, domain and leaves as the challenger logged
+it), never round 2's files. The one source each check of a linked port reads: R8 (`Docket.weightsHeld`), a member's
+registered port (`OneStageZk.portTreeHeld`) and round 2's read (`readOk`). -/
+def roundOneHeld (links : Array Link) (boundary : Json) : Array Docket.Linked :=
+  let ports := Record.byPort boundary
+  links.filterMap fun l => (ports.find? (·.1 == l.value)).map fun (_, e) =>
+    { template := l.template, port := l.port, value := l.value, entry := e }
 
 /-- Value `v`'s entry among registration `rec`'s registered values. -/
 def registeredEntry (rec : Json) (v : String) : Option Json :=

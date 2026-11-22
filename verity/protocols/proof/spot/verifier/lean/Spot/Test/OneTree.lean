@@ -49,7 +49,7 @@ private def pinT : Array (Spot.Registered.Entry × String) := #[(pinEntryT, "".p
 /-- `pinsHeld` with nothing derived to read, `loose` marked and `pins` accepted. -/
 private def heldNoReads (loose : Array String) (pins : Array (Spot.Registered.Entry × String)) (ms : Array Member) :
     V Unit :=
-  pinsHeld default #[] #[] ⟨loose, #[], #[], pins, #[]⟩ ms
+  pinsHeld default #[] #[] ⟨loose, #[], #[], pins, #[], #[]⟩ ms
 
 -- a member reading the pinned input at the pin's own entry, and one reading only other values: accepted
 #guard refusal (heldNoReads #["w"] pinT #[readerT "a" (regT [("p", "w", 'a', 2)]), readerT "b" (regT [("q", "v", 'b', 3)]),
@@ -102,7 +102,7 @@ private def batchPinsT : Array (Spot.Registered.Entry × String) :=
 verifier's own held roots `roots`. -/
 private def batchHeld (ms : Array Member) (pins : Array (Spot.Registered.Entry × String) := batchPinsT)
     (roots : Array (Spot.Registered.Entry × String) := #[]) (loose : Array String := #["w0", "w1"]) : V Unit :=
-  pinsHeld (batchToy) #[batchRangeT] batchHeldT ⟨loose, batchHeldT, #[batchRangeT], pins, roots⟩ ms
+  pinsHeld (batchToy) #[batchRangeT] batchHeldT ⟨loose, batchHeldT, #[batchRangeT], pins, roots, #[]⟩ ms
 
 /-- The chunk `name` over the units `us` of `batchToy`'s range, its registered file `reg`. -/
 private def chunkT (name : String) (lo hi : Nat) (reg : Option Json) (us : Array (Nat × Nat) := #[(lo, hi)]) : Member :=

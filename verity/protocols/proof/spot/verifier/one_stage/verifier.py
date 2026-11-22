@@ -330,7 +330,8 @@ def _params(program: Program, query: Mapping[str, Any], sampling_design: Mapping
             seed_salt: str | None = None, pool: Mapping[str, Any] | None = None,
             tied: Sequence[str] | None = None, history: Mapping[str, Any] | None = None,
             compiler: Any = R.UNREAD, certified: Mapping[str, Mapping[str, Any]] | None = None,
-            verdicts: Mapping[str, bool] | None = None, weights_of_record: tuple[bytes, str] | None = None) -> dict[str, Any]:
+            verdicts: Mapping[str, bool] | None = None, weights_of_record: tuple[bytes, str] | None = None,
+            linked: Sequence[Mapping[str, Any]] | None = None) -> dict[str, Any]:
     """`registration.check`'s copies as the Lean's parameters (`OneStage.paramsOfJson`), `pool` as the verifier holds it:
     the Lean adds its `pin` to the supplied or output values itself. The program function's parameters go with
     `registered`, `tied` or `weights_of_record`, which name them, and with a program binding inputs at registration;
@@ -375,6 +376,8 @@ def _params(program: Program, query: Mapping[str, Any], sampling_design: Mapping
         p["verdicts"] = dict(verdicts)
     if weights_of_record is not None:
         p["weights_of_record"] = {"digest": weights_of_record[1], "document": weights_of_record[0].hex()}
+    if linked is not None:
+        p["linked"] = [dict(x) for x in linked]
     return p
 
 
@@ -390,7 +393,8 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], sa
           pool: Mapping[str, Any] | None = None, tied: Sequence[str] | None = None,
           history: Mapping[str, Any] | None = None, members: Sequence[LP.Member] = (),
           compiler: Any = R.UNREAD, certified: Mapping[str, Mapping[str, Any]] | None = None,
-          verdicts: Mapping[str, bool] | None = None, weights_of_record: tuple[bytes, str] | None = None) -> Verdict:
+          verdicts: Mapping[str, bool] | None = None, weights_of_record: tuple[bytes, str] | None = None,
+          linked: Sequence[Mapping[str, Any]] | None = None) -> Verdict:
     """`docket.check` (R1-R8) by the verifier, then, where it passes, the caller's check (`caller.check`, `Caller.gate`):
     the declared day when it passes `day` and `declarations`, the binding when it passes `binding`, the seed salt when it
     passes `seed_salt`, the registered compiler when it passes `compiler`, and the pool's reset, week and spent mark, a
@@ -406,7 +410,8 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], sa
     `link-points` after R8 (`registration.check`'s ``members``, `Docket.linkRefused`: a sample that ends gives each
     member one count of link points), as the compiled check of that form does the members its parameters
     name (`OneStageZk.membersParamsOfJson`); with none, the one-statement form's, neither does. Both hold the program's
-    registered inputs to `weights_of_record` (`docket.weights_held`, `Docket.weightsCodes`)."""
+    registered inputs to `weights_of_record` (`docket.weights_held`, `Docket.weightsCodes`), each value of a port a
+    second stage's link names held by round 1's record (``linked``, `second_stage.round_one_held`)."""
     log, members = list(log), [([list(r) for r in us], g) for us, g in members]
     try:
         py: Verdict | None = R.check(rec, program, query, sampling_design, scheme, ports, leaf_layer, anchors, log, partition,
@@ -414,13 +419,13 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], sa
                                      window_root=window_root, held=held, members=members, day=day,
                                      declarations=declarations, seed_salt=seed_salt, pool=pool, tied=tied, history=history,
                                      compiler=compiler, certified=certified, verdicts=verdicts,
-                                     weights_of_record=weights_of_record)
+                                     weights_of_record=weights_of_record, linked=linked or ())
         why = None
     except R.HistoryRefused as e:
         py, why = None, str(e)
     params = _params(program, query, sampling_design, scheme, ports, leaf_layer, anchors, log, partition, work_table, registered,
                      supplied, pinned, binding, schemas, window_root, held, outputs, day, declarations, seed_salt, pool,
-                     tied, history, compiler, certified, verdicts, weights_of_record)
+                     tied, history, compiler, certified, verdicts, weights_of_record, linked)
     got = _codes(lean("registration", {
         "params": params, "record": dict(rec),
         **({"members": [{"units": us, "vus_per_block": g} for us, g in members]} if members else {})}))

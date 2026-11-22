@@ -669,6 +669,32 @@ def test_a_wired_row_opens_only_the_writers_field_tree_c_wires_into_it_at_the_re
     assert why(port="x#0", wired=cut) == M.wired_tree_why("R/c0", "x#0")
 
 
+def test_a_linked_port_opens_round_ones_tree_alone_at_round_ones_logged_root():
+    """`OneStageZk.portTreeHeld`'s second source, as Lean's guards on `linkedT`: ``R``'s port ``x`` a link names to
+    read round 1's ``logits`` opens it at round 1's logged root, which the window's record does not hold; another root
+    (`TREE_OTHER`), a tree of round 1 the link does not name, and a tree of the second stage's own are each refused by
+    name (`LINKED_TREE_WHY`)."""
+    entry = {"port": "logits", "root": "ff" * 64, "domain": "dd" * 64, "leaves": 2}
+    record = {"roots": [{"port": "R/c0/z", "root": "bb" * 64, "domain": "dd" * 64, "leaves": 2}]}
+    linked = [{"template": "R", "port": "x", "value": "logits", "entry": entry}]
+
+    def why(value: str = "logits", root: str = entry["root"]) -> str | None:
+        reg = {"format": "verity/registered-reads/v2",
+               "ports": {"x": {"value": value, "root": root, "domain": entry["domain"], "leaves": 2}}}
+        try:
+            M._tree_ports_held({"R/c0": {"registered": reg}}, record, {}, linked)
+        except M._Refused as e:
+            return str(e)
+        return None
+    assert why() is None
+    assert why(root="aa" * 64) == (
+        "registered: member R/c0's port x opens the committed tree logits at another root than the registration's: a "
+        "statement opens its window's registered tree, never another window's or another member's")
+    assert why(value="bx") == DK.linked_tree_why("member R/c0", "x", "logits")
+    assert why(value="committed/R/c0/z", root="bb" * 64) == DK.linked_tree_why("member R/c0", "x", "logits")
+    assert why(value="R/o0") == DK.linked_tree_why("member R/c0", "x", "logits")
+
+
 @lean
 def test_a_fresh_input_opens_the_windows_one_root_of_its_node(tmp_path):
     """A registered port of run input node 1, its value ``input/n1``, opens the record's one root of the node, the

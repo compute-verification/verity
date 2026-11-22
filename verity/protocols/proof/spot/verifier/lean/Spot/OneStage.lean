@@ -342,6 +342,20 @@ def PARTITION_QUERY : String :=
   "the partition object's query is not the parameters' query: the sample is drawn over the query's population and " ++
     "every session's proof block is the partition's"
 
+/-- The refusal of linked ports that are not a list of `{template, port, value, entry}`, each `entry` a port of round
+1's record with a string root and domain and a natural leaf count. -/
+def LINKED_FORM : String :=
+  "linked ports are a list of {template, port, value, entry}, each entry round 1's record's root, domain and leaves of " ++
+    "the value"
+
+/-- One linked port (`Docket.Linked`) of the parameters' `linked`, refused by name where malformed (`LINKED_FORM`). -/
+def linkedOf (l : Json) : V Docket.Linked := do
+  exactly l #["entry", "port", "template", "value"] "a linked port"
+  let e := getD l "entry"
+  match getD l "template", getD l "port", getD l "value", getD e "root", getD e "domain", nat? (getD e "leaves") with
+  | .str t, .str p, .str v, .str _, .str _, some _ => pure { template := t, port := p, value := v, entry := e }
+  | _, _, _, _, _, _ => throw LINKED_FORM
+
 /-- The parameters as parsed, before `paramsOfJson`'s refusal of the sampling design: the stream's run reads them and
 refuses the sampling design its rule names itself (`Run.run`, `bernoulli`). A partition object in any form but the
 pre-canonical `{program, query}` names `query` itself or is refused (`PARTITION_QUERY`). -/
@@ -372,6 +386,7 @@ def paramsParsed (j : Json) : V Params := do
   let keys := if (field? j "compiler").isSome then keys.push "compiler" else keys
   let keys := if (field? j "certified").isSome then keys.push "certified" else keys
   let keys := if (field? j "window_values").isSome then keys.push "window_values" else keys
+  let keys := if (field? j "linked").isSome then keys.push "linked" else keys
   exactly j (if (field? j "binding").isSome then keys.push "binding" else keys) "the parameters"
   let program ← Program.parse (← Flock.canon (← obj (getD j "program") "program")).toUTF8
   let query ← obj (getD j "query") "query"
@@ -545,12 +560,17 @@ def paramsParsed (j : Json) : V Params := do
           throw s!"window value {v}: a port or a registered value of the verifier's, not a window's" else pure v
       | _ => throw "window values are a list of strings"
     | some _ => throw "window values are a list of strings"
+  let linked ← match getD j "linked" with
+    | .null => pure #[]
+    | .arr ls => ls.mapM linkedOf
+    | _ => throw LINKED_FORM
   let .str d := getD j "delta" | throw "delta is not a ratio"
   let delta ← Core.Ratio.ofString d "delta"
   if delta.num == 0 || delta.den ≤ delta.num then throw "delta is not in (0, 1)"
   let p : Params := { verifier := { program, query, samplingDesign, workTable, scheme, ports, leafLayer, anchors, log, partition,
                                     registered, params, supplied, pinned, outputs, binding, schemas, windowRoot, held,
-                                    declared, seedSalt, pool, verdicts, tied, compiler, certified, weightsOfRecord, marks },
+                                    declared, seedSalt, pool, verdicts, tied, compiler, certified, weightsOfRecord, marks,
+                                    linked },
                       delta, challenger, tables, windowValues }
   let again := Docket.unwindowed p.verifier
   if !again.isEmpty then
