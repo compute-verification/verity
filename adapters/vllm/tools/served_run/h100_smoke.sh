@@ -88,6 +88,29 @@ SNAP=$HF_HOME/hub/models--${MODEL//\//--}/snapshots/$REV
   echo "SMOKE REFUSED model: $MODEL at $REV is not in $HF_HOME; fetch it outside the lease:" \
     "HF_HOME=$HF_HOME $PY -c \"from huggingface_hub import snapshot_download as s; s('$MODEL', revision='$REV')\""; exit 3; }
 OUT=${OUT:-${RESEARCH_RUN_DIR:-$SR}/out}
+# REGISTRATION_LANE: the lane the auditor's challenger signs the deployment's registration for (a lane takes one, ever),
+#   the lane the epochs reserve on (served_verdicts.sh's H1_LANE), with no default: the first request waits until the
+#   challenger's ledger (PP_CHALLENGER=gate:USER@HOST with PP_GATE_KEY, else the file REGISTRATION_LEDGER) signs the
+#   registration the serve wrote, under the challenger's key record (REGISTRATION_KEY, else PP_CHALLENGER_KEY). Unset: the
+#   development path, which no one signs.
+HOLD=(adapters/vllm/tools/served_run/registration_hold.py hold)
+if [ -n "${REGISTRATION_LANE:-}" ]; then
+  [ -z "${H1_LANE:-}" ] || [ "$H1_LANE" = "$REGISTRATION_LANE" ] || { echo "SMOKE REFUSED lane: REGISTRATION_LANE" \
+    "$REGISTRATION_LANE is not H1_LANE $H1_LANE, the lane the epochs reserve on"; exit 3; }
+  HOLD+=(--lane "$REGISTRATION_LANE" --key "${REGISTRATION_KEY:-${PP_CHALLENGER_KEY:-}}")
+  if [[ "${PP_CHALLENGER:-}" = gate:* ]]; then
+    g=(ssh -o BatchMode=yes); [ -z "${PP_GATE_KEY:-}" ] || g+=(-o IdentitiesOnly=yes -i "$PP_GATE_KEY")
+    HOLD+=(--gate "$(printf '%q ' "${g[@]}" "${PP_CHALLENGER#gate:}")")
+  else
+    [ -r "${REGISTRATION_LEDGER:-}" ] || { echo "SMOKE REFUSED registration: REGISTRATION_LANE needs the challenger's" \
+      "ledger, PP_CHALLENGER=gate:USER@HOST or a readable REGISTRATION_LEDGER"; exit 3; }
+    HOLD+=(--ledger "$REGISTRATION_LEDGER")
+  fi
+  [ -r "${REGISTRATION_KEY:-${PP_CHALLENGER_KEY:-}}" ] || { echo "SMOKE REFUSED registration: REGISTRATION_LANE needs" \
+    "the challenger's key record, REGISTRATION_KEY or PP_CHALLENGER_KEY"; exit 3; }
+elif [ "${1:-}" != card ]; then
+  "$PY" "${HOLD[@]}" --registration /dev/null
+fi
 D=$SR/serve PRED=$SR/predicted PORT=${PORT:-18282}
 mkdir -p "$SR" "$OUT"
 export VERITY_PROTOCOLS_CONFIG="{\"private\": \"$SR/private\"}"
@@ -257,6 +280,8 @@ if [ "${1:-}" = card ]; then  # under the lease: the wipe where the application 
   "$PY" benchmarks/prove_path/prove_path.py weights-registration --serve-run "$D" --checkpoint-dir "$SNAP" --out "$WREG" \
     --deployment-record "$DREG" > "$SR/weights_registration.log" 2>&1 \
     || { say "SMOKE FAILED weights-registration ($SR/weights_registration.log)"; exit 1; }
+  "$PY" "${HOLD[@]}" --registration "$DREG" 2>&1 | tee "$SR/registration_hold.log" \
+    || { say "SMOKE FAILED registration hold: $(tail -1 "$SR/registration_hold.log")"; exit 1; }
   "$PY" adapters/vllm/tools/served_run/inputs.py tokenize --port "$PORT" --dataset "$DATASET" > "$SR/tokenize.log" 2>&1 \
     || echo "TOKENIZE FAILED ($SR/tokenize.log): $(tail -1 "$SR/tokenize.log")" >> "$SR/tokenize.log"
   "$PY" "${LOAD[@]}" > "$SR/load.log" 2>&1 || { say "SMOKE FAILED request ($SR/load.log)"; exit 1; }
