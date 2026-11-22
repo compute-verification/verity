@@ -8,7 +8,7 @@ The guarantee: `Pous.Guarantees.P2SlackFamilyUncond` (`security/Definitions/Pous
 
 Not yet: setup's check runs on the developer's node, PoUS starts after the serve and loads the weights again, and no field of the policy reads what it gives.
 
-The memory wipe is a protocol of its own (`wipe`) whose files share this directory: `*/wipe_*` and `WIPE` in `scheme.py`.
+The memory wipe is a protocol of its own: `../wipe/`.
 
 ## Pieces
 

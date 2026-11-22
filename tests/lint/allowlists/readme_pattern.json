@@ -9,6 +9,7 @@
   "verity/protocols/accounting/compute/pouw/prover/kernels",
   "verity/protocols/accounting/memory/poub",
   "verity/protocols/accounting/memory/pous",
+  "verity/protocols/accounting/memory/wipe",
   "verity/protocols/accounting/network",
   "verity/protocols/policy/training_detection/inference_only",
   "verity/circuits",
