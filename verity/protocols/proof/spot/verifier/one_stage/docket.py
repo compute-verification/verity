@@ -245,7 +245,8 @@ def _of_record(of_record: tuple[bytes, str]) -> tuple[list[tuple[str, Any]], dic
         try:
             want = RV.domain(program, v, e["words"], e["leaves"], e.get(RV.WIDTH_KEY, RV.WORD_BITS)).domain_id.hex()
         except ValueError:
-            want = None
+            bad.append(v)
+            continue
         if e["value"] != v or e["domain"] != want or not (isinstance(e["root"], str) and len(e["root"]) == 128
                                                           and _HEX.fullmatch(e["root"])):
             bad.append(v)
@@ -290,16 +291,13 @@ def weights_held(program: Program, query: Mapping[str, Any], registered: Iterabl
         try:
             ok = G.shape(program, v, e["words"]) == e["leaves"] and G.width(program, v) == e.get(RV.WIDTH_KEY, RV.WORD_BITS)
         except ValueError:
-            ok = False
+            shape.append(v)
+            continue
         if not ok:
             shape.append(v)
     if shape:
         out.append(("R8-weights-shape", {"values": shape}))
-    try:
-        templated = P.is_template_query(query) and P.units(program, query) >= 0
-    except P.QueryRefused:
-        templated = False
-    if not templated:
+    if not _templated(program, query):
         if of_record is not None or marked:
             out.append(("R8-weights-query", {"query": dict(query)}))
         return out, {}
@@ -357,6 +355,25 @@ def read_pins(program: Program, query: Mapping[str, Any], registered: Iterable[s
     return loose, held, ranges, pins, roots
 
 
+def _templated(program: Program, query: Mapping[str, Any]) -> bool:
+    """Whether ``query`` is a template query that applies to ``program``."""
+    try:
+        return P.is_template_query(query) and P.units(program, query) >= 0
+    except P.QueryRefused:
+        return False
+
+
+def _own_entries(program: Program, registered: Mapping[str, int], schemas: Mapping[str, str] | None,
+                 window_root: str | None, held: Sequence[str] | None, supplied: Mapping[str, Any],
+                 pinned: Mapping[str, str], outputs: Mapping[str, Any]) -> dict[str, Any] | ValueError:
+    """`Docket.ownEntries`: the verifier's own entries of its registered values, or why they don't compute."""
+    try:
+        window, fixed = _window(window_root, held, registered, supplied, pinned, outputs)
+        return G.registered_entries(program, registered, schemas, window, fixed)
+    except ValueError as e:
+        return e
+
+
 def held_entries(program: Program, registered: Mapping[str, int], schemas: Mapping[str, str] | None,
                  window_root: str | None, held: Sequence[str] | None, supplied: Mapping[str, Any],
                  pinned: Mapping[str, str], outputs: Mapping[str, Any], log: Iterable[Mapping[str, Any]]
@@ -364,10 +381,8 @@ def held_entries(program: Program, registered: Mapping[str, int], schemas: Mappi
     """`Docket.heldEntries`: ``{value: {"root", "leaves", "domain"}}`` for each value the verifier expects registered
     whose root it holds itself, its ``pinned`` root, else the one an earlier record of the log registered under the
     domain it takes now (`held_roots`), as R7 holds it; none where its entries don't compute."""
-    try:
-        window, fixed = _window(window_root, held, registered, supplied, pinned, outputs)
-        mine = G.registered_entries(program, registered, schemas, window, fixed)
-    except ValueError:
+    mine = _own_entries(program, registered, schemas, window_root, held, supplied, pinned, outputs)
+    if isinstance(mine, ValueError):
         return {}
     logged = held_roots(log)
     out = {}
@@ -1302,9 +1317,62 @@ def matches_public(rec: Mapping[str, Any], scheme: str, roots: Mapping[str, str]
     return c.verdict()
 
 
+#: `OneStageZkStatement.COMMITTED`
+COMMITTED = "committed/"
+
+
+def field_tree_name(v: str) -> bool:
+    """`OneStageZkStatement.fieldTreeName`."""
+    parts = v.split("/")
+    return len(parts) >= 2 and parts[-1].startswith("o") and len(parts[-1]) > 1 and parts[-1][1:].isdigit()
+
+
+def registered_trees_held(rec: Mapping[str, Any], who: str, registered: Mapping[str, Any] | None,
+                          tmpl: str | None = None) -> str | None:
+    """`OneStageZkStatement.registeredTreesHeld`'s refusal, none where it holds: each port of the registered file of
+    ``who`` that opens a committed tree (`portTreeHeld`'s `treePortOf`) held to the record's root, domain and leaf
+    count at that tree's port, at the member's template ``tmpl`` (none for the one statement)."""
+    by = {r["port"]: r for r in rec.get("roots", []) if isinstance(r.get("port"), str)}
+    for name, e in sorted(((registered or {}).get("ports") or {}).items()):
+        v = e.get("value", "")
+        if not v.startswith(COMMITTED) and field_tree_name(v) and (tmpl is None or f"{tmpl}/{name}" != v):
+            return (f"registered: {who}'s port {name}: the field tree it opens is neither its own output's nor one C "
+                    "wires into it at this row")
+        t = v[len(COMMITTED):] if v.startswith(COMMITTED) else v if G.is_fresh_value(v) or field_tree_name(v) else None
+        if t is None:
+            continue
+        if (r := by.get(t)) is None:
+            return (f"registered: {who}'s port {name} opens the committed tree {t}, and the registration holds no root "
+                    f"{t}: a committed tree a statement opens is one its window registered before any coin")
+        for what, k in (("root", "root"), ("domain", "domain"), ("leaf count", "leaves")):
+            mine = e.get(k).lower() if k != "leaves" else e.get(k)
+            if r.get(k) != mine:
+                return (f"registered: {who}'s port {name} opens the committed tree {t} at another {what} than the "
+                        "registration's: a statement opens its window's registered tree, never another window's or "
+                        "another member's")
+    return None
+
+
+def fresh_reads(registered: Mapping[str, Any] | None) -> list[str]:
+    """`OneStageZkStatement.freshReads`: the ports the verifier's registered file reads at a run input node's tree."""
+    return [p for p, e in ((registered or {}).get("ports") or {}).items() if G.is_fresh_value(e.get("value"))]
+
+
+def public_held(rec: Mapping[str, Any], header: Mapping[str, Any], registered: Mapping[str, Any] | None = None) -> Verdict:
+    """`OneStageZkStatement.publicHeld`'s comparison: the one statement's public file's ``header`` against the record at
+    `public_ports`, each port the registration holds no root of that the verifier's ``registered`` file reads at a run
+    input node's tree (`fresh_reads`) left out of its roots and domains. Raises `ValueError` where `public_ports` does."""
+    reg = public_ports(rec)
+    fv = header.get("frame_v3") or {}
+    drop = {p for p in fresh_reads(registered) if p not in reg}
+    roots = {p: r for p, r in (fv.get("roots") or {}).items() if p not in drop}
+    domains = {p: d for p, d in (fv.get("domain_ids") or {}).items() if p not in drop}
+    return matches_public(rec, header.get("scheme"), roots, domains, header.get("instances"), reg=reg)
+
+
 registered_entries = G.registered_entries
 
 __all__ = ["NOT_ONE_MEMBER", "PARTITION_QUERY", "POOL_KEYS", "RECEIPT", "ROW_TABLES", "TABLE_PORT", "WEIGHTS_UNREGISTERED_WHY", "read_pins",
-           "WINDOW_DOMAIN", "check", "held_roots", "marked_inputs", "matches_public", "partition_query_refused", "pool_chains", "pool_open", "pool_refused",
-           "pool_spent_before", "pool_values", "public_ports", "query_digest", "receipt",
+           "WINDOW_DOMAIN", "check", "fresh_reads", "held_roots", "marked_inputs", "matches_public", "partition_query_refused", "pool_chains", "pool_open", "pool_refused",
+           "pool_spent_before", "pool_values", "public_held", "public_ports", "query_digest", "receipt", "registered_trees_held",
            "refuse_unwindowed", "refused", "registered_entries", "unwindowed", "weights_held", "window_domain"]

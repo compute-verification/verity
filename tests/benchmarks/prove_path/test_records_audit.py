@@ -1372,7 +1372,9 @@ def test_a_windows_audit_is_a_period_audit_whose_scan_state_reads_count_register
     capsys.readouterr()
     assert RA.main(["period", "--window", str(got.dir), "--audit", str(audit), "--out", str(tmp_path / "p.json"), "--tied", TIED]) == 0
     assert json.loads((tmp_path / "p.json").read_text()) == p
-    assert json.loads(capsys.readouterr().out.splitlines()[-1].removeprefix("PERIOD ")) == {
+    said = capsys.readouterr().out.splitlines()
+    assert said[0] == f"TIED-ROOT {json.dumps([TIED])}: none held it: no test holds a tied node's shared root to the record"
+    assert json.loads(said[-1].removeprefix("PERIOD ")) == {
         "verdict": "accept", "reason": None, "free": p["free"], "commitment": DD.digest(rec), "program": rec["program"]}
     refused = RA.period(got.dir, _audited(got.dir, tmp_path / "r", accepted=False), {}, TIED)["answer"]
     assert refused["verdict"] == "reject" and refused["commitment"] == DD.digest(rec)
@@ -1963,3 +1965,21 @@ def test_the_phase_own_value_is_refused_by_name_without_exactly_one_scan_state_p
     with pytest.raises(ValueError, match="the network-attester declaration declares the port 'scan-state'"):
         RA.port_value(SimpleNamespace(name="network-attester", ports=ports), "scan-state")
     assert RA.PHASE_OWN == {"verity/certifier/scan-state/v1"}
+
+
+def test_the_audit_expects_each_marked_tables_anchors_registered_at_the_dockets_words():
+    """A table's root and domain anchors C's marks name (`supplied.anchors`) join the values the verifier expects
+    registered, at the words of the docket's entry of each, in ``hm96-sha512/row/v2`` rows, beside what the tie
+    hands; a docket registering an anchor other than once is refused by name, and a program with no anchor leaves the
+    tie as it is."""
+    mark = {"args": {"value": "t"}, "layout": "digest", "bits": 512}
+    program = SimpleNamespace(supplied={"t/root": {**mark, "supplied": "registered.root/v1"},
+                                        "t/domain": {**mark, "supplied": "registered.domain/v1"}, "x": None})
+    docket = {"registered": [{"value": "t/root", "words": 32}, {"value": "t/domain", "words": 32}, {"value": "t", "words": 4}]}
+    tied = {"registered": {"s": 8}, "schemas": {"s": "seg"}}
+    got = RA.anchored(tied, docket, program, None)
+    assert got["registered"] == {"s": 8, "t/root": 32, "t/domain": 32}
+    assert got["schemas"] == {"s": "seg", "t/root": IF.V2, "t/domain": IF.V2}
+    with pytest.raises(ValueError, match=r"anchors \['t/domain'\] other than once"):
+        RA.anchored(tied, {"registered": docket["registered"][:1]}, program, None)
+    assert RA.anchored(tied, docket, SimpleNamespace(supplied={}), None) == tied

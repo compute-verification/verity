@@ -179,14 +179,19 @@ members, each member's registered file read once, and it reads no blob. -/
 def classHeld (ms : Array Member) : V Unit :=
   ms.foldlM classStep {} >>= fun _ => pure ()
 
+/-- `treePortsHeld` at the reader rows `wired` gives each member (`wiredRows`). -/
+def treePortsHeldAt (wired : Member → Array (String × String)) (ms : Array Member) (rec : Json) : V Unit :=
+  let byPort := rootsByPort rec
+  ms.forM fun m =>
+    registeredTreesHeld byPort s!"member {m.name}" m.own.registered ((templateOf m.name).map (·.1)) (wired m)
+
 /-- **Every member's registered file opens only its window's committed trees** (`registeredTreesHeld` at the record
 `rec`'s roots by port, `rootsByPort`, built once): a member's own committed port at another root, domain or leaf
 count than the record's (another window's tree, another member's) refuses by name, and so does a port whose value is a
-writer's field tree's name (`WIRED_TREE_WHY`).
+writer's field tree's name at a row no wire C states into the member covers (`WIRED_TREE_WHY`, at `wiredRowsOf`).
 One pass over the record's roots and the members' registered files. -/
-def treePortsHeld (ms : Array Member) (rec : Json) : V Unit :=
-  let byPort := rootsByPort rec
-  ms.forM fun m => registeredTreesHeld byPort s!"member {m.name}" m.own.registered ((templateOf m.name).map (·.1))
+def treePortsHeld (p : Params) (ms : Array Member) (rec : Json) : V Unit :=
+  treePortsHeldAt (wiredRowsOf p ms) ms rec
 
 /-- **The per-member form's structure**, held before its run on the parameters `p`, its members `ms`, the
 registration `c`, the evidence `e` and its statements `sts`: each member's name once (`namesOnce`), the statements'
@@ -210,7 +215,7 @@ def membersStructure (p : Params) (ms : Array Member) (c : OneStage.Commitment) 
   popHeld p.base.verifier c.record
   laidHeld ms c.record
   classHeld ms
-  treePortsHeld ms c.record
+  treePortsHeld p ms c.record
   let v := p.base.verifier
   match Docket.readPins v with
   | none => throw (Docket.readPinsWhy v)
@@ -222,12 +227,20 @@ def OWN_ROOT_WHY (member port : String) : String :=
   s!"member {member}: port {port} is a row of in(S) (C wires it from another block's outputs), and the registration " ++
     "holds a root of its own for it: a crossing wire is committed once, in its writer's output field's tree"
 
+/-- The refusal of a member's row `row` C wires into it that is named as its writer's output field: the slice holds
+a member's own output and a wired row each at a field tree, and `headerHeldAt` tells them apart by that name. -/
+def WIRED_AS_FIELD_WHY (member row : String) : String :=
+  s!"member {member}: its row {row} of in(S) is named as the writer's output field it reads, and a member's slice " ++
+    "names a field tree's field only at the member's own output"
+
 /-- **The members' roots with their wired ports'**: each member's roots (`roots`), then, for each wire of the wiring
 `W` whose reader units meet the member's (a wire's are its template's own count, so a range's are those of its
 template's earlier ranges on), its writer's output field's tree among the window's trees `ft` (`fieldTreesOf`,
-`fieldRootIn`), the first wire's of each port. A wired port the member holds a root of its own of is refused by name
-(`OWN_ROOT_WHY`). A reader's wired rows are references with paths into that tree; one whose writer's field the record
-names no tree of gets none, so its member's public file naming it is refused by name (`UNWIRED_WHY`). Its cost is the
+`fieldRootIn`) under the reader row the wire covers (`wireRow`: the port, or its cut row `<port>#<j>`), the first
+wire's of each row, so every cut row of a wire gets its writer's tree. A wired row named as its writer's field
+(`WIRED_AS_FIELD_WHY`) and one the member holds a root of its own of (`OWN_ROOT_WHY`) are refused by name. A
+reader's wired rows are references with paths into that tree; one whose writer's field the record names no tree of
+gets none, so its member's public file naming it is refused by name (`UNWIRED_WHY`). Its cost is the
 members' and the wires' numbers, each lookup among one template's fields. -/
 def fieldRoots (W : Spot.Wires.Wiring) (rs : Array (String × Nat × Nat)) (ms : Array Member)
     (ft : Std.HashMap String (Array (String × Json))) (roots : Std.HashMap String (Array Json)) :
@@ -236,21 +249,16 @@ def fieldRoots (W : Spot.Wires.Wiring) (rs : Array (String × Nat × Nat)) (ms :
   ms.foldlM (fun acc m => do
     let inRange := wireReaches rs lbase m
     let own := roots.getD m.name #[]
-    if let some w := W.wires.find? fun w => inRange w && own.any (getD · "port" == Json.str w.port) then
-      throw (OWN_ROOT_WHY m.name w.port)
+    if let some w := W.wires.find? fun w => inRange w && wireRow W w == w.out then
+      throw (WIRED_AS_FIELD_WHY m.name w.out)
+    if let some w := W.wires.find? fun w => inRange w && own.any (getD · "port" == Json.str (wireRow W w)) then
+      throw (OWN_ROOT_WHY m.name (wireRow W w))
     let mine := W.wires.foldl (fun (got : Array Json) w =>
-      if got.any (getD · "port" == Json.str w.port) || !inRange w then got
-      else match fieldRootIn ft w.writer w.out w.port with
+      if got.any (getD · "port" == Json.str (wireRow W w)) || !inRange w then got
+      else match fieldRootIn ft w.writer w.out (wireRow W w) with
         | some r => got.push r
         | none => got) own
     pure (acc.insert m.name mine)) roots
-
-/-- **C's wiring under the partition**: the templates of the partition's ranges `rs`, read off C
-(`Spot.RecordText.tmplAt`), in(S)'s row cuts (`ioCuts`), and the wires C's root states (`Spot.Edges.edgesOf`). -/
-def derivedWiring (P : Flock.Program.Prog) (rs : Array Flock.TemplateQuery.TRange) : V Spot.Wires.Wiring := do
-  let ts ← (Spot.RecordText.unitsOf rs).mapM (Spot.RecordText.tmplAt P rs)
-  let W : Spot.Wires.Wiring := { templates := ts.map fun t => (t.tid, t.wired), cuts := ← ioCuts P rs, wires := [] }
-  return { W with wires := ← Spot.Edges.edgesOf P rs W }
 
 /-- The refusal of a registration whose trees of its templates' output fields are not the ones C and the partition
 give (`fieldTreesHeld`, `derivedFieldTrees`), `what` saying which. -/
@@ -338,16 +346,22 @@ tree. -/
 def TIED_ROOTS_WHY (w : Nat) : String :=
   s!"members: C's tied run input node {w} is read under two roots: every reader of a tied node opens one tree"
 
+/-- The refusal of a member reading tied run input node `w` at port `p` with no root there (`tiedRootsAt`). -/
+def TIED_NO_ROOT_WHY (member p : String) (w : Nat) : String :=
+  s!"member {member}: port {p} reads C's tied run input node {w}, and its slice holds no root there: every reader " ++
+    "of a tied node opens one tree"
+
 /-- `seen`, the root each tied run input node is read under so far, with each node inside the tied gates `tied` that
-member `m` reads (`memberInputs`) at the root `own` holds for its port; refused (`TIED_ROOTS_WHY`) where `seen` holds
-another root for the node. That the root is the right one is the later period check's. -/
+member `m` reads (`memberInputs`) at the root `own` holds for its port; refused where `own` holds no root at the port
+(`TIED_NO_ROOT_WHY`) or `seen` holds another root for the node (`TIED_ROOTS_WHY`). That the root is the right one is
+the later period check's. -/
 def tiedRootsAt (P : Flock.Program.Prog) (rs : Array Flock.TemplateQuery.TRange) (tied : Array (Nat × Nat))
     (m : Member) (own : Array Json) (seen : Array (Nat × Json)) : V (Array (Nat × Json)) := do
   (← memberInputs P rs m).foldlM (init := seen) fun seen (p, w, _) => do
     if !Flock.Registered.runNode P w || !tied.any fun (first, count) => Partition.within P first count w then
       return seen
     match (own.find? (getD · "port" == .str p)).map (getD · "root") with
-    | none => return seen
+    | none => throw (TIED_NO_ROOT_WHY m.name p w)
     | some r => match seen.find? (·.1 == w) with
       | some (_, r') => if r' == r then return seen else throw (TIED_ROOTS_WHY w)
       | none => return seen.push (w, r)
@@ -907,6 +921,34 @@ private def portsPublic (ports : List String) : ByteArray :=
 #guard [["T/c0/x", "T/c1/x"], ["A/c0/x", "B/c0/x"], ["x", "T/c0/y"], ["T/c0/x", "row-table/s0/t"]].all fun ps =>
   refusal (publicHeld (portsRecord ps) (portsPublic ["x", "y"])) == NOT_ONE_MEMBER
 
+/-- A registered file reading port `x` at `value`. -/
+private def xReadT (value : String) : Json :=
+  Json.mkObj [("format", Json.str Flock.Registered.FORMAT), ("ports", Json.mkObj [("x", Json.mkObj [
+      ("domain", Json.str ("".pushn 'd' 128)), ("leaves", Lean.toJson (2 : Nat)), ("root", Json.str ("".pushn 'a' 128)),
+      ("value", Json.str value)])])]
+
+-- a header port the registration holds no root of is not compared only where the verifier's registered file reads it
+-- at a run input node's tree
+#guard refusal (publicHeld (portsRecord ["y", "input/n3"]) (portsPublic ["y", "x"])) ==
+  "public file: not the registration's: roots"
+#guard refusal (publicHeld (portsRecord ["y", "input/n3"]) (portsPublic ["y", "x"]) (some (xReadT "input/n3"))) == ""
+#guard refusal (publicHeld (portsRecord ["y", "input/n3"]) (portsPublic ["y", "x"]) (some (xReadT "w"))) ==
+  "public file: not the registration's: roots"
+-- a port the registration holds a root of is compared, whatever the registered file reads it at
+#guard refusal (publicHeld (portsRecord ["input/n3", "x"]) (portsPublic ["x"]) (some (xReadT "input/n3"))) ==
+  "public file: not the registration's: roots, domains"
+
+/-- A registration holding run input node 3's tree at the root of `c`s, `d`'s domain and 2 leaves. -/
+private def freshTreeT (c : Char) : Json :=
+  Json.mkObj [("roots", .arr #[Json.mkObj [("domain", .str ("".pushn 'd' 128)), ("leaves", Lean.toJson (2 : Nat)),
+    ("port", .str "input/n3"), ("root", .str ("".pushn c 128))]])]
+
+-- what holds the port `publicHeld` leaves out: the registered file opens it under the registration's tree, and a
+-- header root over other rows than that tree's, its registered file's root another, refuses by name
+#guard refusal (registeredTreesHeld (rootsByPort (freshTreeT 'a')) "the verifier" (some (xReadT "input/n3"))) == ""
+#guard refusal (registeredTreesHeld (rootsByPort (freshTreeT 'c')) "the verifier" (some (xReadT "input/n3"))) ==
+  TREE_OTHER "the verifier" "x" "input/n3" "root"
+
 /-- A circuit file whose META looks up the MUFU tables `names`. -/
 private def lookingUp (names : List String) : ByteArray :=
   s!"circuit\nMETA {(Json.mkObj [("lookups", Json.mkObj (names.map (·, Json.mkObj [])))]).compress}\nrest".toUTF8
@@ -1391,24 +1433,24 @@ private def treeRegT (c : Char) (leaves : Nat := 2) (value : String := "committe
       ("domain", Json.str ("".pushn d 128)), ("leaves", Lean.toJson leaves), ("root", Json.str ("".pushn c 128)),
       ("value", Json.str value)])])]
 
-#guard refusal (treePortsHeld #[readerT "R/c0" (treeRegT 'a')] treeRecT) == ""
+#guard refusal (treePortsHeldAt (fun _ => #[]) #[readerT "R/c0" (treeRegT 'a')] treeRecT) == ""
 -- a genuine tree of `W`'s `y` at another root (the last window's): refused
-#guard refusal (treePortsHeld #[readerT "R/c0" (treeRegT 'c')] treeRecT) == TREE_OTHER "member R/c0" "x" "W/y" "root"
+#guard refusal (treePortsHeldAt (fun _ => #[]) #[readerT "R/c0" (treeRegT 'c')] treeRecT) == TREE_OTHER "member R/c0" "x" "W/y" "root"
 -- the window's root under another domain (the domain binds the window): refused
-#guard refusal (treePortsHeld #[readerT "R/c0" (treeRegT 'a' (d := 'e'))] treeRecT) ==
+#guard refusal (treePortsHeldAt (fun _ => #[]) #[readerT "R/c0" (treeRegT 'a' (d := 'e'))] treeRecT) ==
   TREE_OTHER "member R/c0" "x" "W/y" "domain"
-#guard refusal (treePortsHeld #[readerT "R/c0" (treeRegT 'a' 3)] treeRecT) == TREE_OTHER "member R/c0" "x" "W/y" "leaf count"
+#guard refusal (treePortsHeldAt (fun _ => #[]) #[readerT "R/c0" (treeRegT 'a' 3)] treeRecT) == TREE_OTHER "member R/c0" "x" "W/y" "leaf count"
 -- the member's own tree `R/c0/z` named as the tree of `W`'s `y`: refused
-#guard refusal (treePortsHeld #[readerT "R/c0" (treeRegT 'b')] treeRecT) == TREE_OTHER "member R/c0" "x" "W/y" "root"
-#guard refusal (treePortsHeld #[readerT "R/c0" (treeRegT 'a' (value := "committed/V/y"))] treeRecT) ==
+#guard refusal (treePortsHeldAt (fun _ => #[]) #[readerT "R/c0" (treeRegT 'b')] treeRecT) == TREE_OTHER "member R/c0" "x" "W/y" "root"
+#guard refusal (treePortsHeldAt (fun _ => #[]) #[readerT "R/c0" (treeRegT 'a' (value := "committed/V/y"))] treeRecT) ==
   TREE_UNHELD "member R/c0" "x" "V/y"
-#guard refusal (treePortsHeld #[readerT "R/c0" (treeRegT 'b' (value := "committed/R/c0/z"))] treeRecT) == ""
-#guard refusal (treePortsHeld #[readerT "R/c0" (treeRegT 'a' (value := "committed/R/c0/z"))] treeRecT) ==
+#guard refusal (treePortsHeldAt (fun _ => #[]) #[readerT "R/c0" (treeRegT 'b' (value := "committed/R/c0/z"))] treeRecT) == ""
+#guard refusal (treePortsHeldAt (fun _ => #[]) #[readerT "R/c0" (treeRegT 'a' (value := "committed/R/c0/z"))] treeRecT) ==
   TREE_OTHER "member R/c0" "x" "R/c0/z" "root"
-#guard refusal (treePortsHeld #[readerT "R/c0" (treeRegT 'c' (value := "w"))] treeRecT) == ""
+#guard refusal (treePortsHeldAt (fun _ => #[]) #[readerT "R/c0" (treeRegT 'c' (value := "w"))] treeRecT) == ""
 -- a wired port, its value `W`'s field tree's name: refused whatever its root
-#guard refusal (treePortsHeld #[readerT "R/c0" (treeRegT 'a' (value := "W/o0"))] treeRecT) == WIRED_TREE_WHY "member R/c0" "x"
-#guard refusal (treePortsHeld #[readerT "R/c0" (treeRegT 'a' (value := "committed/W/o0"))] treeRecT) ==
+#guard refusal (treePortsHeldAt (fun _ => #[]) #[readerT "R/c0" (treeRegT 'a' (value := "W/o0"))] treeRecT) == WIRED_TREE_WHY "member R/c0" "x"
+#guard refusal (treePortsHeldAt (fun _ => #[]) #[readerT "R/c0" (treeRegT 'a' (value := "committed/W/o0"))] treeRecT) ==
   TREE_UNHELD "member R/c0" "x" "W/o0"
 #guard !fieldTreeName "o0" && !fieldTreeName "W/o" && !fieldTreeName "W/ox" && fieldTreeName "a/b/o12"
 
@@ -1424,14 +1466,42 @@ private def outRegT (port value : String) (c : Char) : Json :=
       ("value", Json.str value)])])]
 
 -- a member's own output, opened at its template's tree: held to the registration's root, domain and leaves
-#guard refusal (treePortsHeld #[readerT "W/c0" (outRegT "o0" "W/o0" 'a')] treeOutRecT) == ""
+#guard refusal (treePortsHeldAt (fun _ => #[]) #[readerT "W/c0" (outRegT "o0" "W/o0" 'a')] treeOutRecT) == ""
 -- its own output opened at another root than the registration's tree: refused
-#guard refusal (treePortsHeld #[readerT "W/c0" (outRegT "o0" "W/o0" 'c')] treeOutRecT) ==
+#guard refusal (treePortsHeldAt (fun _ => #[]) #[readerT "W/c0" (outRegT "o0" "W/o0" 'c')] treeOutRecT) ==
   TREE_OTHER "member W/c0" "o0" "W/o0" "root"
 -- another template's output tree named as its own output: refused as a wired read
-#guard refusal (treePortsHeld #[readerT "V/c0" (outRegT "o0" "W/o0" 'a')] treeOutRecT) == WIRED_TREE_WHY "member V/c0" "o0"
+#guard refusal (treePortsHeldAt (fun _ => #[]) #[readerT "V/c0" (outRegT "o0" "W/o0" 'a')] treeOutRecT) == WIRED_TREE_WHY "member V/c0" "o0"
 -- a wired input (port `x`) reading `W`'s tree: still refused
-#guard refusal (treePortsHeld #[readerT "W/c0" (outRegT "x" "W/o0" 'a')] treeOutRecT) == WIRED_TREE_WHY "member W/c0" "x"
+#guard refusal (treePortsHeldAt (fun _ => #[]) #[readerT "W/c0" (outRegT "x" "W/o0" 'a')] treeOutRecT) == WIRED_TREE_WHY "member W/c0" "x"
+
+/-- `R/c0` with C's wires into its rows given (`wiredRows`), every other member none. -/
+private def wiredAtT (rows : Array (String × String)) : Member → Array (String × String) :=
+  fun m => if m.name == "R/c0" then rows else #[]
+
+-- a wired input C wires from `W`'s field `o0`, opened at `W`'s tree: held to the registration's root, domain and leaves
+#guard refusal (treePortsHeldAt (wiredAtT #[("x", "W/o0")]) #[readerT "R/c0" (outRegT "x" "W/o0" 'a')] treeOutRecT) == ""
+#guard refusal (treePortsHeldAt (wiredAtT #[("x", "W/o0")]) #[readerT "R/c0" (outRegT "x" "W/o0" 'c')] treeOutRecT) ==
+  TREE_OTHER "member R/c0" "x" "W/o0" "root"
+-- a field of `W` C does not wire the port from: refused
+#guard refusal (treePortsHeldAt (wiredAtT #[("x", "W/o0")]) #[readerT "R/c0" (outRegT "x" "W/o1" 'a')] treeOutRecT) ==
+  WIRED_TREE_WHY "member R/c0" "x"
+-- a cut row: the wired row `x#1` is admitted, the row `x#0` C wires from no field of `W` is refused
+#guard refusal (treePortsHeldAt (wiredAtT #[("x#1", "W/o0")]) #[readerT "R/c0" (outRegT "x#1" "W/o0" 'a')] treeOutRecT) ==
+  ""
+#guard refusal (treePortsHeldAt (wiredAtT #[("x#1", "W/o0")]) #[readerT "R/c0" (outRegT "x#0" "W/o0" 'a')] treeOutRecT) ==
+  WIRED_TREE_WHY "member R/c0" "x#0"
+-- another member's wired row is not this one's
+#guard refusal (treePortsHeldAt (wiredAtT #[("x", "W/o0")]) #[readerT "R/c1" (outRegT "x" "W/o0" 'a')] treeOutRecT) ==
+  WIRED_TREE_WHY "member R/c1" "x"
+
+-- a reader row's name: the port uncut, `<port>#<j>` where the wiring cuts it
+#guard wireRow { templates := [], cuts := [("R", [("x", 2)])], wires := [] }
+    { reader := "R", port := "x", writer := "W", out := "o0", start := 0, radix := [2], base := 0, step := [1],
+      cut0 := 1, cuts := 1 } == "x#1"
+#guard wireRow { templates := [], cuts := [], wires := [] }
+    { reader := "R", port := "x", writer := "W", out := "o0", start := 0, radix := [2], base := 0, step := [1],
+      cut0 := 0, cuts := 1 } == "x"
 
 /-- `treeRecT` with run input node 3's tree, `input/n3`, at the root of `f`s. -/
 private def treeFreshRecT : Json :=
@@ -1439,22 +1509,22 @@ private def treeFreshRecT : Json :=
     ("roots", Json.arr #[hexRootT "W/y" 'a', hexRootT "R/c0/z" 'b', hexRootT "input/n3" 'f']), ("scheme", Json.str "s")]
 
 -- a fresh input, node 3's tree, opened at the record's one root of it
-#guard refusal (treePortsHeld #[readerT "R/c0" (treeRegT 'f' (value := "input/n3"))] treeFreshRecT) == ""
+#guard refusal (treePortsHeldAt (fun _ => #[]) #[readerT "R/c0" (treeRegT 'f' (value := "input/n3"))] treeFreshRecT) == ""
 -- the fresh row changed after the coin: its tree's root is not the record's
-#guard refusal (treePortsHeld #[readerT "R/c0" (treeRegT 'c' (value := "input/n3"))] treeFreshRecT) ==
+#guard refusal (treePortsHeldAt (fun _ => #[]) #[readerT "R/c0" (treeRegT 'c' (value := "input/n3"))] treeFreshRecT) ==
   TREE_OTHER "member R/c0" "x" "input/n3" "root"
 -- a block reading a run node the record holds no entry of: refused, with no fall back to the file's root
-#guard refusal (treePortsHeld #[readerT "R/c0" (treeRegT 'f' (value := "input/n4"))] treeFreshRecT) ==
+#guard refusal (treePortsHeldAt (fun _ => #[]) #[readerT "R/c0" (treeRegT 'f' (value := "input/n4"))] treeFreshRecT) ==
   TREE_UNHELD "member R/c0" "x" "input/n4"
-#guard refusal (treePortsHeld #[readerT "R/c0" (treeRegT 'f' (value := "input/n3"))] treeRecT) ==
+#guard refusal (treePortsHeldAt (fun _ => #[]) #[readerT "R/c0" (treeRegT 'f' (value := "input/n3"))] treeRecT) ==
   TREE_UNHELD "member R/c0" "x" "input/n3"
 -- two blocks of one window opening node 3 under two roots: each held to the record's, and to each other's
-#guard refusal (treePortsHeld #[readerT "R/c0" (treeRegT 'f' (value := "input/n3")),
+#guard refusal (treePortsHeldAt (fun _ => #[]) #[readerT "R/c0" (treeRegT 'f' (value := "input/n3")),
   readerT "R/c1" (treeRegT 'c' (value := "input/n3"))] treeFreshRecT) == TREE_OTHER "member R/c1" "x" "input/n3" "root"
 #guard (whyT (classHeld #[readerT "R/c0" (treeRegT 'f' (value := "input/n3")),
   readerT "R/c1" (treeRegT 'c' (value := "input/n3"))])).startsWith
   "registered: members R/c0 and R/c1 read the registered value input/n3 as two"
-#guard refusal (treePortsHeld #[memberT "R/c0" #[(0, 1)]] treeRecT) == ""
+#guard refusal (treePortsHeldAt (fun _ => #[]) #[memberT "R/c0" #[(0, 1)]] treeRecT) == ""
 
 /-- A writer `W/c0`, template `W`'s two units, and a reader `R/c0`, template `R`'s two after them. -/
 private def wiredMs : Array Member := #[memberT "W/c0" #[(0, 2)], memberT "R/c0" #[(2, 4)]]
@@ -1482,6 +1552,27 @@ private def wiredSliceT (W : Spot.Wires.Wiring) : Json :=
 #guard refusal (headerHeld (wiredSliceT (wiringT false)) (headerT 2 [("x", "aa"), ("z", "bb")])) == UNWIRED_WHY "x"
 #guard refusal (headerHeld (wiredSliceT (wiringT true "V")) (headerT 2 [("x", "aa"), ("z", "bb")])) ==
   UNWIRED_WHY "x"
+-- the slice's wired root names its writer's tree, `W/y`: a header root over the member's own rows there is held by a
+-- registered read of that tree, and refused by name without one
+#guard (match getD (wiredSliceT (wiringT true)) "roots" with
+  | .arr rs => rs.any (getD · "tree" == Json.str "W/y")
+  | _ => false)
+#guard refusal (headerHeldAt #[("x", "W/y")] #[] (wiredSliceT (wiringT true)) (headerT 2 [("x", "cc"), ("z", "bb")])) ==
+  ""
+#guard refusal (headerHeldAt #[] #[] (wiredSliceT (wiringT true)) (headerT 2 [("x", "cc"), ("z", "bb")])) ==
+  SHARED_UNREAD "x" "W/y"
+#guard refusal (headerHeldAt #[("x", "W/z")] #[] (wiredSliceT (wiringT true)) (headerT 2 [("x", "cc"), ("z", "bb")])) ==
+  SHARED_UNREAD "x" "W/y"
+-- the writer's own root at the wired row, with no read: the session would hold the reader's rows to the tree's leaves
+-- in order, not C's, so it is refused by name too
+#guard refusal (headerHeldAt #[] #[] (wiredSliceT (wiringT true)) (headerT 2 [("x", "aa"), ("z", "bb")])) ==
+  SHARED_UNREAD "x" "W/y"
+-- a wired row named as the writer's output field it reads: refused, so a slice's field-named entry is an own output
+#guard whyT (fieldRoots { wiringT true with wires := (wiringT true).wires.map ({ · with port := "y" }) }
+    #[("W", 0, 2), ("R", 2, 2)] wiredMs (fieldTreesOf (templatesOf ["W/c0", "R/c0"]) (recordT 4 [("W/y", "aa")])) {}) ==
+  WIRED_AS_FIELD_WHY "R/c0" "y"
+#guard WIRED_AS_FIELD_WHY "R/c0" "y" == "member R/c0: its row y of in(S) is named as the writer's output field it " ++
+  "reads, and a member's slice names a field tree's field only at the member's own output"
 
 /-- A row of 16 `v16` leaves, a `Gemm{K=16, N=16}` unit's `x` and its output. -/
 private def rowT : Flock.Program.Ty := .array 16 (.value 16)
@@ -1529,6 +1620,11 @@ private def chainRootsT (roots : List (String × String)) : V (Std.HashMap Strin
     ["G/c0", "G/c1", "G/c3"].map fun m => (r.getD m #[]).map (getD · "root")) ==
   some [#[Json.str "bb"], #[Json.str "aa"], #[Json.str "aa"]]
 #guard whyT (chainRootsT [("G/c0/x", "bb"), ("G/c2/x", "cc")]) == OWN_ROOT_WHY "G/c2" "x"
+-- each wired root names its writer's tree, and C's wires into each member are the rows `portTreeHeld` admits
+#guard ((chainRootsT []).toOption.map fun r => (r.getD "G/c1" #[]).map (getD · "tree")) == some #[Json.str "G/o0"]
+#guard ((derivedWiring chainP chainRs).toOption.map fun W =>
+    chainMs.map (wiredRows W (chainRs.map fun r => (r.template, r.first, r.count)))) ==
+  some #[#[], #[("x", "G/o0")], #[("x", "G/o0")], #[("x", "G/o0")]]
 
 /-- `chain()` with its first two root nodes one member, `G/c01`: units 2 and 3 read units 0 and 1 inside it. -/
 private def chainMs01 : Array Member := #[memberT "G/c01" #[(0, 4)], memberT "G/c2" #[(4, 6)], memberT "G/c3" #[(6, 8)]]

@@ -328,8 +328,8 @@ def stream_of(a: argparse.Namespace, mine: CS.Binding, members: list[dict], want
     schemas = {t: s for t, (s, _n) in mine.trees.items()}
     # a run input node's tree input/n<w> is no member's: its leaves are in the schema its readers' files name
     for mm in members:
-        if (f := mm["st"].get("registered_file")) is not None:
-            for e in json.loads(f.read_text())["ports"].values():
+        if (f := mm["st"].get("registered")) is not None:
+            for e in f["ports"].values():
                 if REG.is_fresh_value(e.get("value")):
                     schemas.setdefault(e["value"], e.get(RV.SCHEMA_KEY, RV.SCHEMA))
     strata = [s["template"] for s in D.derive(mine.program, mine.query, mine.law, mine.work_table).get("strata") or ()]
@@ -533,7 +533,7 @@ def registered_negatives(a: argparse.Namespace, mm: dict, sdir: Path, workers: i
     one after another, or with more ``workers`` up to that many at once on a `LeanPool` within the audit's memory,
     every case's files put in the session's archive (`a0.archive_put`) before any case is verified."""
     st, n = mm["st"], mm["m"].n
-    honest = json.loads(st["registered_file"].read_text())
+    honest = st["registered"]
     port, last = next(iter(honest["ports"])), next(reversed(honest["ports"]))
     p = honest["ports"][port]
     declared = declared_ports(st["interface_file"], mm["m"].template) if honest.get(REG.BOUND) and st.get("interface_file") else []
@@ -585,11 +585,10 @@ def registered_negatives(a: argparse.Namespace, mm: dict, sdir: Path, workers: i
     def statement(name: str) -> dict:
         """The statement a case is verified against, its registered reads written."""
         doc, _why, staged = cases[name]
-        alt = {x: y for x, y in st.items() if x != "registered_file"
+        alt = {x: y for x, y in st.items() if x not in a0.REGISTERED_KEYS
                and not (x == "interface_file" and name == "bound-ports-without-interface")} | ({"dir": staged} if staged else {})
         if doc is not None:
-            alt["registered_file"] = sdir / f"{name}.json"
-            alt["registered_file"].write_text(json.dumps(doc, sort_keys=True))
+            alt |= a0.registered_written(sdir / f"{name}.json", doc)
         return alt
 
     def verify(name: str, alt: dict | None = None) -> dict:
@@ -677,6 +676,12 @@ STAGE_WORKER_GIB = 16.0
 
 #: members between two of staging's ``PROGRESS`` lines
 PROGRESS_EVERY = 50
+
+
+def tied_root_line(tied: Sequence[str]) -> str:
+    """The first line of a run that names tied parameters: which test held a tied node's shared root. None does: the
+    members test holds only that every reader brings a root and that they are equal (`members.tied_roots_at`)."""
+    return f"TIED-ROOT {json.dumps(sorted(tied))}: none held it: no test holds a tied node's shared root to the record"
 
 
 def progress(phase: str, t0: float, **kw: Any) -> None:
@@ -991,6 +996,61 @@ def stage(served: Path, mm: dict, files: tuple[dict, dict], tmpl_unit_bin: str |
             raise RuntimeError(f"member {mm['k']}'s prover's file is not under the header its public file was held to")
 
 
+def own_files(served: Path, mine: CS.Binding, rec: dict, form: tuple[list, dict] | str,
+              registered: dict | None, publics: Mapping[str, bytes], roots: Mapping[str, dict], want: Mapping[str, dict],
+              door: bool, summary: dict, members: Sequence[dict], checks: dict) -> dict[str, dict]:
+    """Each member's registered file, built once (the reads by member key returned): the file the Lean executable is given (``registered.json``) and the one
+    its header test holds its public file to (`members.population_why` at `Member.reads`, `Member.held`), its verdict
+    folded into ``checks[f"m{k}"]`` beside the staging's codes.
+
+    Each row-table chunk's Lean verify reads its x rows against its table's root, which `tables.check_row_tables` ties to
+    the docket; a member reading an outside registered value, against the root its owner signed; and either's other
+    ports, against the docket's own roots, since Lean takes registered reads only when they name every port or bind the
+    rest: a port those reads leave out is bound to the docket's root and domain of its rows (`REG.bind_ports`), never a
+    port the window's registered circuit record declares registered (`--interface`: the record the audit holds by
+    SHA-512). A member with ports in shared trees reads each at its tree's root, at the leaf its wiring gives, a wired row
+    at its writer's field tree (`rows.own_reads`), beside the registered reads `interface.registered_file` names. The
+    door's file is the position-free one (`Flock.Registered.FORMAT`): C gives each position (`Flock.OneCircuit.pos`), so
+    it carries no positions and binds no port."""
+    tables = mine.row_tables and checks.get("row_tables", {}).get("ok")
+    reads = CS.own_reads({**(TB.registered_reads(mine, publics, registered=REG) if tables else {}), **(registered or {})},
+                         mine, roots, registered=REG)
+    if door:
+        reads = {k: door_reads(f) for k, f in reads.items()}
+    iface = served / "circuit.json"
+    iface = iface if iface.is_file() and hashlib.sha512(iface.read_bytes()).hexdigest() == summary.get("circuit") else None
+    for mm in members:
+        m, ok = mm["m"], checks[f"m{mm['k']}"]
+        own = None
+        if m.key in reads:
+            fv_roots = mm["header"]["frame_v3"]["roots"]
+            own = REG.bind_ports(reads[m.key], fv_roots, {p: {"root": roots[mine.tree(m, p)]["root"],
+                                                              "domain": want[mine.tree(m, p)]["domain"]}
+                                                          for p in fv_roots if mine.tree(m, p) in roots})
+            mm["st"] |= a0.registered_written(mm["st"]["dir"] / "registered.json", own)
+            if iface is not None:
+                mm["st"]["interface_file"] = iface
+        why = header_why(mine, rec, form, mm, own)
+        checks[f"m{mm['k']}"] = {"ok": all(ok.values()) and why is None,
+                                 "codes": [c for c, v in ok.items() if not v] + ([] if why is None else ["header"]),
+                                 "detail": {} if why is None else {"header": why}}
+    return reads
+
+
+def header_why(mine: CS.Binding, rec: dict, form: tuple[list, dict] | str, mm: dict, own: Mapping[str, Any] | None) -> str | None:
+    """The member's public file's header against its slice of the docket, the per-member form's rule in its one Python
+    (`members.population_why`), at the reads the verifier opens a shared output tree at (`rows.out_value`) and every
+    read of the registered file ``own`` the Lean executable is given for it, with that file's ports, as Lean's members
+    check reads them (`Member.reads`, `Member.held`); None where it holds."""
+    if isinstance(form, str):
+        return form
+    m = mm["m"]
+    file_reads, held = MB.registered_reads(own)
+    opened = {(p, mine.tree(m, p)) for p, _ in m.outs if mine.tree(m, p) != m.port(p)} | file_reads
+    return MB.population_why([[m.base, m.base + m.n]], form[0], mm["header"], form[1][m.key], opened, held,
+                             subset=MB.subset_designs(mine.law, rec))
+
+
 def member_form(a: argparse.Namespace, mine: CS.Binding, rec: dict) -> tuple[list, dict[str, dict]] | str:
     """What the per-member form holds each member's public file to (`members.population_why`), read off the verifier's
     window ``mine`` and the docket ``rec``: the docket's strata and each member's slice of the record
@@ -1042,6 +1102,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     of record; None for a window with none. ``session``: the thread of the challenger session the audit samples on
     (`a5_coins.start`'s, which the caller holds), ended before a negative's worker is forked (`session_ended`); None
     where the caller hands none, and its thread is then one more the workers' fork refuses while it lives."""
+    if named := verifying(a).get("tied"):
+        print(tied_root_line(named), flush=True)
     out.mkdir(parents=True, exist_ok=True)
     t_audit = time.time()
     program, query, part, pd, n_all, sampling_design = mine.program, mine.query, mine.partition, mine.partition_digest, mine.population, mine.law
@@ -1056,12 +1118,14 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True))
         print("A5 " + json.dumps(why))
         return summary, False
-    want = CS.expected_ports(mine)
     # a circuit record with run inputs registers each run input node's tree beside the members' (`Window`), read off the
     # record only where it is the circuit the audit holds
     held_doc = served / "circuit.json"
-    if held_doc.is_file() and hashlib.sha512(held_doc.read_bytes()).hexdigest() == summary.get("circuit"):
-        want |= IF.run_input_ports(json.loads(held_doc.read_bytes()), mine)
+    held = held_doc.is_file() and hashlib.sha512(held_doc.read_bytes()).hexdigest() == summary.get("circuit")
+
+    def ports_at(w) -> dict:
+        return CS.expected_ports(w) | (IF.run_input_ports(json.loads(held_doc.read_bytes()), w) if held else {})
+    want = ports_at(mine)
     summary.update({"run_root": mine.run, "population": n_all, "partition": pd, "law": sampling_design, "delta": a.delta, "firewall": a.zk_server,
                     "arm": "fw" if a.zk_server else "dev",
                     "members": [{"k": k, "template": m.template, "n": m.n, "base": m.base} for k, m in enumerate(mine.members)]})
@@ -1172,25 +1236,14 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
                     m.template: definition_digest(desc["definitions"][m.template], desc)}
             elif (m.template, circ.pin) not in programs_ok:   # a function of the circuit's META and the template: once per circuit
                 programs_ok[m.template, circ.pin] = a0.template_program_ok(meta, defn)
-            # the header against the member's slice of the docket: the per-member form's rule, in its one Python
-            # at the reads the verifier opens a shared output tree at (`rows.own_reads`'s `rows.out_value`)
-            opened = {(p, mine.tree(m, p)) for p, _ in m.outs if mine.tree(m, p) != m.port(p)}
-            # and every read its registered file names, at a run input node's tree or a registered value, with that
-            # file's ports, as Lean's members check reads them (`Member.reads`, `Member.held`)
-            file_reads, held = member_reads(registered, m.key)
-            opened |= file_reads
-            why = form if isinstance(form, str) else MB.population_why([[m.base, m.base + m.n]], form[0], header, form[1][m.key],
-                                                                        opened, held, subset=MB.subset_designs(mine.law, rec))
             ok = {"pin": header.get("circuit_sha512") == made["pin"],
                   "partition": meta.get("partition") == {"rule": P.FORMAT, "digest": pd},
                   "program": meta.get("program_sha512") == part["program"],
-                  "header": why is None,
                   "classes": header["units"].get("classes") == [made.get("class_sha512")] * m.n,
                   "template_program": programs_ok[m.template, circ.pin],
                   "shared_rows": header.get("shared_rows") == ({**dict(m.tables), **{p: m.n for p, _ in m.out_rows}}
                                                                if m.tables else None)}
-            checks[f"m{k}"] = {"ok": all(ok.values()), "codes": [c for c, v in ok.items() if not v],
-                               "detail": {} if why is None else {"header": why}}
+            checks[f"m{k}"] = ok
             publics[m.key] = body(st_dir / f"pub-{m.n}.bin")
             members.append({"k": k, "m": m, "defn": defn, "header": header, "circuit": circuit, "circ": circ, "read": read,
                             "make": makes.get(m.template),
@@ -1217,6 +1270,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     if mine.row_tables:
         bad = TB.check_row_tables(mine, publics, {r["port"]: r["root"] for r in rec["roots"]}, step_roots)
         checks["row_tables"] = {"ok": not bad, "codes": sorted(bad), "detail": bad}
+    reads = own_files(served, mine, rec, form, registered, publics, roots, want, door, summary, members, checks)
     w = rec.get("window", {})
     checks["source"] = source(w)
     summary["source"], summary["commitment"] = w.get("kind"), w.get("commitment")
@@ -1233,33 +1287,6 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True))
         print("A5 " + json.dumps({"refused_before_draw": summary["checks_before_draw"], "checks": checks}, default=str))
         return summary, False
-    # each row-table chunk's Lean verify reads its x rows against its table's root, which the checks above tied to the docket;
-    # a member reading an outside registered value, against the root its owner signed; and either's other ports, against the
-    # docket's own roots, since Lean takes registered reads only when they name every port or bind the rest: a port
-    # those reads leave out is bound to the docket's root and domain of its rows, which the checks above held its
-    # header's to (`REG.bind_ports`), never a port the window's registered circuit record declares registered
-    # (`--interface`: the record the audit holds by SHA-512); a member with ports in shared trees reads each at its
-    # tree's root, at the leaf its wiring gives (`Binding.tree`, `Binding.reads`), a registered read those reads name
-    # (`registered`, `interface.registered_file`'s). The door's file is the position-free one (`Flock.Registered.FORMAT`):
-    # C gives each position (`Flock.OneCircuit.pos`), so it carries no positions and binds no port
-    reads = CS.own_reads({**(TB.registered_reads(mine, publics, registered=REG) if mine.row_tables else {}),
-                          **(registered or {})}, mine, roots, registered=REG)
-    if door:
-        reads = {k: door_reads(f) for k, f in reads.items()}
-    iface = served / "circuit.json"
-    iface = iface if iface.is_file() and hashlib.sha512(iface.read_bytes()).hexdigest() == summary.get("circuit") else None
-    for mm in members:
-        if mm["m"].key in reads:
-            m = mm["m"]
-            fv_roots = mm["header"]["frame_v3"]["roots"]
-            own = REG.bind_ports(reads[m.key], fv_roots, {p: {"root": roots[mine.tree(m, p)]["root"],
-                                                              "domain": want[mine.tree(m, p)]["domain"]}
-                                                          for p in fv_roots if mine.tree(m, p) in roots})
-            mm["st"]["registered_file"] = mm["st"]["dir"] / "registered.json"
-            mm["st"]["registered_file"].write_text(json.dumps(own, sort_keys=True))
-            if iface is not None:
-                mm["st"]["interface_file"] = iface
-
     # one sample over the whole population; each member serves its share under --zk
     trees = False
     if drawn is not None:
@@ -1560,6 +1587,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     result["checks_before_draw"] = checks
     result["case_v2"] = case_written(out)
     members_lean(out, result, pm)
+    one_statement_held(result, rec, members, pm)
     if after:
         result["checks_after_draw"] = after
     (out / "audit.json").write_text(json.dumps(result, indent=1, sort_keys=True, default=str))
@@ -1599,7 +1627,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
             name = "program-not-the-days-declared (R2)"
             parts.append(workers.submit(name, functools.partial(registration, name, program, want, leaf_layer,
                                                                 day=day["day"], declarations=moved)))
-        other = CS.expected_ports(replace(mine, run="00" * 32))
+        other = ports_at(replace(mine, run="00" * 64))
         name = "domains-bound-to-another-run-root (R3)"
         parts.append(workers.submit(name, functools.partial(registration, name, program, other, leaf_layer)))
         first = members[0]["m"].key
@@ -1758,10 +1786,26 @@ def case_written(out: Path) -> dict:
     return {"written": False, "why": said.read_text().strip() if said is not None else "the audit wrote none, and no reason"}
 
 
-def member_reads(registered: Mapping[str, Any] | None, key: str) -> tuple[set[tuple[str, str]], Mapping[str, Any]]:
-    """The member ``key``'s registered reads ``(port, value)`` and its registered file's ports, off the registered files
-    ``registered`` by member, as Lean's members check reads them (`Member.reads`, `Member.held`); none without a file."""
-    return MB.registered_reads((registered or {}).get(key) or {"ports": {}})
+def one_statement_held(result: dict, rec: dict, members: Sequence[dict], pm: dict | str | None) -> None:
+    """The one statement's public file held to the registration as the executable holds it (`docket.public_held`,
+    `OneStageZkStatement.publicHeld`), and that file's committed trees held to the registration's
+    (`docket.registered_trees_held`), at the verifier's registered file its case names (`v2_proof`): an audit of one
+    member whose case is the one statement's (``pm`` none) accepts only where both hold, its verdict
+    ``result["checks"]["one_statement_public"]``."""
+    if pm is not None or len(members) != 1:
+        return
+    mm = members[0]
+    f = mm["st"].get("registered_file")
+    reads = json.loads(f.read_text()) if f else None
+    try:
+        v = R.public_held(rec, mm["header"], reads).to_json()
+    except ValueError as e:
+        v = {"ok": False, "codes": ["public"], "detail": str(e)}
+    if (why := R.registered_trees_held(rec, "the verifier", reads)) is not None:
+        v = {**v, "ok": False, "codes": [*v["codes"], "registered-trees"], "detail": {"registered-trees": why}}
+    result.setdefault("checks", {})["one_statement_public"] = v
+    if not v["ok"]:
+        result["accepted"] = False
 
 
 def members_lean(out: Path, result: dict, pm: dict | str | None,
@@ -1945,9 +1989,8 @@ def v2_proof(done: Sequence[dict], zk: bool) -> dict | str:
         return f"v2 verifies one table's session on its circuit and public file; this audit sampled {len(done)} members"
     mm, sdir = done[0]["mm"], done[0]["sdir"]
     st, n = mm["st"], mm["m"].n
-    reads = st.get("registered_file")
     return {"proof": PF.Proof(st["dir"] / "circuit.txt", st["dir"] / f"pub-{n}.bin", session_dirs(sdir)),
-            "public": st["public"], "registered": json.loads(reads.read_text()) if reads else None,
+            "public": st["public"], "registered": st.get("registered"),
             "tables": looked_up_tables(st["dir"])}
 
 
@@ -1991,8 +2034,7 @@ def members_proof(members: Sequence[dict], done: Sequence[dict], zk: bool, one: 
         if isinstance(g, bool) or not isinstance(g, int) or g < 1:
             return f"member {m.key}'s circuit names no vus_per_block (its META's: {g!r})"
         sessions = session_dirs(sdirs[m.key]) if m.key in sdirs else ()
-        reads = st.get("registered_file")
-        out.append(PF.Member(m.key, PF.Proof(mm["circuit"], st["dir"] / f"pub-{m.n}.bin", sessions), st["public"], json.loads(reads.read_text()) if reads else None, ((m.base, m.base + m.n),), g))
+        out.append(PF.Member(m.key, PF.Proof(mm["circuit"], st["dir"] / f"pub-{m.n}.bin", sessions), st["public"], st.get("registered"), ((m.base, m.base + m.n),), g))
         tables.update((f.name, f) for f in looked_up_tables(mm["circuit"].parent) if f.name not in tables)
     return {"members": out, "tables": [tables[x] for x in sorted(tables)]}
 

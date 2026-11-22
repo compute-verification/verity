@@ -282,3 +282,15 @@ def test_under_archive_link_a_circuit_that_cannot_be_linked_is_put_as_without_it
     assert (out / "archive" / "sha512" / key).stat().st_ino != (st["dir"] / "circuit.txt").stat().st_ino
     files = [v for k, v in st["archived"].items() if k[:1] != ("archiving",)]  # `a0.archiving` keeps its locks there too
     assert files and files[0][0] == key
+
+
+def test_a_registered_file_changed_after_the_audit_built_it_is_refused_by_name(tmp_path):
+    """The audit's registered file, rewritten between its build and the Lean step, is refused before `verify` runs
+    (`a0.registered_held`); the file as the audit built it is verified."""
+    lean, _puts, members, _archived = window(tmp_path)
+    st, out = members[1]
+    st |= a0.registered_written(st["dir"] / "registered.json", {"format": "f", "ports": {}})
+    assert a0.lean_verify(str(lean), st, 8, out, zk=True)["accepted"]
+    st["registered_file"].write_text('{"format": "f", "ports": {"x": {}}}')
+    v = a0.lean_verify(str(lean), st, 8, out, zk=True, log="changed")
+    assert not v["accepted"] and v["why"] == a0.registered_changed_why(st["registered_file"])
