@@ -18,10 +18,7 @@ from verity.protocols.accounting.memory.pous.verifier.primitives import (
     FeistelPi,
     IdealPermutation,
     IdealTweakablePermutation,
-    MiyaguchiPreneel,
     OverwriteChain,
-    Primitives,
-    XorSponge,
     _bit_reach,
     _schedule,
     bit_diffusion_stages,
@@ -93,20 +90,6 @@ def test_overwrite_chain_is_the_spec():
         assert cost.depth == len(parents) + 1 and cost.kinds == {"PiQuery": len(parents) + 1}
 
 
-@pytest.mark.parametrize("mode", [XorSponge, MiyaguchiPreneel])
-def test_broken_modes_are_as_described(mode):
-    """The broken modes, recomputed: zero IV, the header, the parents newest first and the pad as rate blocks."""
-    h = mode(PARAMS, FeistelPi(PARAMS.m + CAPACITY_BITS))
-    mb = PARAMS.m // 8
-    t, layer, labels, head, parents, pad = _spec_inputs(13)
-    state = 0
-    for b in [head + bytes(mb - len(head))] + parents + [pad]:
-        x = state ^ int.from_bytes(b, "little")
-        state = h.pi.forward(x) ^ (x if mode is MiyaguchiPreneel else 0)
-    key, cost = run(key_program(h, key_query(PARAMS, t, layer, 13, labels)), Primitives(h, FeistelP(PARAMS.m)))
-    assert key == state & ((1 << PARAMS.m) - 1) and cost.depth == 14
-
-
 def test_key_rounds():
     """13 calls with every parent held; an edge from the oldest parent leaves 3 calls per level: Π₂(oldest), Π₂(pad), P
     (instantiation §1)."""
@@ -122,10 +105,6 @@ def test_key_rounds():
 def test_modes_reject_mismatched_widths():
     with pytest.raises(ValueError):
         OverwriteChain(PARAMS, FeistelPi(PARAMS.m + 512))
-    with pytest.raises(ValueError):
-        XorSponge(Params(4, 64, 1), FeistelPi(256 + 512))
-    with pytest.raises(ValueError):
-        XorSponge(PARAMS, FeistelPi(PARAMS.m + 256))
 
 
 @pytest.mark.parametrize("words", [2, 3, 5, 8, 20, 33, 144])

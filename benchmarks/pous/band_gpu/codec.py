@@ -10,9 +10,8 @@ holds the Feistel dispatch switches and `segment_tags` the band's kernels use.
     tag_s   = salt (24 B) || u64(s)
     Pi, Pi2 = Feistel-10 on M + 64 or 2M + 64 bytes, F_i(x) = SHAKE256(0x48 || u8(i) || x)[0 : width / 2]
     P_T     = Feistel-10 on M bytes,      F_i(T, x) = SHAKE256(0x50 || u8(i) || T || x)[0 : M / 2],  T = tag_s || u8(layer) || u16(v)
-    H       = the reference's `KeyDerivation` (`key_mode`): the overwrite chain over Pi2 (Feistel-10 on 2M + 64 bytes, the
-              default) or the XOR sponge over Pi, absorbing the header, the parents newest first (c_{v-1} .. c_{v-npar},
-              npar = min(v, 12)) and a pad10*1 block
+    H       = the reference's `KeyDerivation` (`key_mode`): the overwrite chain over Pi2 (Feistel-10 on 2M + 64 bytes)
+              over the header, the parents newest first (c_{v-1} .. c_{v-npar}, npar = min(v, 12)) and a pad10*1 block
     c1_v    = P_(tag,0,v)(W_v ^ H(tag, 0, v, c1_par(v)))
     c2_v    = P_(tag,1,v)(transpose(c1)_v ^ H(tag, 1, v, c2_par(v)))
 
@@ -103,20 +102,15 @@ def key_mode(prims) -> str:
     """Which GPU twin computes the reference `Primitives` `prims`, read off their interfaces: `P_T` must be `FeistelP`, the key
     derivation's permutation `FeistelPi`, and its call schedule for `K` parents (`h.steps`) and width decide the mode.
     `overwrite`: the header in the chaining value, then `(r, h) <- Pi2(B || h)` for the parents newest first and the pad, `Pi2`
-    of `2m + 512` bits, the key the pad call's `r` (`OverwriteChain`, the default).  `sponge`: a header call, the parents and
-    the pad each XORed into the rate of `Pi` of `m + 512` bits (`XorSponge`, broken, kept to check the code on).  Anything
-    else, feed-forward modes included, fails closed."""
+    of `2m + 512` bits, the key the pad call's `r` (`OverwriteChain`).  Anything else fails closed."""
     h = prims.h
     perm = getattr(h, "pi2", None) or getattr(h, "pi", None)
     newest = [(u,) for u in reversed(range(K))]
     steps = [tuple(x) for x in h.steps(range(K))]
     width = getattr(perm, "width", None)
     feistel = isinstance(prims.p, primitives.FeistelP) and isinstance(perm, primitives.FeistelPi)
-    if feistel and not getattr(h, "feed_forward", False):
-        if steps == [*newest, ()] and width == 16 * M + primitives.CAPACITY_BITS:
-            return "overwrite"
-        if steps == [(), *newest, ()] and width == 8 * M + primitives.CAPACITY_BITS:
-            return "sponge"
+    if feistel and steps == [*newest, ()] and width == 16 * M + primitives.CAPACITY_BITS:
+        return "overwrite"
     raise NotImplementedError(f"no GPU twin of {type(h).__name__} over {type(perm).__name__} with {type(prims.p).__name__}")
 
 
@@ -142,13 +136,8 @@ def keys(tags: torch.Tensor, layer: int, vs: torch.Tensor, labels: torch.Tensor,
     r = tags.shape[0]
     npar = torch.clamp(vs, max=K)
     hdr = _header(tags, layer, vs, npar)
-    sponge = MODE == "sponge"
-    state = torch.zeros(r, PI_BYTES if sponge else M + PI_BYTES, dtype=torch.uint8, device=tags.device)
-    if sponge:
-        state[:, :hdr.shape[1]] = hdr
-        permute(state)
-    else:
-        state[:, M:M + hdr.shape[1]] = hdr
+    state = torch.zeros(r, M + PI_BYTES, dtype=torch.uint8, device=tags.device)
+    state[:, M:M + hdr.shape[1]] = hdr
     for j in range(1, K + 2):
         for rows, pad in (((npar >= j).nonzero().flatten(), False), ((npar == j - 1).nonzero().flatten(), True)):
             if not len(rows):
@@ -159,10 +148,7 @@ def keys(tags: torch.Tensor, layer: int, vs: torch.Tensor, labels: torch.Tensor,
                 block[:, 0], block[:, M - 1] = 0x01, 0x80
             else:
                 block = labels[groups[rows], vs[rows] - j]
-            if sponge:
-                sub[:, :M] ^= block
-            else:
-                sub[:, :M] = block
+            sub[:, :M] = block
             permute(sub)
             state[rows] = sub
     return state[:, :M].contiguous()
