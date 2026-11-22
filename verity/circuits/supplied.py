@@ -177,9 +177,15 @@ def registered_values(program: Any, values: Sequence[str]) -> tuple[str, ...]:
     mark or None, in parameter order. ValueError unless each of ``values`` is there once."""
     if len(set(values)) != len(values):
         raise ValueError(f"values {list(values)}: each once")
-    tables = [m["args"]["value"] for m in program.supplied.values()
-              if m and m["supplied"] in ("registered.root/v1", "registered.domain/v1")]
+    tables = [program.supplied[a]["args"]["value"] for a in anchors(program)]
     return (*values, *(t for t in dict.fromkeys(tables) if t not in values))
+
+
+def anchors(program: Any) -> tuple[str, ...]:
+    """``program``'s parameters a mark of an anchor binds (`registered.root/v1` or `registered.domain/v1`), in parameter
+    order: a table's root and domain id, which a record registers beside the table (`registered_values`)."""
+    return tuple(n for n, m in program.supplied.items()
+                 if m and m["supplied"] in ("registered.root/v1", "registered.domain/v1"))
 
 
 def check_order(reads: Mapping[str, int], coin: int, coin_name: str = "the coin") -> None:

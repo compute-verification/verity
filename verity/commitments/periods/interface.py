@@ -3343,7 +3343,8 @@ class Window:
         ``one_stage.docket``), chained after ``previous`` (the digest of the prover's last record; None for its
         first), its period naming ``provenance``, the circuit record's SHA-512, the advice binding and
         each registered value's root by parameter (``registered_roots``, which `input_count` holds to the verifier's pins);
-        with the circuit's values (`Registered.values`), a ``verity/registration/v2`` record registering each by its
+        with the circuit's values (`Registered.values`), each table a mark names and its anchors (`supplied.anchors`), a
+        ``verity/registration/v2`` record registering each by its
         committed value's entry, as one-stage's R7 holds its program's parameters;
         each member reading a registered value, its header naming each table row's position and path (`close`), each path
         and each row it reads by reference written once for the period (`rows.write`)."""
@@ -3352,6 +3353,8 @@ class Window:
             raise ValueError(f"the circuit's values {[v for v, _n, _w in missing]} have no committed value: give each in "
                              "the period's registered")
         values = SU.registered_values(self.window.program, [v for v, _n, _w in program_values(self.circuit.registered)])
+        k = len(program_values(self.circuit.registered))
+        values = (*values[:k], *SU.anchors(self.window.program), *values[k:])
         if unheld := [v for v in values if v not in held]:
             raise ValueError(f"C's supplied anchors name {unheld}, whose tables the period holds no committed value of: "
                              "give each in the period's registered")
