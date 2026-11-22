@@ -32,12 +32,11 @@ form of `Pouw.Guarantees`; its proof is `Flock.SecurityProofs.G : Flock.Guarante
 (`Proofs.Flock.Recursive.Guarantees`).
 
 * `RecursiveSound`, for the auditor, in fork form (not a guarantee: the lock retired it, since its event is
-  possibilistic and nearly empty; the recursion's knowledge-soundness statement is
-  `Flock.Guarantees.RecursiveKS`, which no theorem proves): either a run of the prover's own strategy finds a SHA-512
-  collision (between two of V*'s sessions' registrant records, at a round's commitment, or in one of V*'s sessions), or
-  the auditor accepts every one of V*'s sessions on a false hidden statement with probability at most V*'s sessions'
-  statistical errors, plus each round's transfer slack, plus the inner protocol's soundness error. It assumes no hash.
-  Its one new assumption is `Flock.Assumptions.VBridge`.
+  possibilistic and nearly empty; the recursion's knowledge-soundness statement is `Flock.Guarantees.RecursiveKS`, which
+  no theorem proves): either a run of the prover's own strategy finds a SHA-512 collision
+  (between two of V*'s sessions' registrant records, at a round's commitment, or in one of V*'s sessions), or the auditor accepts every one of V*'s sessions on a false
+  hidden statement with probability at most V*'s sessions' statistical errors, plus each round's transfer slack, plus
+  the inner protocol's soundness error. It assumes no hash. Its one new assumption is `Flock.Assumptions.VBridge`.
 * `RecursiveZK`, for the developer: the auditor's whole view, the ZK server's commitments (`zkServerLeaf`) to every inner
   message and tree top and then its view of the outer session, has a simulator that reads public inputs only, within
   the commitments' hiding gap at hm96-sha512's pinned key plus the outer session's zero-knowledge gap. A view released
