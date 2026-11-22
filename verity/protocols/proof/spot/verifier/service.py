@@ -1081,12 +1081,14 @@ class _Entry:
     outcome: Outcome | None = None
     session: ProofRun | None = None
     #: under a two-stage design: the interior docket, its population program and what `register_interiors`
-    #: handed R1-R8 (as `copies`, `seed_salt` and `history`), then the second stage's sample and the coins it read
+    #: handed R1-R8 (as `copies`, `seed_salt`, `history` and `partition`), then the second stage's sample and the coins
+    #: it read
     interior: WindowCommitmentRecord | None = None
     interior_program: Program | None = None
     interior_copies: tuple[Any, ...] = ()
     interior_seed_salt: str | None = None
     interior_history: Mapping[str, Any] | None = None
+    interior_partition: Mapping[str, Any] | None = None
     second: Draw | None = None
     second_read: bytes | None = None
     second_family: str | None = None
@@ -2248,7 +2250,7 @@ class Stream:
         e.interior, e.interior_program = reg, got["program"]
         e.interior_copies = (ports, leaf_layer, anchors, earlier, registered, supplied, pinned, schemas, window_root, held,
                              outputs)
-        e.interior_seed_salt, e.interior_history = seed_salt, history
+        e.interior_seed_salt, e.interior_history, e.interior_partition = seed_salt, history, partition
         return reg
 
     def interior_program(self, q: int, reads: Sequence[tuple[str, int, int, str, Sequence[int]]] = ()) -> Program:
@@ -2686,6 +2688,7 @@ class Stream:
                       interior={"program": e.interior_program, "query": self.spec.check.query,
                                 "law": {"law": "subset", "k": ireg.record["population"]}, "copies": e.interior_copies,
                                 "seed_salt": e.interior_seed_salt, "history": e.interior_history,
+                                "partition": e.interior_partition,
                                 "replay": Program(self.replay),
                                 "values": [(x.name, x.registered) for x in self._values(interior=True)],
                                 "record": ireg.record, "received": ireg.receipt["received"], "read": e.second_read,

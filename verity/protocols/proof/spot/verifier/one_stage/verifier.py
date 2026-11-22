@@ -566,7 +566,8 @@ def run(python: Mapping[str, Any], rec: Mapping[str, Any], program: Program, que
 
     Under a two-stage design `interior` is the interior docket and the second stage (`Run.Interior`): its
     `program`, `query`, `sampling_design` and `copies` (as `check` takes them, the binding `binding`, its window's `seed_salt`
-    when it has one, and its `history` tables when it has any), one replay block's Program
+    when it has one, its `history` tables when it has any, and the `partition` object R2 held its digest to, None the
+    blockless one), one replay block's Program
     (`replay`), its `values`, `record` and `received`, the bytes the second stage read (`read`), their evidence
     (`coins`, held to the run's `key` and `main`: a run has one challenger) and their family (`family`, the second
     stage's own: a family's coins follow one docket), its
@@ -594,7 +595,8 @@ def run(python: Mapping[str, Any], rec: Mapping[str, Any], program: Program, que
         it = interior
         i_ports, i_leaf, i_anchors, i_log, i_registered, i_supplied, i_pinned, i_schemas, i_window, i_held, i_outputs = \
             it["copies"]
-        i_params = _params(it["program"], it["query"], it["law"], scheme, i_ports, i_leaf, i_anchors, i_log, None, None,
+        i_params = _params(it["program"], it["query"], it["law"], scheme, i_ports, i_leaf, i_anchors, i_log,
+                           it.get("partition"), None,
                            i_registered, i_supplied, i_pinned, binding, i_schemas, i_window, i_held, i_outputs,
                            seed_salt=it.get("seed_salt"), history=it.get("history"))
         if it.get("proofs") is not None:

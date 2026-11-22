@@ -792,3 +792,18 @@ def test_the_params_record_a_template_as_a_table_read_beside_its_circuit_file():
                 {"V": 8.0, "H": 2}, {"V": -1, "H": 2}, {"V": 8, "H": 2, "x": 1}, [8, 2]):
         with pytest.raises(ValueError, match="each read two positive counts"):
             S.template_circuits({"templates": [{**entries[0], "read": bad}, entries[1]]}, WINDOW_QUERY)
+
+
+@pytest.mark.parametrize("partition", [None, {"blocks": [[[0, 3]]], "format": "verity/partition/v1"}])
+def test_the_interiors_partition_reaches_the_leans_run(monkeypatch, partition):
+    """`verifier.run` hands the Lean's run the partition object the stream held the interior docket's digest to
+    (`register_interiors`' ``partition``), None for the blockless one, so its R2 holds the docket to the same object."""
+    seen = []
+    monkeypatch.setattr(V, "lean", lambda f, value: seen.append(value) or {"refused": "stub"})
+    program = PN.population_program(PAIR, N_RHO)
+    interior = {"program": program, "query": QUERY, "law": {"law": "subset", "k": N_RHO}, "copies": ({}, None, [], [])
+                + (None,) * 7, "replay": program, "values": [], "record": {}, "received": "0", "read": b"", "coins": None,
+                "proved_units": None, "instances": None, "served": None, "session_roots": None, "partition": partition}
+    V.run({}, {}, program, QUERY, {"law": "subset", "k": 1}, "s", {}, None, [], [], None, None, {}, [], [], "c", "0", b"",
+          None, [], {}, [], {}, 0.5, interior=interior)
+    assert seen[0]["interior"]["params"]["partition"] == partition
