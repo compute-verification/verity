@@ -39,7 +39,9 @@ RECORD = Path(__file__).resolve().parent / "openers_gated.json"
 APPLICATIONS = ROOT / "applications"
 #: the bindings of a template that calls an opener in the circuits tests and processor trials encode, by the module
 #: defining it: each key as the circuit's description names it
-TESTED: dict[str, tuple[str, ...]] = {}
+TESTED: dict[str, tuple[str, ...]] = {
+    "verity.commitments.gates.embedding": ("EmbeddingRead_v4{V=256,H=64}", "EmbeddingRead_v4{V=20,H=8}"),
+}
 
 
 def _imports() -> tuple[Any, Any, Any, Any]:
@@ -490,7 +492,7 @@ def epoch(params: dict, target: Any) -> tuple[dict, dict[str, Any]]:
     from verity_vllm.program.predict.steps import Registered
 
     s = serves.served(params["model"], params["revision"], params["precision"], params["slots"], params["window-steps"])
-    serve = {"model": s.model, "revision": s.revision, "execution": target.execution_label(), "target": target.to_json()}
+    serve = {"model": s.model, "revision": s.revision, "execution": target.execution_label, "target": target.to_json()}
     reg = Registered.of(phi_of_serve(serve), DEFAULT_SEED, ADV.CAP_BITS)
     sampling = {"temperature": 0.0, "top_p": 1.0, "top_k": 0, "seed": None, "max_tokens": s.outputs}
     steps = [[I1.Row(i, "prefill", 0, s.prompt) for i in range(s.slots)]]
