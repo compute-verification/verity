@@ -843,11 +843,7 @@ theorem tiedRootsAt_ok {P : Flock.Program.Prog} {rs : Array Flock.TemplateQuery.
       subst hww
       simp [hw, ht] at hc
     · split at hst
-      · rename_i hn
-        cases hst
-        refine ⟨fun _ _ hx => hx, fun _ r hr => ?_⟩
-        rw [hn] at hr
-        cases hr
+      · cases hst
       · rename_i r0 hr0
         split at hst
         · rename_i x r' hx
