@@ -66,7 +66,7 @@ refuses it; `LmsVerify_v1` reads q's low H bits only.  The bytes are rewired int
 big-endian, its bits least significant first) without a gate.  At the deployed scheme, ``lms-sha512/n64-w1-h20/v0``
 (`lms.DEPLOYED`), it is ``PousSessionSig_v1{64,1,20}``: rows of 640, 512 and 278,048 bits and its verdict word, 12 ANDs
 beside the verifier's.  It is no unit of the session: the auditor verifies the signature over m in the clear under the
-pinned key (`session_proofs.clear_reasons`), and the digest's unit holds m to the records.
+pinned key (`MemoryAttester.InProofs.clearReasons`), and the digest's unit holds m to the records.
 """
 from __future__ import annotations
 

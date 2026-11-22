@@ -29,8 +29,7 @@ crypto, and each verdict behind the core protocol interface (`Core.Protocol`).
   composition's tie reads off the wipe's case and the wipe's check with its count held;
 * `SetupRecord`, the setup's published outputs the memory challenger's device signs at setup, under a session's key
   and id, and its check against a session (`setupRecordOk`);
-* `InProofs`, the session's clear checks beside its proofs (`clearReasons`, `pous.verifier.session_proofs`'
-  `clear_reasons`);
+* `InProofs`, the session's clear checks beside its proofs (`clearReasons`);
 * `Difftest`, the functions `tests/` holds to the Python, among them those of `Attest`, the package `core_attest`'s
   period tree and checks, which this module imports.
 -/

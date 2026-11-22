@@ -83,7 +83,7 @@ def SignedSetupRecord.ofJson (j : Json) : V SignedSetupRecord := do
 /-- A signed setup record from exactly its canonical JSON. -/
 def decodeSignedSetupRecord : Json → V SignedSetupRecord := exactly SignedSetupRecord.ofJson SignedSetupRecord.toJson
 
-/-- `setup_record_ok`: `s` is under `scheme`, which `schemes` accepts, and `publicKey`, and its signature verifies on
+/-- `s` is under `scheme`, which `schemes` accepts, and `publicKey`, and its signature verifies on
 its record's bytes under `session`. -/
 def setupRecordOk (schemes : Schemes) (scheme : String) (publicKey session : ByteArray) (s : SignedSetupRecord) :
     Bool :=

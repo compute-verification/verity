@@ -173,10 +173,10 @@ def session_units(k: int, head: int, limit_ns: int, block_bytes: int, blocks: in
 
     The store (`store_table`, the setup's one) and the record's salt (``session-salt``, 32 words) are registered values;
     the coins', the header's, the context's and m's are `coin_bound`'s. The digest's unit holds m, which the auditor
-    verified the signature over in the clear under the pinned key (`session_proofs.clear_reasons`), to the salt and the
+    verified the signature over in the clear under the pinned key (`MemoryAttester.InProofs.clearReasons`), to the salt and the
     records the rounds read. An index past the store's blocks, or a row that doesn't open, gives its opening a verdict word
     of 0 (`gates.embedding`), which the round requires to be 1; the verifier also holds every round's index below the
-    store's blocks in the clear (`session_proofs.clear_reasons`)."""
+    store's blocks in the clear (`MemoryAttester.InProofs.clearReasons`)."""
     dig = bind(session_circuit.PousSessionDigest, K=k, HEAD=head, LIMIT=limit_ns)
     opener = opening(blocks, block_bytes // 2)
     slots = [(bind(session_circuit.PousRound, N=block_bytes, SLOT=s), (k - s + 1) // 2) for s in (0, 1)]
