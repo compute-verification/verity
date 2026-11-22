@@ -15,6 +15,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+from . import settings
 from .clone import RECORD_DRIVER
 
 OK, FINDING, USAGE, REFUSED = 0, 1, 2, 3
@@ -34,9 +35,12 @@ CALLER_ENV = ("PYTHONPATH", "PYTHONHOME", "VIRTUAL_ENV", "UV_PROJECT_ENVIRONMENT
 
 def git_env(**extra: str) -> dict[str, str]:
     """The environment for a gate's subprocess: os.environ less GIT_LOCAL_ENV and CALLER_ENV, with `RECORD_DRIVER` after any
-    GIT_CONFIG_COUNT settings the caller carries, plus ``extra``."""
+    GIT_CONFIG_COUNT settings the caller carries, plus ``extra``. Of the caller's PYTHONPATH it keeps a test suite's read tracer
+    (tools/check/guard/child), so a Python a gate starts in a test reads under its suite's guard."""
     drop = {*GIT_LOCAL_ENV, *CALLER_ENV}
     env = {k: v for k, v in os.environ.items() if k not in drop}
+    if tracer := [p for p in settings.get("PYTHONPATH", "").split(os.pathsep) if p and os.path.isfile(os.path.join(p, "verity_suite_reads.py"))]:
+        env["PYTHONPATH"] = os.pathsep.join(tracer)
     n = int(env.get("GIT_CONFIG_COUNT") or 0)
     for i, (k, v) in enumerate(RECORD_DRIVER.items(), n):
         env[f"GIT_CONFIG_KEY_{i}"], env[f"GIT_CONFIG_VALUE_{i}"] = k, v

@@ -2891,7 +2891,8 @@ ENV_OWN = frozenset({CUSTODY_ENV, STORE_REQUIRED_ENV, REGRESSION_ENV})
 
 def env() -> dict[str, str]:
     """The steps' environment: this process's variables that `ENV_PASS` and `ENV_PASS_PREFIXES` name, less `ENV_OWN`; PYTHONPATH
-    entries inside this tree only (a machine's runner puts its shipped `research` first); and a git identity.  Inside a recorded
+    entries inside this tree only (a machine's runner puts its shipped `research` first), and the suites' read tracer where a
+    suite's test runs this check; and a git identity.  Inside a recorded
     run, the store is required, the run's custody dir is passed on and the vLLM reference regression runs (the module docstring's
     "The evidence store")."""
     out = {k: v for k, v in SETTINGS.environ().items() if (k in ENV_PASS or k.startswith(ENV_PASS_PREFIXES)) and k not in ENV_OWN}
@@ -2900,7 +2901,8 @@ def env() -> dict[str, str]:
         out[REGRESSION_ENV] = "1"
         if custody := custody_dir():
             out[CUSTODY_ENV] = str(custody)
-    keep = [p for p in SETTINGS.PYTHONPATH.split(os.pathsep) if p and Path(p).resolve().is_relative_to(ROOT)]
+    keep = [p for p in SETTINGS.PYTHONPATH.split(os.pathsep)
+            if p and (Path(p).resolve().is_relative_to(ROOT) or (Path(p) / "verity_suite_reads.py").is_file())]
     if keep:
         out["PYTHONPATH"] = os.pathsep.join(keep)
     else:

@@ -78,9 +78,12 @@ used: the workspace metadata files they opened, the installed distributions they
 dependencies, and the imports that found nothing. A pass is reused only while each of those is as it was. A Python a test
 starts, or a Python started by a program it starts, traces its own opens while it keeps the suite's PYTHONPATH and environment
 (`guard/child/`): one that opens a file outside the inputs fails the suite as the test would, and so does one whose tracer
-doesn't start; the failure names the test and the file. Nothing sees into other programs (bash, git, `uv`, a Python run with
-`-I`, `-E` or `-S`, or on a PYTHONPATH without the tracer): what they read is unchecked, and checking it would mean keying
-their suite on the whole tree. List what they read under `inputs`, or give the test a stand-in for it. The one exception is the
+doesn't start; the failure names the test and the file. So does a Python a test starts in the suite's environment with the
+tracer taken off its PYTHONPATH, naming the line that started it and its command, past what `STRIPPED` lets its suite have
+today; a suite run (`-p verity_suite_guard`) has its own guard. Nothing sees
+into other programs (bash, git, `uv`, a Python run with `-I`, `-E` or `-S`, or in an environment without the suite's
+variables): what they read is unchecked, and checking it would mean keying their suite on the whole tree. List what they
+read under `inputs`, or give the test a stand-in for it. The one exception is the
 suite's own build outputs (`artifacts`, a Lean executable reads only what its arguments name): such a program's start is taken
 as reading the repository paths it is given, a file with the files beside it and a directory whole, checked against the inputs
 like any read, and `lake build` of them in their package as reading nothing the key doesn't hold (`VERITY_SUITE_PROGRAMS`).
@@ -294,6 +297,41 @@ CUSTODY_ENV, STORE_REQUIRED_ENV, REGRESSION_ENV = "CHECK_STORE_CUSTODY", "VERITY
 #: 14acc70d97a8: lean-build found `Flock/RecSparse.olean` gone while two suites built spot-verifier from the pytest
 #: step). A suite that builds or runs a Lake package lists its lakefile under `inputs` (what `lake` reads, which no tracer
 #: sees), and tests/test_after_lean.py holds every suite that is a Lake package or declares one's lakefile or `.lake` here.
+#: The Pythons today's tests start in the suite's environment with the read tracer taken off their PYTHONPATH, which read what no
+#: key holds (the guard's `S` lines), as a list that only shrinks: suite -> (its owner's handle, {file holding the line that
+#: starts one: how many such lines, or (fewest, most) for lines that run only sometimes}). A file past its count fails the
+#: suite naming each line; a run of every test that finds fewer fails asking for the entry to be lowered, and one at zero deleted.
+STRIPPED: dict[str, tuple[str, dict[str, int | tuple[int, int]]]] = {
+    "benchmarks/prove_path": ("network-accounting", {"benchmarks/prove_path/records_audit.py": 1}),
+    "research": ("ci", {
+        "tests/tools/research/test_at_main.py": 1,
+        "tests/tools/research/test_launcher_tree.py": 1,
+        "tests/tools/research/test_monitors.py": 1,
+        "tests/tools/research/test_queue.py": 2,
+        "tests/tools/research/test_remote_version.py": 1,
+        "tests/tools/research/test_research_cancel.py": 2,
+        "tests/tools/research/test_run_custody.py": 1,
+        "tests/tools/research/test_slack.py": 3,
+        "tests/tools/research/test_telemetry.py": 4,
+        "tools/research/src/research/jobs/dispatch.py": 1,
+        "tools/research/src/research/pods/nebius/dispatch.py": 1,
+        "tools/research/src/research/pods/nebius/sky/commit_pack.py": 1,
+        "tools/research/src/research/queue.py": 1,
+        "tools/research/src/research/quick_tier.py": 2,
+        "tools/research/src/research/remote.py": 1,
+        "tools/research/src/research/telemetry/run.py": 1,
+    }),
+    "verity-circuit-check": ("circuits", {
+        "tests/tools/verity/circuit_check/conftest.py": 1,
+        "tests/tools/verity/circuit_check/test_catalog_fixture.py": 1,
+        "tools/verity/circuit_check/src/circuit_check/ambient.py": 1,
+    }),
+    "verity-vllm": ("vllm", {
+        "tests/adapters/vllm/tests/ops/test_pod_bootstrap.py": 3,
+        "tests/adapters/vllm/tests/pipeline/test_source_identity.py": 9,
+    }),
+    "verity-ops": ("infra", {"infra/control/nightly_check.py": 1, "tests/infra/ops/test_deploy.py": 1}),
+}
 AFTER_LEAN = ("verity-flock", "verity-lean-audit", "verity-difftest", "pous-verifier", "core-identity", "verity-core-composition",
               "verity", "verity-core-evaluate", "verity-core-zk-server",
               "verity/protocols/proof/recursion/verifier/vstar_cli", "verity/protocols/proof/flock/verifier/sigma", "verity-core-sampled-proofs",
@@ -2332,6 +2370,32 @@ def read_report(report: Path) -> dict | None:
     return rep if isinstance(rep, dict) else None
 
 
+def stripped_breaches(name: str, sites: dict[str, tuple[str, set[str]]], whole: bool) -> list[tuple[str, set[str]]]:
+    """Where suite ``name``'s Pythons started with the read tracer off their PYTHONPATH (``sites``: the line that started each ->
+    its command and the tests that ran it) break `STRIPPED`: a file with more such lines than its entry, and, in a run of every
+    test (``whole``), one with fewer. Each with the tests to name."""
+    allowed = STRIPPED.get(name, ("", {}))[1]
+    by_file: dict[str, list[str]] = {}
+    for site in sites:
+        by_file.setdefault(site.rpartition(":")[0] if site.rpartition(":")[2].isdigit() else site, []).append(site)
+    out = []
+    for f in sorted(by_file.keys() | allowed.keys()):
+        lo, hi = allowed[f] if isinstance(allowed.get(f), tuple) else (allowed.get(f, 0),) * 2
+        found = sorted(by_file.get(f, []))
+        if len(found) > hi:
+            lines = "; ".join(f"{s} starts {sites[s][0]}" for s in found)
+            out.append((f"{f} starts {len(found)} Pythons in the suite's environment with the read tracer "
+                        f"(tools/check/guard/child) taken off their PYTHONPATH, where `STRIPPED` in tools/check/suites.py lets "
+                        f"{name} have {hi}: {lines}. Keep the tracer on the PYTHONPATH the test was given, or give the test a "
+                        "stand-in for it", {w for s in found for w in sites[s][1]}))
+        elif whole and len(found) < lo:
+            out.append((f"{f} starts {len(found)} Pythons with the read tracer taken off their PYTHONPATH, fewer than the "
+                        f"{lo} `STRIPPED` in tools/check/suites.py lists for {name}: "
+                        + ("delete its entry" if not found else f"lower its entry to {len(found)}") + " in this change",
+                        set()))
+    return out
+
+
 def run(suite: Suite, allowed: list[str], args: list[str], logs: Path, workers: int = 1, watch: list[str] = (),
         reuse: list[str] = (), timeout_s: float = 0.0, threads: int = 0, part: Part | None = None) -> Result:
     slug = suite.path.replace("/", "_") if suite.path != "." else LAYOUT.ROOT_SUITE
@@ -2416,6 +2480,7 @@ def run(suite: Suite, allowed: list[str], args: list[str], logs: Path, workers: 
     ran_all = rc == 0 or (rc == 5 and (bool(reuse) or empty or (part is not None and ("-m" in args or "-k" in args))))
     reported = bool(rep)
     reads, child_outside, by = {m: set(fs) for m, fs in (rep.get("reads") or {}).items()}, {}, {}
+    stripped: dict[str, tuple[str, set[str]]] = {}
     traced = set(rep["traced"]) if isinstance(rep.get("traced"), list) else None
     untraced = {m: set(v) for m, v in (rep.get("untraced") or {}).items()}
     base = "" if suite.path == "." else suite.path + "/"
@@ -2431,6 +2496,13 @@ def run(suite: Suite, allowed: list[str], args: list[str], logs: Path, workers: 
             traced.add(f"{kind}\t{rel}")
         elif kind == "X":
             untraced.setdefault(module, set()).add(rel)
+        elif kind == "S":
+            site, _, cmd = rel.partition(" ")
+            stripped.setdefault(site, (cmd, set()))[1].add(test or module.removeprefix(base))
+    whole = ran_all and not reuse and part is None and not args
+    for why, whos in stripped_breaches(suite.name, stripped, whole):
+        child_outside.setdefault("*", []).append(why)
+        by.setdefault(("E", why), set()).update(whos)
     rep["reads"] = {m: sorted(fs) for m, fs in sorted(reads.items())}
     out = rep.get("outside") or {}
     rep["outside"] = dict.fromkeys(out, "*") if isinstance(out, list) else out      # a report written before the attribution
@@ -3105,9 +3177,10 @@ def main(argv: list[str] | None = None) -> int:
                 return " and ".join(w) if len(w) < 3 else f"{w[0]}, {w[1]} and {len(w) - 2} more"
             files = [f"{rel}: read by a process that {who(w)} started" for k, rel, w in r.child_reads if k == "O"]
             blind = [f"a Python that {who(w)} started could not start its read guard ({why.removeprefix('the tracer did not start: ')})"
+                     if why.startswith("the tracer did not start: ") else why + (f" (run by {who(w)})" if w else "")
                      for k, why, w in r.child_reads if k == "E"]
             lines = files + blind
-            print(f"        processes its tests started read outside its inputs, so nothing vouches for its pass:\n          "
+            print("        processes its tests started read outside its inputs, so nothing vouches for its pass:\n          "
                   + "\n          ".join(lines[:10]) + (f"\n          and {len(lines) - 10} more" if len(lines) > 10 else "")
                   + (f"\n        list each file under [tool.verity.tests] inputs in {s.path}/pyproject.toml with a comment saying why, "
                      "or give the test a stand-in for it" if files else ""))
