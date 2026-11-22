@@ -1051,7 +1051,7 @@ def test_a_window_of_fewer_requests_than_slots_is_its_one_requests_rows():
 @pytest.mark.slow
 def test_a_window_of_fewer_requests_than_slots_commits(tmp_path):
     """The one-request window (`ONE`) closed and written as `prove_path`'s window commit writes it: its circuit of one
-    Program commits, its registration pinning no value, its scan state a run input. What the quick test above can't reach: `Window.close` and
+    Program commits, its registration naming the embedding table and its two anchors alone, its scan state a run input. What the quick test above can't reach: `Window.close` and
     `Window.write` on a window not of the class's shape. Slow (minutes) for the close."""
     low, values, rows = _rows((WC.Request(CLASS.anchor(0), CLASS.lane(0), 3, 1),), ONE)
     win = IF.Window(low.circuit, RUN, DESIGN, 64, registered=values, forms=WR.FORMS)
@@ -1059,7 +1059,8 @@ def test_a_window_of_fewer_requests_than_slots_commits(tmp_path):
     rows.record(win)
     win.write(win.close(), tmp_path, {}, registrar=DK)
     rec = json.loads((tmp_path / "registration.json").read_text())
-    assert rec.get("registered", []) == [] and SS.SCAN_STATE not in rec["window"].get("registered_roots", {})
+    assert [e["value"] for e in rec["registered"]] == [*SU.anchors(low.circuit.program()[0]), TABLE]
+    assert SS.SCAN_STATE not in rec["window"].get("registered_roots", {})
 
 
 def _private(seed: int):

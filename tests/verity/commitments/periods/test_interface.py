@@ -2111,7 +2111,8 @@ def test_a_period_registers_its_circuits_values_by_their_entries_chained_after_t
 
 def test_a_period_registers_each_table_its_circuits_anchor_marks_name_after_its_values(tmp_path, monkeypatch):
     """A table whose root or domain id a supplied anchor's mark in C names (`supplied.registered_values`) is registered by the
-    entry of the value the period holds, after the circuit's values and once; a mark that is no anchor's adds nothing, a
+    entry of the value the period holds, after the circuit's values and its anchors (`supplied.anchors`) and once; a
+    mark that is no anchor's adds nothing, a
     marked table the period doesn't hold is refused by name before anything is written, and registering it moves neither
     the circuit nor its Program's digest. Unmarked, the record is today's."""
     got = {}
@@ -2130,6 +2131,7 @@ def test_a_period_registers_each_table_its_circuits_anchor_marks_name_after_its_
         if held:
             win.registered["t"] = t
         win.window.program.supplied = dict(marks)
+        win.registered.update({a: anchors[a] for a in SU.anchors(win.window.program)})
         out = tmp_path / name
         win.write(win.close(salts_of=fixed(win)), out, {"by": "test"}, registrar=reg)
         return w, list(got["registered"]), (out / "circuit.json").read_bytes(), program_digest(win.window.program)
@@ -2137,14 +2139,16 @@ def test_a_period_registers_each_table_its_circuits_anchor_marks_name_after_its_
     def anchor(fn, value):
         return {"supplied": fn, "args": {"value": value}, "layout": "digest", "bits": 512}
 
+    anchors = {a: Held(a, np.full((1, 32), k, dtype=np.uint16)) for k, a in enumerate(("t/root", "t/domain", "w/root"))}
     w, plain, _, _ = write("plain", {})
     assert plain == [w.entry()]
     marked = {"t/root": anchor("registered.root/v1", "t"), "t/domain": anchor("registered.domain/v1", "t"),
               "w/root": anchor("registered.root/v1", "w"), "x": None, "y": anchor("other/v1", "t")}
     _, entries, body, digest = write("marked", marked)
-    assert entries == [w.entry(), t.entry()]
+    assert entries == [w.entry(), *(anchors[a].entry() for a in ("t/root", "t/domain", "w/root")), t.entry()]
     with monkeypatch.context() as m:
         m.setattr(SU, "registered_values", lambda _p, values: tuple(values))
+        m.setattr(SU, "anchors", lambda _p: ())
         assert write("values-alone", marked)[1:] == ([w.entry()], body, digest)
     assert write("not-anchors", {"y": anchor("other/v1", "t")})[1] == plain
     with pytest.raises(ValueError, match=r"anchors name \['t'\]"):
