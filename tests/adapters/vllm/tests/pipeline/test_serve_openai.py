@@ -19,7 +19,7 @@ import pytest
 import torch
 from verity import hooks as H
 from verity.protocols.run import schemes as declarations
-from verity.protocols.accounting.network.prover import ids_protocol as idp
+from verity_vllm.pipeline import ids_protocol as idp
 from verity.protocols.accounting.network.verifier import id_form as IDF
 from verity.protocols.accounting.network.verifier import io_tie as IT
 from verity import release as REL
@@ -135,8 +135,7 @@ def test_ids_frames_are_the_scans_id_events():
     req = p.parse(dict(CERTIFIER_BODY, stream_options={"include_usage": True, "continuous_usage_stats": True}))
     assert (req.include_usage, req.continuous_usage, req.return_token_ids) == (False, False, True)
     assert not p.parse(dict(CERTIFIER_BODY, stream=False)).return_token_ids
-    declared = {n: f for s in declarations.load().values() for n, f in s.framings.items()}
-    assert declared["ids"] is idp.IdsProtocol and "ids" in proto.framings() and idp.ID_PAYLOAD == 512 - HEADER.size
+    assert "ids" in proto.framings() and idp.ID_PAYLOAD == 512 - HEADER.size
     with pytest.raises(ValueError, match="at least 138"):
         idp.IdsProtocol(payload=137, base=proto.PlainProtocol())
 

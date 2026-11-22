@@ -4,33 +4,10 @@ answers every other request as the serving system's own completion protocol, ``b
 from __future__ import annotations
 
 import dataclasses
-import json
 from collections.abc import Mapping
 from typing import Any
 
-from verity.protocols.accounting.network.prover.workload import FRAME_HEADER, id_event, id_request
-from verity import release as REL
-
-#: the scan's cell payload, P = B − 9 at its B = 512-byte cells: ``--id-payload``'s default
-ID_PAYLOAD = 503
-
-
-def id_request_fields(request: bytes, payload: int) -> dict[str, Any] | str:
-    """The fields (`workload.id_request`'s keywords) of `request`, its head and body as the server read them, where it is an id
-    request as the network attester forwards it: without the release headers it puts on the server's copy
-    (`release.with_release`), exactly `workload.id_request` of its own fields in the scan's B = P + 9-byte cells (P =
-    ``payload``). For anything else, why it is not one."""
-    head, _, body = request.partition(b"\r\n\r\n")
-    line, *fields = head.split(b"\r\n")
-    kept = b"".join(f + b"\r\n" for f in fields
-                    if f.partition(b":")[0].strip().lower() not in (REL.RELEASE_HEADER, REL.RUN_HEADER, REL.BUCKET_HEADER))
-    try:
-        b = json.loads(body)
-        got = {k: b[k] for k in ("model", "user", "prompt", "max_tokens", "temperature", "top_p", "seed")}
-        canonical = id_request(**got, frame_bytes=payload + FRAME_HEADER.size)
-    except (ValueError, KeyError, TypeError) as e:
-        return f"no id request's fields: {e!r}"
-    return got if canonical == line + b"\r\n" + kept + b"\r\n" + body else "not the id request of its fields"
+from verity.release import ID_PAYLOAD, id_event, id_request_fields
 
 
 class IdsProtocol:
@@ -40,10 +17,10 @@ class IdsProtocol:
     ``continuous_usage``, ``return_token_ids`` and ``stream`` fields.
     The network attester relays bytes: what the server sends goes into its egress cells unchanged, and the scan's egress reads
     each cell as one id event. So a streamed response here has no HTTP head and no chunked body:
-    - each token id its own `workload.id_event` of P = ``payload`` bytes (``created`` 0, ``model`` "verity", the id
+    - each token id its own `release.id_event` of P = ``payload`` bytes (``created`` 0, ``model`` "verity", the id
       right-aligned in 10 characters, spaces before the blank line), whatever the delta carries;
     - no usage chunk, whatever ``force_include_usage``;
-    - then exactly `workload.TRAILER`, ``data: [DONE]`` and the blank line, whose position the network attester checks
+    - then exactly `release.TRAILER`, ``data: [DONE]`` and the blank line, whose position the network attester checks
       against the stop rule; a stream the engine fails sends neither it nor any text, only its ids so far before the
       connection closes (`error_end`).
 
@@ -84,7 +61,7 @@ class IdsProtocol:
         return b"".join(id_event(int(t), self.payload) for t in token_ids or ())
 
     def error_end(self, error: str) -> None:
-        """None, whatever ``error`` says: a failed stream stops after its ids so far, without `workload.TRAILER`, so the
+        """None, whatever ``error`` says: a failed stream stops after its ids so far, without `release.TRAILER`, so the
         network attester sees it unterminated rather than ended early, and no server-chosen text leaves; the reason stays
         in the server's record."""
         return None

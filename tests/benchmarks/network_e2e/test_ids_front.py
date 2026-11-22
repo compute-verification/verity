@@ -1,42 +1,43 @@
-"""`verity-vllm ids-front` (`pipeline.ids_front`) on CPU: before the server whose framing is vLLM's (`PlainProtocol`), an id
-request as the network attester forwards it is answered byte for byte as ``--protocol ids`` answers it, and every other
-connection as the server answers it; before a server of scripted bytes, the ids come in order however the stream is
-framed, and a stream that doesn't reach ``[DONE]`` ends without the trailer or any of the server's text."""
+"""The id relay (`benchmarks/network_e2e/ids_front.py`) on CPU: before a server of scripted bytes, an id request as the
+network attester forwards it is answered as id events and the trailer however the stream is framed, a stream that doesn't
+reach ``[DONE]`` ends without the trailer or any of the server's text, and every other connection is the server's own."""
 from __future__ import annotations
 
 import asyncio
 import contextlib
 import gc
 import http.client
+import importlib.util
 import itertools
 import json
 import re
 import socket
 import threading
-from types import SimpleNamespace
+from pathlib import Path
 from typing import Any
 
 import pytest
-from verity_vllm.config import UsageError
-from verity_vllm.pipeline import cli
-from verity_vllm.pipeline import ids_front as F
-from verity_vllm.pipeline import serve_protocol as proto
-
-from tests.pipeline import test_serve_openai as served
-from verity.protocols.accounting.network.prover import id_relay as R
-from verity.protocols.accounting.network.prover import ids_protocol as idp
-from verity.protocols.accounting.network.verifier import io_tie as IT
 from verity import release as REL
+
+_SPEC = importlib.util.spec_from_file_location("ids_front", Path(__file__).resolve().parents[3] / "benchmarks" / "network_e2e" / "ids_front.py")
+assert _SPEC is not None and _SPEC.loader is not None
+F = importlib.util.module_from_spec(_SPEC)
+_SPEC.loader.exec_module(F)
 
 P = 140
 FIELDS = {"model": "m", "user": "u", "prompt": [128000, 791, 4062], "max_tokens": 2, "temperature": 0.0, "top_p": 1.0, "seed": 0}
 STREAM = b"HTTP/1.1 200 OK\r\ncontent-type: text/event-stream; charset=utf-8\r\ntransfer-encoding: chunked\r\n\r\n"
 
 
+def bare_request(payload: int = P) -> bytes:
+    """An id request in cells of ``payload`` + 9 bytes without release headers."""
+    return REL.id_request(**FIELDS, frame_bytes=payload + REL.FRAME_HEADER.size, offset=0)
+
+
 def released(payload: int = P, n: int = 4, bucket: int = 9) -> bytes:
     """An id request in cells of ``payload`` + 9 bytes as the network attester forwards it: release `n` of run ``run``,
     at `bucket`."""
-    return REL.with_release(served.id_request(payload), n, b"run", bucket)
+    return REL.with_release(bare_request(payload), n, b"run", bucket)
 
 
 def exchange(address: tuple[str, int], request: bytes) -> bytes:
@@ -167,13 +168,13 @@ class Echo(threading.Thread):
 
 
 def copy_of(head: bytes, host: bytes) -> bytes:
-    """`ids_front.server_request` of `FIELDS` under `head`'s release headers, as the relay hands them to it."""
+    """`server_request` of `FIELDS` under `head`'s release headers, as the relay hands them to it."""
     rel = REL.release_of(head)
     return F.server_request(FIELDS, host, b"" if rel is None else REL.release_head(*rel))
 
 
 class Fronted:
-    """`id_relay.serve` on a thread's own loop, before the server at ``upstream``, its clock a counter (1, 2, 3, ...
+    """`serve` on a thread's own loop, before the server at ``upstream``, its clock a counter (1, 2, 3, ...
     seconds a reading) and its records kept in ``log``, ``recorded`` released once a record."""
 
     address: tuple[str, int]                 # where the front listens, known once `__enter__` returns
@@ -186,7 +187,7 @@ class Fronted:
         def log(rec: dict) -> None:
             self.log.append(rec)
             self.recorded.release()
-        self.front = R.Front(tuple(upstream), payload, request_of=F.server_request, stream_ids=F.token_ids, log=log,
+        self.front = F.Front(tuple(upstream), payload, request_of=F.server_request, stream_ids=F.token_ids, log=log,
                              clock=lambda: float(next(ticks)))
         self.ready = threading.Event()
 
@@ -197,7 +198,7 @@ class Fronted:
 
         async def main() -> None:
             self.loop, self.stop = asyncio.get_running_loop(), asyncio.Event()
-            await R.serve(self.front, ("127.0.0.1", 0), announce=announce, stop=self.stop)
+            await F.serve(self.front, ("127.0.0.1", 0), announce=announce, stop=self.stop)
 
         self.thread = threading.Thread(target=lambda: asyncio.run(main()), daemon=True)
         self.thread.start()
@@ -225,13 +226,13 @@ class Fronted:
 
 
 def test_an_id_request_is_its_fields_whatever_release_headers_it_came_with():
-    """`ids_protocol.id_request_fields`: the fields of an id request in its P + 9-byte cells, bare or as the network
+    """`release.id_request_fields`: the fields of an id request in its P + 9-byte cells, bare or as the network
     attester forwards it (the release, the run and the bucket); why not, in other cells, cut short, or changed by a byte."""
-    for request in (served.id_request(P), released(), REL.with_release(served.id_request(P), 0)):
-        assert idp.id_request_fields(request, P) == FIELDS
+    for request in (bare_request(P), released(), REL.with_release(bare_request(P), 0)):
+        assert REL.id_request_fields(request, P) == FIELDS
     for other, p in ((released(), P + 1), (released()[:-1], P), (released().replace(b'"stream":true', b'"stream":True'), P),
                      (b"", P)):
-        assert isinstance(idp.id_request_fields(other, p), str)
+        assert isinstance(REL.id_request_fields(other, p), str)
 
 
 def test_the_servers_copy_keeps_the_release_and_asks_for_the_token_ids():
@@ -244,46 +245,45 @@ def test_the_servers_copy_keeps_the_release_and_asks_for_the_token_ids():
                         b"x-verity-release: 4\r\nx-verity-release-run: " + b"run".hex().encode() +
                         b"\r\nx-verity-release-bucket: 9\r\ncontent-length: %d\r\nconnection: close" % len(body))
     assert REL.release_of(got_head + b"\r\n\r\n") == (4, b"run", 9)
-    bare = copy_of(served.id_request(P).partition(b"\r\n\r\n")[0] + b"\r\n\r\n", b"h")
+    bare = copy_of(bare_request(P).partition(b"\r\n\r\n")[0] + b"\r\n\r\n", b"h")
     assert b"x-verity" not in bare and REL.release_of(bare.partition(b"\r\n\r\n")[0] + b"\r\n\r\n") is None
 
 
-@pytest.mark.parametrize("payload", [P, idp.ID_PAYLOAD])
-def test_before_vllms_framing_an_id_request_is_answered_as_protocol_ids_answers_it(tmp_path, payload):
-    """The front before the server whose framing is vLLM's (`PlainProtocol`, its usage chunk forced): the network
-    attester's id request comes back as ``--protocol ids`` sends it from the same engine, each sampled id one event of P
-    bytes, then the trailer, with no HTTP head, no usage and no text. The record has the release, the counts and each
-    write's time after the arrival, and no id."""
-    with served.Serving(tmp_path, commit=False) as s, Fronted(s.http.address, payload) as f:
+@pytest.mark.parametrize("payload", [P, REL.ID_PAYLOAD])
+def test_an_id_request_is_answered_in_the_id_form_from_the_servers_stream(payload):
+    """Before a server that streams each sampled id in its own chunk: the network attester's id request comes back as
+    each id one event of P bytes, then the trailer, with no HTTP head, no usage and no text. The record has the release,
+    the counts and each write's time after the arrival, and no id."""
+    answer = STREAM + chunked(event(choice([4853], " a")), event(choice([4884], " b")), event(b"[DONE]"))
+    server = Scripted(answer, connections=2)
+    with Fronted(server.address, payload) as f:
         raw = f.send(released(payload))
-        assert f.send(served.id_request(payload)) == raw
-    assert raw == b"".join(IT.id_event(t, payload) for t in (4853, 4884)) + IT.TRAILER
-    ids = idp.IdsProtocol(payload=payload, base=proto.PlainProtocol(True))
-    with served.Serving(tmp_path / "ids", commit=False, protocol=ids) as direct:
-        assert direct.send(released(payload)) == raw
+        assert f.send(bare_request(payload)) == raw
+    server.join()
+    assert raw == b"".join(REL.id_event(t, payload) for t in (4853, 4884)) + REL.TRAILER
     assert f.log == [{"n": 4, "run": b"run".hex(), "bucket": 9, "prompt": 3, "ids": 2, "ended": True, "why": None, "at": 1.0,
                       "ms": [1000.0, 2000.0, 3000.0]},
                      {"n": None, "run": None, "bucket": None, "prompt": 3, "ids": 2, "ended": True, "why": None, "at": 5.0,
                       "ms": [1000.0, 2000.0, 3000.0]}]
 
 
-def test_every_other_connection_gets_the_servers_own_answer(tmp_path):
-    """Through the front, what isn't an id request in the front's cells reaches the server unchanged and its answer
-    comes back whole: ``/v1/models``, ``/tokenize``, the network attester's shim's streamed POST (vLLM's chunks, with their
-    token ids), and an id request in other cells, which the server answers in HTTP. None is recorded."""
-    with served.Serving(tmp_path, commit=False) as s, Fronted(s.http.address, idp.ID_PAYLOAD) as f:
-        models = f.ask("GET", "/v1/models")
-        tokens = f.ask("POST", "/tokenize", json.dumps({"model": "m", "prompt": "a bb ccc"}).encode())
-        shim = served.shims_request(s.http.address[1])
-        through, direct = f.send(shim), s.send(shim)
-        other = f.send(released(P))
-    assert [m["id"] for m in models["data"]] == ["m"] and tokens["tokens"] == [1, 101, 102, 103]
-    head, body = served.dechunked(through)
-    assert head.startswith(b"HTTP/1.1 200 OK\r\n") and served.dechunked(direct)[0] == head
-    chunks = [json.loads(e) for e in served.events(body)[:-1]]
-    assert [t for c in chunks for ch in c["choices"] for t in ch["token_ids"]] == [4853, 4884]
-    assert other.startswith(b"HTTP/1.1 200 OK\r\n") and IT.ID_EVENT_HEAD not in other
+def test_every_other_connection_gets_the_servers_own_answer():
+    """Through the front, what isn't an id request in the front's cells reaches the server unchanged and its answer comes
+    back whole: a model listing, a tokenization, the streamed POST of a client that brings its own request, and an id
+    request in other cells. None is recorded."""
+    answer = b"HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: 11\r\nconnection: close\r\n\r\n{\"ok\":true}\n"
+    requests = [b"GET /v1/models HTTP/1.1\r\nhost: h\r\nconnection: close\r\n\r\n",
+                b"POST /tokenize HTTP/1.1\r\nhost: h\r\ncontent-length: 10\r\nconnection: close\r\n\r\n0123456789",
+                b"POST /v1/completions HTTP/1.1\r\nhost: h\r\ncontent-length: 2\r\nconnection: close\r\n\r\n{}",
+                released(P)]
+    server = Scripted(answer, connections=len(requests))
+    with Fronted(server.address, REL.ID_PAYLOAD) as f:
+        assert [f.send(r) for r in requests] == [answer] * len(requests)
+    server.join()
+    assert server.requests == requests
     assert f.log == []
+
+
 
 
 def test_a_relayed_connection_streams_both_ways_until_both_sides_end():
@@ -317,7 +317,7 @@ def test_the_ids_come_in_order_however_the_server_frames_its_stream():
         head = STREAM if body is not whole else STREAM.replace(b"transfer-encoding: chunked\r\n", b"")
         server = Scripted(head + body)
         with Fronted(server.address) as f:
-            assert f.send(released()) == b"".join(IT.id_event(t, P) for t in (7, 8, 9)) + IT.TRAILER
+            assert f.send(released()) == b"".join(REL.id_event(t, P) for t in (7, 8, 9)) + REL.TRAILER
         server.join()
         assert server.requests == [copy_of(released().partition(b"\r\n\r\n")[0] + b"\r\n\r\n",
                                            b"%s:%d" % (server.address[0].encode(), server.address[1]))]
@@ -347,7 +347,7 @@ def test_a_stream_that_does_not_reach_done_ends_without_the_trailer(answer, sent
     with Fronted(server.address) as f:
         raw = f.send(released())
     server.join()
-    assert raw == b"".join(IT.id_event(t, P) for t in sent) and IT.TRAILER not in raw
+    assert raw == b"".join(REL.id_event(t, P) for t in sent) and REL.TRAILER not in raw
     assert [(r["ids"], r["ended"], r["why"]) for r in f.log] == [(len(sent), False, why)]
 
 
@@ -357,11 +357,11 @@ def test_a_stream_that_does_not_reach_done_ends_without_the_trailer(answer, sent
 def test_an_id_request_with_a_malformed_release_is_refused_by_name_and_the_front_goes_on(field, name):
     """A malformed release header on an id request (`release.release_of`'s refusal) is no release: the front answers
     nothing, opens no server connection for it and records the refusal's name as why; the next request is served."""
-    request = served.id_request(P).replace(b"\r\n", b"\r\n" + field + b"\r\n", 1)
+    request = bare_request(P).replace(b"\r\n", b"\r\n" + field + b"\r\n", 1)
     server = Scripted(STREAM + chunked(event(choice([7], " a")), event(b"[DONE]")))
     with Fronted(server.address) as f:
         assert f.send(request) == b""
-        assert f.send(released()) == IT.id_event(7, P) + IT.TRAILER
+        assert f.send(released()) == REL.id_event(7, P) + REL.TRAILER
     server.join()
     assert len(server.requests) == 1
     assert [(r["n"], r["ended"], r["why"] and r["why"].split(":")[0]) for r in f.log] == [(None, False, name), (4, True, None)]
@@ -392,10 +392,10 @@ def test_once_the_network_attesters_side_has_ended_the_front_ends_the_servers(an
                 assert c.recv(65536) == b""
         server.join()
         f.recorded.acquire()
-    assert got == b"".join(IT.id_event(t, P) for t in sent)
+    assert got == b"".join(REL.id_event(t, P) for t in sent)
     assert server.requests == [copy_of(released().partition(b"\r\n\r\n")[0] + b"\r\n\r\n",
                                        b"%s:%d" % (server.address[0].encode(), server.address[1]))]
-    assert f.log == [{"n": 4, "run": b"run".hex(), "bucket": 9, "prompt": 3, "ids": len(sent), "ended": False, "why": R.GONE,
+    assert f.log == [{"n": 4, "run": b"run".hex(), "bucket": 9, "prompt": 3, "ids": len(sent), "ended": False, "why": F.GONE,
                       "at": 1.0, "ms": [1000.0] * len(sent)}]
 
 
@@ -440,62 +440,27 @@ def test_a_server_that_is_not_there_closes_the_connection():
     assert (other["broken"], other["error"], set(other)) == ("server", "ConnectionRefusedError", {"broken", "error", "at"})
 
 
-def test_the_command_is_registered_with_the_scans_payload_as_its_default():
-    opts = cli.parse("ids-front", ["--upstream", "127.0.0.1:18745"], environ={})
-    assert (opts.upstream, opts.listen, opts.id_payload, opts.log) == ("127.0.0.1:18745", "127.0.0.1:18746", idp.ID_PAYLOAD, None)
-    assert F.address("node-a:18745") == ("node-a", 18745)
-    for bad in ("18745", "host:", ":18745", "host:port"):
-        with pytest.raises(UsageError):
-            F.address(bad)
-
-
-def test_the_launcher_starts_each_process_a_named_scheme_files_with_this_servers_readers(monkeypatch, capsys):
-    """A stand-in registry: scheme ``stand-in`` files a `StartBeside` of its registered process with both readers; the
-    launcher calls it with the server's own readers and its options, and refuses a name the registry lacks."""
-    from verity import hooks as H
-    from verity.protocols.accounting import scheme as schemes
-    from verity_vllm import messages
-
+def test_the_command_defaults_to_the_scans_payload_and_runs_the_relay_with_its_readers(monkeypatch, capsys):
+    """The command runs `run` with its options and the server's own readers (`server_request`, `token_ids`), and writes
+    the address the relay listens on."""
     called: list = []
 
-    async def run(upstream, listen, payload, *, log, stop, announce):
-        called.append((upstream, listen, payload, log))
+    async def run(upstream, listen, payload, *, server_request, stream_token_ids, log, stop, announce):
+        called.append((upstream, listen, payload, server_request, stream_token_ids, log))
         announce(listen)
 
-    def process(request_of, stream_ids):
-        called.append((request_of, stream_ids))
-        return run
-
-    stand_in = SimpleNamespace(name="stand-in", settings={}, check_settings=lambda s: None, requests=lambda ctx: (),
-                               attach=lambda ex, ctx: ex.request("stand-in", H.StartBeside("relay", tuple(F.READERS))))
-    monkeypatch.setitem(schemes.SCHEMES, "stand-in", stand_in)
-    monkeypatch.setitem(schemes.PROCESSES, "relay", process)
-    try:
-        opts = cli.parse("ids-front", ["--upstream", "127.0.0.1:18745", "--protocols", "stand-in"], environ={})
-        assert F.main(opts) == 0
-        assert called == [(F.server_request, F.token_ids), (("127.0.0.1", 18745), ("127.0.0.1", 18746), 503, None)]
-        assert json.loads(capsys.readouterr().out) == {"listening": ["127.0.0.1", 18746]}
-    finally:
-        messages.close()
-    with pytest.raises(UsageError, match="no scheme 'other'"):
-        F.launch(messages.Exchange(), ["other"])
-    with pytest.raises(UsageError, match="no scheme starts a process"):
-        F.launch(messages.Exchange(), [])
-
-
-def test_the_launcher_starts_the_network_attesters_id_relay_from_the_one_table():
-    from verity.protocols.accounting.network import scheme as network
-    from verity.protocols.accounting.network.prover import id_relay
-    from verity_vllm import messages
-
-    ex = messages.Exchange()
-    (name, start), = F.launch(ex, [network.NETWORK_ATTESTER.name])
-    assert name == network.START_ID_RELAY.process and ex.requests == [(network.NETWORK_ATTESTER.name, network.START_ID_RELAY)]
-    assert network.START_ID_RELAY.readers == id_relay.READERS and callable(start())
+    monkeypatch.setattr(F, "run", run)
+    assert F.main(["--upstream", "127.0.0.1:18745"]) == 0
+    assert called == [(("127.0.0.1", 18745), ("127.0.0.1", 18746), REL.ID_PAYLOAD, F.server_request, F.token_ids, None)]
+    assert json.loads(capsys.readouterr().out) == {"listening": ["127.0.0.1", 18746]}
+    assert F.address("node-a:18745") == ("node-a", 18745)
+    for bad in ("18745", "host:", ":18745", "host:port"):
+        with pytest.raises(SystemExit, match="HOST:PORT"):
+            F.address(bad)
 
 
 def test_a_broken_stream_is_the_hooks_broken():
     from verity import hooks as H
     with pytest.raises(H.Broken, match="error event"):
         F.chunk_ids(b'{"error": "x"}')
-    assert R.Broken is H.Broken
+    assert F.Broken is H.Broken

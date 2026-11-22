@@ -1,12 +1,15 @@
-"""The network attester's id egress relay: a process of the server's side, on its host, between the network attester and
-a server that answers in HTTP, which takes the HTTP off the server's answers to the network attester's id requests.
+"""The network attester's id egress relay, started by path: a process of the server's side, on its host, between the
+network attester and vLLM's own OpenAI server, which takes the HTTP off the server's answers to the network attester's id
+requests.
 
-* **An id request** (a connection's first request, exactly `workload.id_request` in the network attester's P + 9-byte
-  cells, its release headers aside: `ids_protocol.id_request_fields`) goes to the server as the request ``request_of``
+    python benchmarks/network_e2e/ids_front.py --upstream HOST:PORT [--listen 127.0.0.1:18746] [--id-payload 503] [--log FILE]
+
+* **An id request** (a connection's first request, exactly `release.id_request` in the network attester's P + 9-byte
+  cells, its release headers aside: `release.id_request_fields`) goes to the server as the request ``request_of``
   builds of its fields, on a connection of its own, under the release headers it came with. Of the server's answer only
   the token ids come back, as ``stream_ids`` reads them, each one id event written as its chunk arrives, then the trailer
   once ``stream_ids`` ends. A stream ``stream_ids`` breaks off (`Broken`: the server refused the request, sent an error or
-  text without its ids, or broke off) ends as `ids_protocol.IdsProtocol`'s failed stream does: its ids so far, no trailer
+  text without its ids, or broke off) ends as ``serve-openai --protocol ids``'s failed stream does: its ids so far, no trailer
   and none of the server's text, so the network attester fails the connection. Once the network attester's side of the
   connection has ended (closed, or broken), the relay closes its connection to the server, whatever the server has sent,
   so the server sees the close as it would on a connection of its own. What the network attester sends after its
@@ -23,28 +26,33 @@ a connection needed after its release is the most of ``ms[i]`` less (i // r) buc
 Every other connection that breaks, before it is relayed or while it is, leaves one record: ``broken``, the side whose
 connection broke (``client`` or ``server``), ``error``, the exception's class name, and ``at``, the seconds from the
 relay's start to the break.
+
+The relay reads the server through two readers: an id request's copy for the server (`server_request`, a
+``POST /v1/completions`` of its fields with ``return_token_ids``, under the release headers it came with), and the
+server's streamed chunks (`token_ids`, through ``data: [DONE]``, `Broken` where the stream breaks).
+
+Once the relay listens it writes one line, ``{"listening": [HOST, PORT]}``, on stdout; it serves until SIGTERM or
+SIGINT. ``--log`` appends its records, one JSON line each.
 """
 from __future__ import annotations
 
+import argparse
 import asyncio
 import contextlib
-import functools
+import json
+import signal
+import sys
 import time
-from collections.abc import AsyncIterator, Callable, Coroutine
+from collections.abc import AsyncGenerator, AsyncIterator, Callable
+from pathlib import Path
 from typing import Any
 
 from verity import hooks as H
-from verity.protocols.accounting.network.prover.ids_protocol import (
-    ID_PAYLOAD,
-    id_request_fields,
-)
-from verity.protocols.accounting.network.prover.workload import (
-    TRAILER,
-    id_event,
-)
 from verity import release as REL
+from verity.release import ID_PAYLOAD, TRAILER, id_event, id_request_fields
 
-__all__ = ["BLANK", "BODY_BYTES", "COMPLETIONS", "GONE", "READ_BYTES", "Broken", "Front", "RequestOf", "READERS", "StreamIds", "process", "run", "serve"]
+__all__ = ["BLANK", "BODY_BYTES", "COMPLETIONS", "GONE", "READ_BYTES", "Broken", "Front", "RequestOf", "StreamIds", "address",
+           "chunk_ids", "main", "run", "serve", "server_request", "token_ids"]
 
 READ_BYTES = 1 << 16
 #: the longest body the relay reads whole to tell an id request: a connection whose request says more is relayed
@@ -58,9 +66,6 @@ GONE = "the network attester's side ended before the server's stream"
 RequestOf = Callable[[dict[str, Any], bytes, bytes], bytes]
 #: each chunk's token ids, in order, of the server's answer read from its connection; `Broken` where it doesn't end whole
 StreamIds = Callable[[asyncio.StreamReader], AsyncIterator[list[int]]]
-#: the readers `run` takes from the serving system, by name: ``server-request`` a `RequestOf`, ``stream-token-ids`` a
-#: `StreamIds`
-READERS = ("server-request", "stream-token-ids")
 
 
 #: why the server's stream of an id request ends without its trailer: the workload's readers' error
@@ -235,7 +240,110 @@ async def run(upstream: tuple[str, int], listen: tuple[str, int], payload: int =
     await serve(front, listen, announce=announce, stop=stop)
 
 
-def process(server_request: RequestOf, stream_token_ids: StreamIds) -> Callable[..., Coroutine[Any, Any, None]]:
-    """The relay as the process `verity.hooks.StartBeside` starts: called with the serving system's readers in `READERS`'
-    order, it is `run` with them given."""
-    return functools.partial(run, server_request=server_request, stream_token_ids=stream_token_ids)
+def address(text: str) -> tuple[str, int]:
+    """``HOST:PORT`` as (host, port)."""
+    host, sep, port = text.rpartition(":")
+    if not (sep and host and port.isdecimal()):
+        raise SystemExit(f"an address is HOST:PORT, not {text!r}")
+    return host, int(port)
+
+
+def server_request(fields: dict[str, Any], host: bytes, release: bytes) -> bytes:
+    """The server's copy of an id request of `fields`: a ``POST /v1/completions`` of the fields, streamed, with
+    ``return_token_ids``, on a connection it closes, under `release`, the release headers it came with."""
+    body = json.dumps(fields | {"stop": [], "stream": True, "return_token_ids": True}, separators=(",", ":")).encode()
+    return (COMPLETIONS + b"\r\nhost: " + host + b"\r\ncontent-type: application/json\r\n" + release
+            + b"content-length: %d\r\nconnection: close\r\n\r\n" % len(body) + body)
+
+
+def chunk_ids(data: bytes) -> list[int]:
+    """The token ids of one streamed completion chunk (its ``data:`` JSON), every choice's ``token_ids`` in order;
+    `Broken` for an error event, and for a choice whose text comes without its ids or whose ids aren't u32s."""
+    chunk = json.loads(data)
+    if not isinstance(chunk, dict) or "error" in chunk:
+        raise Broken("the server sent an error event")
+    ids: list[int] = []
+    for choice in chunk.get("choices") or ():
+        got = choice.get("token_ids") if isinstance(choice, dict) else ...
+        if got is None and not choice.get("text"):
+            continue
+        if not (isinstance(got, list) and all(type(t) is int and 0 <= t < 1 << 32 for t in got)):
+            raise Broken("the server sent a chunk without its token ids")
+        ids += got
+    return ids
+
+
+async def _body(reader: asyncio.StreamReader, chunked: bool) -> AsyncIterator[bytes]:
+    while True:
+        if chunked:
+            size = int((await reader.readuntil(b"\r\n")).split(b";", 1)[0], 16)
+            if size == 0:
+                return
+            yield (await reader.readexactly(size + 2))[:-2]
+        else:
+            data = await reader.read(READ_BYTES)
+            if not data:
+                return
+            yield data
+
+
+async def token_ids(reader: asyncio.StreamReader) -> AsyncGenerator[list[int], None]:
+    """Each chunk's token ids (`chunk_ids`) of a streamed ``/v1/completions`` response read from `reader`, through
+    ``data: [DONE]``; `Broken` where the response isn't a 200 whose events go on to ``[DONE]``."""
+    try:
+        status, *lines = (await reader.readuntil(BLANK))[:-len(BLANK)].decode("latin-1").split("\r\n")
+        code = status.split(" ")[1:2]
+        if code != ["200"]:
+            raise Broken(f"the server answered {code[0] if code and code[0].isdecimal() else 'no status'}")
+        headers = {k.strip().lower(): v.strip() for k, _, v in (ln.partition(":") for ln in lines)}
+        buf = b""
+        async for data in _body(reader, "chunked" in headers.get("transfer-encoding", "").lower()):
+            *events, buf = (buf + data).replace(b"\r\n", b"\n").split(b"\n\n")
+            for event in events:
+                for line in event.split(b"\n"):
+                    if line.startswith(b"data:"):
+                        if line[5:].strip() == b"[DONE]":
+                            return
+                        yield chunk_ids(line[5:])
+    except (asyncio.IncompleteReadError, asyncio.LimitOverrunError, ConnectionError, ValueError) as e:
+        raise Broken(f"the server's stream broke off ({type(e).__name__})") from e
+    raise Broken("the server's stream ended before [DONE]")
+
+
+
+def main(argv: list[str] | None = None) -> int:
+    p = argparse.ArgumentParser(description="the network attester's id relay before vLLM's own OpenAI server")
+    p.add_argument("--upstream", required=True, help="the server's HOST:PORT: vLLM's own OpenAI server")
+    p.add_argument("--listen", default="127.0.0.1:18746", help="the HOST:PORT the relay listens on")
+    p.add_argument("--id-payload", type=int, default=ID_PAYLOAD, dest="id_payload",
+                   help="each id event's bytes, the network attester's cell payload B - 9 (default 503: the scan's B = 512)")
+    p.add_argument("--log", default=None, help="append the relay's records to this file (JSON lines)")
+    opts = p.parse_args(argv)
+    upstream, listen = address(opts.upstream), address(opts.listen)
+    with contextlib.ExitStack() as stack:
+        out = stack.enter_context(Path(opts.log).open("a", buffering=1, encoding="utf-8")) if opts.log else None
+
+        def log(rec: dict[str, Any]) -> None:
+            assert out is not None
+            out.write(json.dumps(rec, separators=(",", ":")) + "\n")
+
+        async def serving() -> None:
+            stop = asyncio.Event()
+            for sig in (signal.SIGTERM, signal.SIGINT):
+                asyncio.get_running_loop().add_signal_handler(sig, stop.set)
+
+            def announce(at: tuple[str, int]) -> None:
+                sys.stdout.write(json.dumps({"listening": list(at)}) + "\n")
+                sys.stdout.flush()
+            try:
+                await run(upstream, listen, opts.id_payload, server_request=server_request, stream_token_ids=token_ids,
+                          log=log if out is not None else None, stop=stop, announce=announce)
+            except ValueError as e:
+                raise SystemExit(f"--id-payload: {e}") from e
+
+        asyncio.run(serving())
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

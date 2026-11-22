@@ -115,7 +115,6 @@ def _attached(M, name: str, tmp_path):
                         feed=str(tmp_path / "feed"))
     except (Refused, LookupError, ValueError, RuntimeError) as e:
         pytest.skip(f"{name} does not attach off a card: {type(e).__name__}: {e}")
-    ex.readers = {r: lambda *a, **k: None for _, q in ex.requests if isinstance(q, H.StartBeside) for r in q.readers}
     d = SP.declared(_config(), ex.attached)
     required = {r.property: r.value for _, r in ex.requests if isinstance(r, H.RequireProperty)}
     ex.answer(H.Declared(d.card, {**d.properties, **required}, d.schemes, d.settings))

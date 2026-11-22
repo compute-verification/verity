@@ -368,23 +368,6 @@ def test_a_scheme_that_reads_its_pin_gets_the_settings_and_refuses_by_name_witho
     assert M.Exchange().attach(wipe, process=H.ENGINE) == [PIN["key-sha512"]]
 
 
-def test_a_process_beside_is_started_with_the_readers_the_launcher_offers(monkeypatch):
-    monkeypatch.setattr(schemes, "PROCESSES", {"id-front": lambda request, ids: ("relay", request(), ids())})
-    ex = M.Exchange()
-    ex.request("network", H.StartBeside("id-front", ("server-request", "stream-token-ids")))
-    with pytest.raises(Refused, match=r"network: starts id-front beside the workload with readers \['server-request', "
-                                      r"'stream-token-ids'\] no launcher here offers"):
-        ex.answer(H.Declared("", {}))
-    ex.readers = {"server-request": lambda: "req", "stream-token-ids": lambda: [1, 2]}
-    ex.answer(H.Declared("", {}))
-    ((process, start),) = ex.beside()
-    assert process == "id-front" and start() == ("relay", "req", [1, 2])
-    other = M.Exchange()
-    other.request("network", H.StartBeside("tap"))
-    with pytest.raises(Refused, match="starts tap beside the workload, which no scheme registered"):
-        other.answer(H.Declared("", {}))
-
-
 def test_a_build_request_is_filed_before_the_build_and_any_other_before_the_first_step():
     ex = M.Exchange()
     ex.answer(H.Declared("", {}))

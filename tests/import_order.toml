@@ -201,9 +201,6 @@ loaded_by = [
     "verity/protocols/accounting/memory/pous/prover/wipe_prover.py",
     "verity/protocols/accounting/memory/pous/prover/workload.py",
     "verity/protocols/accounting/network/prover/admission.py",
-    "verity/protocols/accounting/network/prover/id_relay.py",
-    "verity/protocols/accounting/network/prover/ids_protocol.py",
-    "verity/protocols/accounting/network/prover/serve_head.py",
     "verity/protocols/accounting/network/prover/workload.py",
     "verity/protocols/proof/spot/prover/workload.py",
 ]
