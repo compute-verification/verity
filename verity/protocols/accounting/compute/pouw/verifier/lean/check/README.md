@@ -193,11 +193,11 @@ no weights' root, an execution phase whose request runs past its public max_toke
 commits no fixed length or an EOS-keyed one, and one mutation per other refusal), and `tests/verity/protocols/accounting/compute/pouw/verifier/test_pouw_credit.py`
 holds each mutation to its refusal.
 
-`tests/verity/protocols/accounting/compute/pouw/verifier/lean/check/test_verified_difftest.py` puts `credit-verified` against `credit._asks` and `credit._verified` with the Lean
-of record, over `tests/verity/protocols/accounting/compute/pouw/verifier/lean/check/pouw_verified_cases.py` (an execution phase's statements, null or answered as the served path answers,
-and one mutation per refusal before the verifier runs and of its answers), and holds the served
-`credit._lean_verified` to `credit._verified`'s verdict and verifier runs. `tests/verity/protocols/accounting/compute/pouw/verifier/lean/check/test_live_verified_difftest.py` does
-the same for `credit-live-verified` against `credit._live_asks` and `credit._live_verified`, over
+No test puts `credit-verified` against `credit._asks` and `credit._verified`, or holds the served `credit._lean_verified`
+to them: the cases of `tests/verity/protocols/accounting/compute/pouw/verifier/lean/check/pouw_verified_cases.py` (`verified_instance`, `lanes_instance`) are stand-in
+layouts no tile pin holds, which `credit.layout_of` refuses before the statements are read.
+`tests/verity/protocols/accounting/compute/pouw/verifier/lean/check/test_live_verified_difftest.py` puts `credit-live-verified` against `credit._live_asks` and
+`credit._live_verified` with the Lean of record, over
 `tests/verity/protocols/accounting/compute/pouw/verifier/lean/check/pouw_live_verified_cases.py` (an execution phase's live statements, its live tables' entries and each step's m_s), and
 holds the served `credit._lean_live_verified` to `credit._live_verified`; and `credit-committed-files` against
 `credit.committed_files`, on the ledgers of `pouw_credit_cases.period_instance` whose open commits circuit files of each
