@@ -601,7 +601,7 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], sa
     if rec["scheme"] != scheme:
         c.fail("R3-scheme", {"registered": rec["scheme"], "verifier": scheme})
     roots = rec["roots"] if isinstance(rec["roots"], list) else []
-    if (not roots and ports) or not all(isinstance(r, Mapping) and set(r) == _ROOT_KEYS for r in roots):
+    if not roots or not all(isinstance(r, Mapping) and set(r) == _ROOT_KEYS for r in roots):
         c.fail("R3-roots", rec["roots"])
     else:
         got = {r["port"]: r for r in roots}

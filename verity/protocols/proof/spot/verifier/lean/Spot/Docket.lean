@@ -917,7 +917,7 @@ def check (rec : Json) (v : Verifier) : Array String := Id.run do
   if !jeq (get "scheme") v.scheme then c := addCode c "R3-scheme"
   let roots := match get "roots" with | .arr rs => rs | _ => #[]
   let ix := portIndex roots
-  if (roots.isEmpty && !v.ports.isEmpty) || !roots.all (keys? · == some ROOT_KEYS) then c := addCode c "R3-roots"
+  if roots.isEmpty || !roots.all (keys? · == some ROOT_KEYS) then c := addCode c "R3-roots"
   else
     if ix.count != roots.size || ix.count != v.ports.size || !v.ports.all (fun (p, _) => ix.has p) then
       c := addCode c "R3-ports"
@@ -986,7 +986,7 @@ def checkRef (rec : Json) (v : Verifier) : Array String := Id.run do
   -- R3
   if !jeq (get "scheme") v.scheme then c := addCode c "R3-scheme"
   let roots := match get "roots" with | .arr rs => rs | _ => #[]
-  if (roots.isEmpty && !v.ports.isEmpty) || !roots.all (keys? · == some ROOT_KEYS) then c := addCode c "R3-roots"
+  if roots.isEmpty || !roots.all (keys? · == some ROOT_KEYS) then c := addCode c "R3-roots"
   else
     let distinct := roots.foldl (fun (acc : Array Json) r =>
       if acc.any (jeq · (getD r "port")) then acc else acc.push (getD r "port")) #[]
