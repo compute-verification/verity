@@ -1,15 +1,21 @@
 """Every circuit template the circuit-check catalog reaches at its bindings that calls an opener (`OPENERS`) either gates
 what it returns on the opener's verdict or returns a verdict alone, and each that does neither is an entry of
-``allowlists/repo_openers_gated.json`` naming what consumes its verdict today; the list only shrinks.  With each opener's
-verdict cut to 0 and every parameter unknown, a template's body is evaluated in three values (0, 1, unknown) with each
-parameter's dependence carried beside its value: a returned element that comes out constant is gated, one that depends on
-no parameter reaching an opener's opened value or path is a verdict, and any other is ungated.  A call that reaches no
-opener on parameters all unknown is not entered: its returns are unknown and depend on all its parameters.  A template
-the walk can't decide (a body that doesn't build or compile) fails.  The walk builds every body of the catalog, which takes
-most of an hour: no cheaper test finds an opener, which is seen only in the bodies that call it."""
+``allowlists/repo_openers_gated.json`` naming what consumes its verdict today; the list only shrinks.  The walk takes each
+template once per shape (its statics, each size only as zero or not), at its least binding, by its own nodes alone; a
+traced template, or one whose code reaches no opener's module, is a leaf.  With each opener's verdict cut to 0 and every
+parameter unknown, a reaching template's body is evaluated in three values (0, 1, unknown) with each parameter's
+dependence carried beside its value: a returned element that comes out constant is gated, one that depends on no
+parameter reaching an opener's opened value or path is a verdict, and any other is ungated.  A call that reaches no opener
+on parameters all unknown is not entered.  A template the walk can't decide (a body that doesn't build or compile, a
+shape whose next binding classes otherwise, a module that names an opener its imports don't reach) fails.
+``openers_gated.json`` is the record of the gated templates at the bindings registered circuits use (`SERVED`), each
+evaluated at that very binding, with its closure digest; ``--write`` writes it.  The tests that walk are slow: no cheaper
+test finds an opener, which is seen only in the bodies that call it."""
 from __future__ import annotations
 
+import ast
 import heapq
+import importlib.util
 import itertools
 import json
 import sys
@@ -39,6 +45,72 @@ def _imports() -> tuple[Any, Any, Any, Any]:
     from circuit_check import targets as T
     from verity.circuits import defs as D
     return BD, T, D, BC
+
+
+class Imports:
+    """Whether a module's code can reach an opener's module: its imports, function-level ones included, and its packages',
+    closed over; ``mentions`` the modules whose source names an opener without that."""
+
+    def __init__(self) -> None:
+        from verity.commitments.gates import frame_v3, lms, merkle
+
+        defs = (frame_v3.FrameV3Read, frame_v3.FrameV3ReadAt, merkle.MerkleRead, lms.LmsVerify)
+        assert {f"{d.name}_v{d.version}" for d in defs} == set(OPENERS)
+        self.names = tuple(d.name for d in defs)
+        self.targets = {d.body.__module__ for d in defs}
+        self.edges: dict[str, set[str]] = {}
+        self.memo: dict[str, bool] = {}
+        self.mentions: set[str] = set()
+
+    @staticmethod
+    def origin(name: str) -> str | None:
+        try:
+            spec = importlib.util.find_spec(name)
+        except (ImportError, ValueError, AttributeError):
+            return None
+        return spec.origin if spec is not None and spec.origin and spec.origin.endswith(".py") else None
+
+    def imports(self, mod: str) -> set[str]:
+        if mod not in self.edges:
+            self.edges[mod] = out = {".".join(mod.split(".")[:i]) for i in range(1, mod.count(".") + 1)}
+            if (path := self.origin(mod)) is not None:
+                pkg = mod.split(".") if path.endswith("__init__.py") else mod.split(".")[:-1]
+                for node in ast.walk(ast.parse(Path(path).read_text(encoding="utf-8"))):
+                    if isinstance(node, ast.Import):
+                        out.update(a.name for a in node.names)
+                    elif isinstance(node, ast.ImportFrom):
+                        m = ".".join((pkg[:len(pkg) - node.level + 1] if node.level else [])
+                                     + (node.module.split(".") if node.module else []))
+                        out.update([m] if m else [])
+                        out.update(f"{m}.{a.name}" for a in node.names if m and self.origin(f"{m}.{a.name}"))
+        return self.edges[mod]
+
+    def reaches(self, mod: str) -> bool:
+        if mod not in self.memo:
+            seen, stack = set(), [mod]
+            while stack and not seen & self.targets:
+                m = stack.pop()
+                if m not in seen:
+                    seen.add(m)
+                    stack.extend(self.imports(m))
+            self.memo[mod] = bool(seen & self.targets)
+            path = self.origin(mod)
+            if not self.memo[mod] and path is not None and any(n in Path(path).read_text(encoding="utf-8") for n in self.names):
+                self.mentions.add(mod)
+        return self.memo[mod]
+
+    def can_reach(self, v: Any) -> bool:
+        """Whether a template, or a static value, can call an opener: its body's module reaches one, or a static does."""
+        D = _imports()[2]
+        if isinstance(v, D.SpecializedDefinition):
+            return self.reaches(v.defn.body.__module__) or self.can_reach(list(v.bindings.values()))
+        if isinstance(v, D.CompositeDefinition):
+            return self.reaches(v.body.__module__)
+        if isinstance(v, (tuple, list)):
+            return any(self.can_reach(x) for x in v)
+        if isinstance(v, dict):
+            return any(self.can_reach(x) for x in v.values())
+        return callable(v) and isinstance(getattr(v, "__module__", None), str) and self.reaches(v.__module__)
 
 
 def _shape(v: Any, D: Any) -> str:
@@ -96,9 +168,11 @@ def walk(start: list[Any]) -> tuple[dict[str, list[tuple[int, Any]]], dict[str, 
     be opened, with why; and each body over 5 s to build.  Smallest binding first over the whole walk, one body per shape
     (an opener's none), each its own nodes alone (`by_calls.unlaid`), so no callee's body is built for it.  A traced
     template's (`boolean.trace`: its body is `trace.emit`'s, a body of primitive gates and of calls of traced templates) is
-    none either: it reaches no opener."""
+    none either: it reaches no opener; nor is one whose code reaches no opener's module (`Imports`), where its module
+    doesn't name an opener."""
     _BD, _T, D, BC = _imports()
     from verity.circuits.boolean import trace
+    imports = Imports()
     members: dict[str, list[tuple[int, Any]]] = {}
     callees: dict[str, set[str]] = {}
     undecided: dict[str, str] = {}
@@ -127,7 +201,7 @@ def walk(start: list[Any]) -> tuple[dict[str, list[tuple[int, Any]]], dict[str, 
         members.setdefault(k, []).append((size, fn))
         if k in callees or k in undecided:
             continue
-        if fn.base_id in OPENERS or fn.defn.body.__module__ == trace.__name__:
+        if fn.base_id in OPENERS or fn.defn.body.__module__ == trace.__name__ or not imports.can_reach(fn):
             callees[k] = set()
             continue
         t = time.monotonic()
@@ -141,6 +215,8 @@ def walk(start: list[Any]) -> tuple[dict[str, list[tuple[int, Any]]], dict[str, 
         callees[k] = {shape(c) for c in kids if isinstance(c, D.SpecializedDefinition)}
         for c in kids:
             push(c)
+    for mod in sorted(imports.mentions):
+        undecided[mod] = "its source names an opener, though its imports reach none: a lookup by name the walk can't follow"
     return members, callees, undecided, slow
 
 
@@ -394,6 +470,7 @@ def test_the_list_is_well_formed() -> None:
             parse(bad)
 
 
+@pytest.mark.slow
 def test_a_gated_read_and_an_ungated_one() -> None:
     D = _imports()[2]
     from verity.commitments.gates import embedding as E
