@@ -18,6 +18,7 @@ inputs = ["verity/lean_process.py", "verity/protocols/accounting/memory/pous/att
           "verity/hooks.py",
           "verity/commitments", "verity/commitments/crypto", "verity/commitments/randomness", "verity/channel.py", "verity/runtime", "tests/verity/tests/test_channel.py", "verity/config.py", "verity/party.py", "verity/protocol.py",
           "verity/protocols/accounting/memory/pous/attester/__init__.py",
+          "verity/protocols/accounting/memory/wipe/__init__.py", "verity/protocols/accounting/memory/wipe/attester/__init__.py",
           "verity/protocols/accounting/memory/pous/attester/challenger_party.py",
           "verity/protocols/accounting/memory/wipe/attester/wipe_challenger.py",
           "security/Definitions/Pous.lean", "security/Definitions/Pous", "security/Proofs/Pous",
