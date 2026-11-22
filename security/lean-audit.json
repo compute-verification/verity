@@ -27622,7 +27622,7 @@
     "∀ (w : Fin n), Real.instLE.le (Pouw.RelativeSecurity.prob fun x => (Cd.monitoringPeriodLayer hr hK pr).MovedIn x w) δbind": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "ResourceAccounting.SecurityProofs.Composition": {
-    "∀ (r : (i : Fin k) → Ω i), Set.instMembership.mem 𝓕 (S r)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (r : (i : Fin k) → Ω i), Set.instMembership.mem (𝓕 r) (S r)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (i : Fin k) (r r' : (i : Fin k) → Ω i), (∀ (j : Fin k), Ne j i → Eq (r j) (r' j)) → Eq ((S r).inputs (Set.instCompl.compl (Finset.instSetLike.coe (V i)))) ((S r').inputs (Set.instCompl.compl (Finset.instSetLike.coe (V i))))": "∀ taken inline, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "ResourceAccounting.SecurityProofs.ComputeOfPearlCPerRunPriced": {
