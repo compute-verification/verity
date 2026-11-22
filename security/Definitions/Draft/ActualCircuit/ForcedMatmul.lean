@@ -1,135 +1,153 @@
 module
 
-public import Definitions.Pouw.Assumptions.PouwWork
-public import Definitions.Pouw.Assumptions.PouwFloor
+public import Definitions.Pouw.PouwWork
+public import Definitions.Pouw.TS.Play
 public import Definitions.Draft.ActualCircuit.Epoch
-public import Mathlib.Analysis.SpecialFunctions.Log.Basic
 
 /-!
 # Forced matrix multiplication's statement (draft)
 
-Today's useful work (PoUW, Pearl+ among its schemes) on the actual circuit, over `ResourceAccounting.PouwWork`'s
-vocabulary: the verifier at `P.V` sends the epoch's challenges, reads back each block's word by the deadline and
-accepts by its rule (`Verdict`); the node is the location `X`, the epoch `[P.ts, P.td)`. The work is priced at `π` and a
-marking `m` of gates is left out, each a function of the actual circuit, so the set a statement names is a set of actual
-circuits. Pearl+ is one choice of `Verdict`'s words and targets; nothing here is specific to it.
+Today's useful work (PoUW) on the actual circuit, over `ResourceAccounting.PouwWork`'s vocabulary: the verifier at
+`P.V` holds the epoch's challenge, the words it heard and its verdict (`Verdict`); the node is the location `X`, the
+epoch `[P.ts, P.td)`. The served protocol is Pearl+'s, whose deployed target is `Verity.Vocab.PouwSound` in a composite
+that lists Pearl+'s id; that target is about the declared circuit's tiles at the credit its check published, and
+these statements are about the actual circuit. Pearl+ is one choice of `Verdict`'s words and targets; nothing here is
+specific to it.
 
-These statements are about the actual circuit; useful work's deployed guarantee
-(`Properties.Pouw.MonitoringPeriod.SecurityProofs.h1CheckedCreditMonitoringPeriod`) is about the declared circuit, with
-its tolerance counted once a monitoring period. They rest on the premises of
-`ResourceAccounting.Guarantees.PouwLocalOff` (A2, A2b and A3, the last an open conjecture), or on their pooled versions
-below, and they reach the deployed check only through `AcceptIsVerdict`, which ties the verifier's transcript to PoUW's
-rule.
+Every premise is stated a challenge at a time (`Definitions.Draft.ActualCircuit.Epoch`): the challenge, the words and
+the verdict are read from the verifier's view (`Readout`, `acceptsOn`, `goodOn`), the work from the one run
+(`PouwWork.credits`, `PouwWork.help`), and every event is guarded by the view holding the challenge it is indexed by
+(`HoldsChallenge`), since `Sound` ranges over strategies that ignore their index.
 
-* `forcedSet`: the actual circuits in which, if the node took in no help during the epoch, its own work outside the
-  marking is at least `W`.
-* `ForcedMatmulEpoch`: (a), one epoch, one set, one error: `forcedSet` at `W = Wb · Nmin`, error `δdet + δluck + δskip`.
-* `forcedDeficit`, `BudgetSound`, `TailSound`, `ForcedMatmulEpochPooled`: (b), one epoch with the pooling kept: the
-  node's shortfall below `Wb · N` meets an exponential-moment bound off a skip event, which gives a bound at every
-  tolerance at once, and whose epochs combine by multiplying (`Draft.ActualCircuit.PooledComposition`).
+* `PouwDetectionAt`: A2 a challenge at a time.
+* `PouwFloorAt`: a new form of A3, per challenge.
+* `ForcedMatmulEpoch`: (a), one epoch, one bound, one error.
+* `PouwDetectionBudgetAt`, `forcedGame`, `ForcedMatmulEpochPooled`: (b), one epoch with the pooling kept, as
+  `ResourceAccounting.TS.RoundGame.BudgetAt` of a one-round game read on actual runs, which
+  `Definitions.Draft.ActualCircuit.PooledEpochs` multiplies over a monitoring period.
 
-A5 (`ResourceAccounting.Assumptions.PouwHelpBound` at `0`, the node isolated) is a premise on one strategy in
-`PouwLocalOff`. Taken of every strategy it would say no strategy takes help, so it is inside the set instead: each set
-here says nothing of an actual circuit whose node took in help during the epoch.
+The bound on ingress the help term needs is network accounting's own statement, met by intersection; it is not stated
+here.
 -/
 
 @[expose] public section
 
 namespace Draft.ActualCircuit
 
-open ResourceAccounting ResourceAccounting.PouwWork
+open ResourceAccounting ResourceAccounting.PouwWork ResourceAccounting.TS Pouw.RelativeSecurity Finset
 
-variable {L : Type}
+variable {Ω : Type} {L : Type}
+
+/-- **PoUW's verdict read on the verifier's view**: the challenge the verifier holds (`chal`: it is at `V`, so in its
+view) and the words it heard (`heard`). New: `Verdict`'s rule and words read the strategy's challenge index and what
+crossed into `V`; these read them off the one run's view. -/
+structure Readout (Ω : Type) (L : Type) where
+  chal : VerifierView L → Ω
+  heard : VerifierView L → Inbox L
+
+/-- The verifier accepts on its view `v`: `P.accept` at the challenge it holds, on the words it heard. -/
+def acceptsOn (P : Verdict Ω L) (rd : Readout Ω L) (v : VerifierView L) : Prop :=
+  P.accept (rd.chal v) (rd.heard v)
 
 open Classical in
-/-- **The forced set**: the actual circuits in which, if the node `X` took in no help during the ticks `I` (no gate
-placed outside `X` and `V` is read by `X` or `V`, `Placed.ingress`), its own computed gates during `I`, the marking
-`m` left out, have work at least `W` at the pricing `π`. -/
-def forcedSet (V X : Finset L) (I : Set ℕ) (π : (A : Placed L) → Fin A.N → ℕ) (m : (A : Placed L) → Finset (Fin A.N))
-    (W : ℕ) : Set (Placed L) :=
-  {A | A.ingress (X ∪ V) I = 0 → W ≤ A.work (π A) (A.region X I \ m A)}
+/-- The blocks whose heard word is right at the challenge the view holds. -/
+noncomputable def goodOn (P : Verdict Ω L) (rd : Readout Ω L) (v : VerifierView L) : ℕ :=
+  ((range P.N).filter fun k => P.word (rd.heard v) k = P.target (rd.chal v) k).card
 
-/-- **The verifier's transcript decides PoUW's rule**: in every feasible run, at every challenge where the verifier at
-`P.V` accepts on its transcript by `acc`, PoUW's verdict accepts (`PouwWork.Accepts`, on the challenges and what
-crossed into `P.V`). New: `Sound` and `Composition` read acceptance on the transcript, `PouwWork` on the challenges and
-the messages in; this says that in a feasible run the verifier's leaves run its program and that program computes
-`P.accept`, the honest verifier of the trust base and a fact of the verifier's code. -/
-def AcceptIsVerdict {Ω : Type} (𝓕 : Set (Actual.Run L)) (P : Verdict Ω L) (acc : Transcript L → Prop) : Prop :=
-  ∀ (S : Ω → Actual.Run L) (r : Ω), S r ∈ 𝓕 → acc ((S r).view P.V) → Accepts S P r
+/-- **The view holds the challenge `r`**: at index `r`, the challenge the verifier at `V` holds in the run `S r` is `r`.
+Every per-challenge event is guarded by it: `Sound` also ranges over strategies whose runs ignore their index (a
+strategy constant at one run), and those are excused at every index but the one their view holds. -/
+def HoldsChallenge (rd : Readout Ω L) (V : Finset L) (S : Ω → Actual.Run L) (r : Ω) : Prop :=
+  rd.chal ((S r).view V) = r
 
-/-- **(a) Forced matrix multiplication in one epoch.** If the verifier accepts in the epoch `[P.ts, P.td)` then, except
-with probability `δdet + δluck + δskip` over its challenges, the actual circuit lies in `forcedSet` at `W = Wb · Nmin`:
-had the node taken in no help during the epoch, its own work outside the marking is at least `Wb · Nmin`. Premises:
-the transcript decides PoUW's rule (`AcceptIsVerdict`), and for every strategy A2 (`PouwDetection`), A2b (`PouwLuck`)
-and A3 (`PouwFloorOff`, an open conjecture), as in `ResourceAccounting.Guarantees.PouwLocalOff`, of which this is the
-statement over every strategy.
+/-- **A2 a challenge at a time.** For every strategy `Sound` reads, the verifier accepts on a view holding the
+challenge with fewer than `Nmin` heard words right at it with probability at most `δ`. New premise, open: the sample's
+detection bound, words and challenge read off the view. -/
+def PouwDetectionAt [Fintype Ω] [LinearOrder L] (𝓕 : Set (Actual.Run L)) (P : Verdict Ω L) (rd : Readout Ω L)
+    (Nmin : ℕ) (δ : ℝ) : Prop :=
+  Sound Ω 𝓕 P.V (acceptsOn P rd) (fun S r => HoldsChallenge rd P.V S r → Nmin ≤ goodOn P rd ((S r).view P.V)) δ
+
+/-- **A3, per challenge.** A new form of A3; whether the conjecture survives it is the compute-accounting and Lean
+leads' to say. For every strategy `Sound` reads, accepted or not, at all but a `δ` share of the challenges the view
+holds, `Wb` times the words heard right at that challenge is at most the node's credits outside the marking `m` at
+`π` during the epoch plus `ρ` a bit of help (`PouwWork.credits`, `PouwWork.help`). It is `PouwFloorOff` with the right
+words counted at the challenge rather than at every challenge, and linear in them. A strategy whose inputs hold the
+right words at every challenge makes it false unless the feasible set bounds the node's stored bits below that
+table. -/
+def PouwFloorAt [Fintype Ω] [LinearOrder L] (𝓕 : Set (Actual.Run L)) (P : Verdict Ω L) (rd : Readout Ω L)
+    (X : Finset L) (π : (A : Placed L) → Fin A.N → ℕ) (m : (A : Placed L) → Finset (Fin A.N)) (Wb ρ : ℕ) (δ : ℝ) :
+    Prop :=
+  Sound Ω 𝓕 P.V (fun _ => True)
+    (fun S r => HoldsChallenge rd P.V S r → Wb * goodOn P rd ((S r).view P.V) ≤
+      credits S P X (fun r => π (S r).A) (fun r => m (S r).A) r + ρ * help S P X r) δ
+
+/-- **(a) Forced matrix multiplication in one epoch.** If the verifier accepts in the epoch `[P.ts, P.td)` then,
+except with probability `δdet + δskip` over its challenges, at a view holding the challenge, the node's credits outside
+the marking plus `ρ` times the bits it took in during the epoch are at least `Wb · Nmin`. Premises: A2 and the new A3,
+each a challenge at a time.
 
 (a) fixes one tolerance, `Wb · (N − Nmin)`, before the epoch and pays its error in every epoch, so over a monitoring
 period of `n` epochs either the errors add `n` times or each epoch's tolerance is taken separately. It drops the shape
-of the shortfall's distribution, which (b) keeps so that the period's tolerance is paid once. -/
+of the shortfall's distribution, which (b) keeps so that the period's tolerance is paid once.
+
+Not vacuous because its conclusion fails for the verifier that accepts every view against the strategy that holds the
+challenge and computes and hears nothing (credits and ingress `0`, at `Wb · Nmin ≥ 1` and `δdet + δskip < 1`), where the
+premise that fails is `PouwDetectionAt`; `PouwDetectionAt` holds at `δdet = 0`, `Nmin = N` for the verifier that accepts
+only when every heard word is right at the challenge it holds, and I cannot name a verifier at which `PouwFloorAt` is
+proved: it is the conjecture. -/
 def ForcedMatmulEpoch : Prop :=
   ∀ (Ω : Type) [Fintype Ω] (L : Type) [LinearOrder L] (P : Verdict Ω L) (𝓕 : Set (Actual.Run L))
-    (acc : Transcript L → Prop) (X : Finset L) (π : (A : Placed L) → Fin A.N → ℕ)
-    (m : (A : Placed L) → Finset (Fin A.N)) (Wb Nmin ρ : ℕ) (δdet δluck δskip : ℝ),
-    AcceptIsVerdict 𝓕 P acc →
-    ForStrategies Ω 𝓕 P.V (fun S => Assumptions.PouwDetection S P Nmin δdet ∧ Assumptions.PouwLuck S P Nmin δluck ∧
-      Assumptions.PouwFloorOff S P X (fun r => π (S r).A) (fun r => m (S r).A) Wb Nmin ρ δskip) →
-    Sound Ω 𝓕 P.V acc (Lies P.V fun _ => forcedSet P.V X (Set.Ico P.ts P.td) π m (Wb * Nmin)) (δdet + δluck + δskip)
+    (rd : Readout Ω L) (X : Finset L) (π : (A : Placed L) → Fin A.N → ℕ)
+    (m : (A : Placed L) → Finset (Fin A.N)) (Wb Nmin ρ : ℕ) (δdet δskip : ℝ),
+    PouwDetectionAt 𝓕 P rd Nmin δdet → PouwFloorAt 𝓕 P rd X π m Wb ρ δskip →
+    Sound Ω 𝓕 P.V (acceptsOn P rd)
+      (fun S r => HoldsChallenge rd P.V S r →
+        Wb * Nmin ≤ credits S P X (fun r => π (S r).A) (fun r => m (S r).A) r + ρ * help S P X r)
+      (δdet + δskip)
 
-open Classical in
-/-- **The node's shortfall** below `W`: `W` less its own work during `I` outside the marking, at `π`, when it took in
-no help during `I`, and `0` when it took in help. -/
-noncomputable def forcedDeficit (V X : Finset L) (I : Set ℕ) (π : (A : Placed L) → Fin A.N → ℕ)
-    (m : (A : Placed L) → Finset (Fin A.N)) (W : ℕ) (A : Placed L) : ℝ :=
-  if A.ingress (X ∪ V) I = 0 then ((W - A.work (π A) (A.region X I \ m A) : ℕ) : ℝ) else 0
+/-- **The detection game** of a strategy: one round whose share is the words not heard right at the challenge the view
+holds and whose check is that the view holds the challenge and the verifier accepts. -/
+noncomputable def detectionGame (S : Ω → Actual.Run L) (P : Verdict Ω L) (rd : Readout Ω L) : RoundGame Ω 1 :=
+  .round (fun r => ((P.N - goodOn P rd ((S r).view P.V) : ℕ) : ℝ))
+    (fun r => HoldsChallenge rd P.V S r ∧ acceptsOn P rd ((S r).view P.V)) fun _ => .done
 
-open Classical in
-/-- **A2 and A2b, pooled**: the blocks not right at every challenge, `N − goodAll`, meet an exponential-moment bound at
-`Λ` blocks: `E[exp((N − goodAll)/Λ) · 1{accept}] ≤ 1` over the challenges. `goodAll` doesn't depend on the challenge,
-so this reads `Pr[accept] ≤ exp(−(N − goodAll)/Λ)`. New, open: the sample's detection bound at every number of wrong
-blocks at once (`ResourceAccounting.TS.RoundGame.BudgetAt`'s shape on PoUW's verdict); nothing proves it on the actual
-circuit today. -/
-noncomputable def PouwDetectionBudget {Ω : Type} [Fintype Ω] (S : Ω → Actual.Run L) (P : Verdict Ω L) (Λ : ℝ) : Prop :=
-  (∑ r, if Accepts S P r then Real.exp (((P.N - goodAll S P : ℕ) : ℝ) / Λ) else 0) ≤ Fintype.card Ω
+/-- **A2, pooled, a challenge at a time**: every strategy `Sound` reads has `Λ` bound its detection game
+(`RoundGame.BudgetAt`: `E[exp((N − good)/Λ) · 1{holds the challenge ∧ accept}] ≤ 1`), stated through `Sound` at error
+`0` with a guarantee that reads the strategy. New premise, open: the sample's detection bound at every number of wrong
+words at once. -/
+def PouwDetectionBudgetAt [Fintype Ω] [LinearOrder L] (𝓕 : Set (Actual.Run L)) (P : Verdict Ω L) (rd : Readout Ω L)
+    (Λ : ℝ) : Prop :=
+  Sound Ω 𝓕 P.V (fun _ => True) (fun S _ => RoundGame.BudgetAt Λ (detectionGame S P rd)) 0
 
-/-- **A3 at every count of right blocks, off one skip event**: some event `Z` of probability at most `δ` is such that
-at every challenge outside it the node's credits outside the marking, plus `ρ` a bit of help, are at least `Wb` per block
-right at every challenge. New, an open conjecture: `PouwFloorOff` at every `Nmin` with one `Z` for all of them. -/
-def PouwFloorLinear {Ω : Type} [Fintype Ω] (S : Ω → Actual.Run L) (P : Verdict Ω L) (X : Finset L)
-    (π : ∀ r, Fin (S r).A.N → ℕ) (m : ∀ r, Finset (Fin (S r).A.N)) (Wb ρ : ℕ) (δ : ℝ) : Prop :=
-  ∃ Z : Ω → Prop, Pouw.pr Z ≤ δ ∧ ∀ r, ¬ Z r → Wb * goodAll S P ≤ credits S P X π m r + ρ * help S P X r
+/-- **The forced game** of a strategy: one round whose share is the node's shortfall below `Wb · N`, credits plus `ρ`
+times help, and whose check is that the view holds the challenge, the verifier accepts and the new A3's inequality
+holds there (off the skip event). -/
+noncomputable def forcedGame (S : Ω → Actual.Run L) (P : Verdict Ω L) (rd : Readout Ω L) (X : Finset L)
+    (π : (A : Placed L) → Fin A.N → ℕ) (m : (A : Placed L) → Finset (Fin A.N)) (Wb ρ : ℕ) : RoundGame Ω 1 :=
+  .round
+    (fun r => ((Wb * P.N - (credits S P X (fun r => π (S r).A) (fun r => m (S r).A) r + ρ * help S P X r) : ℕ) : ℝ))
+    (fun r => HoldsChallenge rd P.V S r ∧ acceptsOn P rd ((S r).view P.V) ∧
+      Wb * goodOn P rd ((S r).view P.V) ≤
+        credits S P X (fun r => π (S r).A) (fun r => m (S r).A) r + ρ * help S P X r)
+    fun _ => .done
 
-open Classical in
-/-- **An exponential-moment bound, off a skip event**, for the verifier at `V` accepting by `acc`: for every strategy
-`Sound` reads, some event `Z` of probability at most `δ` is such that `E[exp(d/Λ) · 1{accept ∧ ¬Z}] ≤ 1` over the
-challenges, `d` the shortfall of the actual circuit at the transcript. `d ≥ 0` is the caller's. -/
-noncomputable def BudgetSound [LinearOrder L] (Ω : Type) [Fintype Ω] (𝓕 : Set (Actual.Run L)) (V : Finset L)
-    (acc : Transcript L → Prop) (d : Transcript L → Placed L → ℝ) (Λ δ : ℝ) : Prop :=
-  ForStrategies Ω 𝓕 V fun S => ∃ Z : Ω → Prop, Pouw.pr Z ≤ δ ∧
-    (∑ r, if acc ((S r).view V) ∧ ¬ Z r then Real.exp (d ((S r).view V) (S r).A / Λ) else 0) ≤ Fintype.card Ω
+/-- **(b) Forced matrix multiplication in one epoch, the pooling kept.** For every strategy `Sound` reads, `Wb · Λ`
+bounds its forced game (`RoundGame.BudgetAt`): off the new A3's skip event, of probability at most `δskip` by
+`PouwFloorAt`, `E[exp(shortfall/(Wb · Λ)) · 1{holds the challenge ∧ accept}] ≤ 1`. So at every tolerance at once,
+`Wb · Λ · t`, the epoch accepts with a larger shortfall with probability at most `δskip + exp(−t)` (Theorem S's tail,
+`ResourceAccounting.SecurityProofs.TS.budget_tail`, at the forced game), and over a monitoring period the epochs'
+bounds multiply and the period's tolerance is counted once (`PooledEpochs`). Premises: `Λ > 0`, A2 pooled and the new
+A3, each a challenge at a time.
 
-/-- **A bound at every tolerance at once**: for every `t`, if the verifier accepts then, except with probability
-`δ + exp(−t/Λ)`, the actual circuit's shortfall is below `t`. `BudgetSound` at `Λ > 0` gives it at every `t` (Markov's
-inequality on `exp(d/Λ)`); it alone does not give a bound on a sum of epochs' shortfalls at one `Λ`, which `BudgetSound` does. -/
-noncomputable def TailSound [LinearOrder L] (Ω : Type) [Fintype Ω] (𝓕 : Set (Actual.Run L)) (V : Finset L)
-    (acc : Transcript L → Prop) (d : Transcript L → Placed L → ℝ) (Λ δ : ℝ) : Prop :=
-  ∀ t : ℝ, Sound Ω 𝓕 V acc (Lies V fun τ => {A | d τ A < t}) (δ + Real.exp (-t / Λ))
-
-/-- **(b) Forced matrix multiplication in one epoch, the pooling kept.** If the verifier accepts in the epoch
-`[P.ts, P.td)` then, off a skip event of probability at most `δskip`, the node's shortfall below `Wb · N`
-(`forcedDeficit`, `0` when it took in help) has `E[exp(shortfall/(Wb · Λ)) · 1{accept ∧ ¬skip}] ≤ 1`
-(`BudgetSound`): so at every tolerance `t` at once, except with probability `δskip + exp(−t/(Wb · Λ))`, the shortfall
-is below `t` (`TailSound`), and over a monitoring period the epochs' bounds multiply, the skip events add, and the
-period's tolerance `Wb · Λ · ln(1/δ)` is counted once (`PooledComposition`). Premises: `Λ > 0`, the transcript decides
-PoUW's rule, and for every strategy A2 and A2b pooled (`PouwDetectionBudget`) and A3 at every count with one skip event
-(`PouwFloorLinear`). -/
+Not vacuous because its conclusion fails for the verifier that accepts every view against the strategy that holds the
+challenge and computes and hears nothing (shortfall `Wb · N ≥ 1` at every challenge, the new A3's inequality holding
+there with no word right, so `E[exp(shortfall/(Wb · Λ)) · 1{check}] = exp(N/Λ) > 1`), where the premise that fails is
+`PouwDetectionBudgetAt`; and I cannot name a verifier at which `PouwFloorAt` is proved. -/
 def ForcedMatmulEpochPooled : Prop :=
   ∀ (Ω : Type) [Fintype Ω] (L : Type) [LinearOrder L] (P : Verdict Ω L) (𝓕 : Set (Actual.Run L))
-    (acc : Transcript L → Prop) (X : Finset L) (π : (A : Placed L) → Fin A.N → ℕ)
+    (rd : Readout Ω L) (X : Finset L) (π : (A : Placed L) → Fin A.N → ℕ)
     (m : (A : Placed L) → Finset (Fin A.N)) (Wb ρ : ℕ) (Λ δskip : ℝ),
-    0 < Λ → AcceptIsVerdict 𝓕 P acc →
-    ForStrategies Ω 𝓕 P.V (fun S => PouwDetectionBudget S P Λ ∧
-      PouwFloorLinear S P X (fun r => π (S r).A) (fun r => m (S r).A) Wb ρ δskip) →
-    BudgetSound Ω 𝓕 P.V acc (fun _ => forcedDeficit P.V X (Set.Ico P.ts P.td) π m (Wb * P.N)) (Wb * Λ) δskip
+    0 < Λ → PouwDetectionBudgetAt 𝓕 P rd Λ → PouwFloorAt 𝓕 P rd X π m Wb ρ δskip →
+    Sound Ω 𝓕 P.V (fun _ => True) (fun S _ => RoundGame.BudgetAt (Wb * Λ) (forcedGame S P rd X π m Wb ρ)) 0
 
 end Draft.ActualCircuit
