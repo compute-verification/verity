@@ -98,8 +98,10 @@ def HashBudget (𝓕 : Set (Actual.Run L)) (A : Auditor L) (shaEvals : Actual.Ru
 /-- **Kind 2, the device and the verifier as written**, on the feasible runs: the verifier's leaves have no input
 gates; no gate reads the salt's cells before `ts` nor the sample's before `tc` (the challenge does not leave the device
 early, anywhere, the device's own gates included); and nothing the verifier's leaves place is read off the auditor
-before the deadline (Pearl+'s verifier sends nothing to the node). With lean's `AsWritten` at `Vv` this is soundness's
-N1 mend: what is heard is what crossed, the verifier holds nothing else, and the challenge leaves when it is sent. -/
+before the deadline (Pearl+'s verifier sends nothing to the node). The last clause is stronger than soundness's (4)
+(what crosses out of `Vv` before `t` is a function of the transcript before `t`), and Pearl+ meets it. With lean's
+`AsWritten` at `Vv` this is soundness's N1 mend: what is heard is what crossed, the verifier holds nothing else, and the
+challenge leaves when it is sent. That a message carries its sender, soundness's (2), is not in lean's `heard` yet. -/
 def DeviceAsWritten (𝓕 : Set (Actual.Run L)) (A : Auditor L) : Prop :=
   ∀ R ∈ 𝓕,
     (∀ g, R.A.x g ∈ A.Vv → R.A.isInput g = false) ∧
@@ -335,13 +337,8 @@ theorem late_not_heard (R : Actual.Run L) (V : Finset L) (d : ℕ) (h : ∀ g, R
   rw [List.map_eq_nil_iff]
   apply List.eq_nil_of_length_eq_zero
   rw [Finset.length_sort]
-  first
-    | (simp only [Finset.card_eq_zero, Finset.image_eq_empty, Finset.filter_eq_empty_iff]
-       rintro p - ⟨-, -, hx, ht⟩
-       exact absurd ht (not_lt.mpr (h p.1 hx)))
-    | (apply Finset.card_eq_zero.mpr
-       convert Finset.image_empty (fun p : Fin R.A.N × Fin R.A.N =>
-         toLex (R.A.t p.1, toLex (R.A.x p.1, Actual.position (R.seen p.2))))
-       exact Finset.filter_eq_empty_iff.mpr fun p _ hp => absurd hp.2.2.2 (not_lt.mpr (h p.1 hp.2.2.1)))
+  simp only [Finset.card_eq_zero, Finset.image_eq_empty, Finset.filter_eq_empty_iff]
+  rintro p - ⟨-, -, hx, ht⟩
+  exact absurd ht (not_lt.mpr (h p.1 hx))
 
 end Draft.PearlPlusUsefulWork
