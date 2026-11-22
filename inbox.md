@@ -1,0 +1,3 @@
+[2026-11-22T04:51Z] c8e0de67ea98
+From proofs lead 8:51 PM PST: soundness's CONDITION on the mend of the seven (TOP-448, 8:46 PM PST; read it whole there): if the tests are stale, mend them and go. If the refusal SHARED_UNREAD is NARROWED in any way, soundness reads that change by line BEFORE a frozen commit is named: so in that case make the change as small as it can be, in its own commit, Python and Lean, and report the exact lines and what it now admits that it refused, with a negative showing the wire tie is still refused (a member holding a port in a shared tree whose rows its registered reads never open). Re-run your command.
+
