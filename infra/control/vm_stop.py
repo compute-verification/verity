@@ -88,7 +88,12 @@ def vms(cfg: dict, machines_d: Path) -> list[dict]:
     out = []
     for e in cfg.get("vm", []):
         f = machines_d / f"{e['name']}.toml"
-        m = tomllib.loads(f.read_text()) if f.is_file() else {}
+        try:
+            m = tomllib.loads(f.read_text()) if f.is_file() else {}
+        except (OSError, ValueError) as err:   # one bad file must not stop the pass for every other machine
+            print(f"{e['name']}: {f} unread, so only the entry's own id, host and deadline count ({type(err).__name__}: {err})",
+                  flush=True)
+            m = {}
         dl = e.get("deadline") or m.get("deadline")
         out.append({"name": e["name"], "rules": list(e["rules"]), "id": e.get("id") or m.get("nebius_instance_id"),
                     "host": e.get("host") or m.get("host"), "user": e.get("user") or m.get("user", "research"),
