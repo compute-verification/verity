@@ -918,9 +918,16 @@ def verifier_reads(d: Design, window: CS.Binding, interior: Mapping[str, Any], b
             ports[p] = {"value": x.value, "root": e["root"], "leaves": int(e["leaves"]), "words": int(words),
                         "word_bits": RV.WORD_BITS, "domain": e["domain"], RV.SCHEMA_KEY: m.schema(p),
                         "reads": [s * x.per + a for s in range(q) for a in x.at], RV.READS_FROM: m.base}
-        out[m.key] = {"format": REG.READS_V2,
-                      "ports": {p: {k: v for k, v in e.items() if k not in ("reads", RV.READS_FROM)} for p, e in ports.items()}}
+        out[m.key] = position_free(ports)
     return out
+
+
+def position_free(ports: Mapping[str, Mapping[str, Any]]) -> dict[str, Any]:
+    """The position-free ``--registered`` file (`REG.READS_V2`, Flock's `Registered.FORMAT`) of ``{port: entry}``, each
+    entry without ``reads`` and ``reads_from``, which C gives: the sessions' files and their references' alike, as
+    round 2 holds the one to the other whole (``second-values``)."""
+    return {"format": REG.READS_V2,
+            "ports": {p: {k: v for k, v in e.items() if k not in ("reads", RV.READS_FROM)} for p, e in ports.items()}}
 
 
 def references(d: Design, q: int, out: Path, sample: Sequence[int] | None = None) -> dict[str, Any]:
@@ -955,9 +962,9 @@ def references(d: Design, q: int, out: Path, sample: Sequence[int] | None = None
         (at / "inst.bin").unlink()
         with open(at / "pub.bin", "rb") as f:
             header = json.loads(f.readline())
-        reads = LK.reads_file({p: {"value": linked.get((m.template, p), window.tree(m, p)), "words": int(words),
+        reads = position_free({p: {"value": linked.get((m.template, p), window.tree(m, p)), "words": int(words),
                                    "word_bits": RV.WORD_BITS, RV.SCHEMA_KEY: m.schema(p)}
-                               for p, words in m.all_rows}, registered=REG)
+                               for p, words in m.all_rows})
         read = read_record(template_fn(m.template), at / "circuit.txt", header["circuit_sha512"])
         named.append({"template": m.template, "circuit": header["circuit_sha512"], "header": header, "registered": reads,
                       **({} if read is None else {"read": read})})
@@ -1049,13 +1056,13 @@ def round_two_twin(replay: Program, key: str, sample: Sequence[int], window: CS.
     """Round 2's statement check by its Python twin (`second_stage.check_twin`), for tests only: the verdict of record is
     the Lean verifier's, inside the stream's run (`Run.run`), whose statement codes the outcome carries (``outcome``'s
     ``statements``) and the summary's ``round_two`` reads from it."""
-    return SS.check_twin(_round_two_own(replay, key, sample, window, irec, brec, drawn, record, proofs, tie),
+    return SS.check_twin(_round_two_own(replay, key, sample, window, irec, brec, drawn, record, proofs, tie, stmts),
                          stmts).to_json()
 
 
 def _round_two_own(replay: Program, key: str, sample: Sequence[int], window: CS.Binding, irec: Mapping[str, Any],
                    brec: Mapping[str, Any], drawn: Sequence[int], record: Mapping[str, Any], proofs: Mapping[str, Any],
-                   tie: Mapping[str, Any] | None) -> SS.Own:
+                   tie: Mapping[str, Any] | None, stmts: Sequence[Mapping[str, Any]] | None = None) -> SS.Own:
     """What round 2 holds of the run: over the links and wires the
     replay block ``replay`` defines under descriptor id ``key`` makes (`second_stage.replay_links`, at the boundary
     record's ports, and `second_stage.replay_wires`, as the stream derives them), their rows
@@ -1081,7 +1088,8 @@ def _round_two_own(replay: Program, key: str, sample: Sequence[int], window: CS.
                  fixed=(*(tie.get("pinned") or ()), *(tie.get("outputs") or ())), reads=S.template_reads(proofs),
                  tables=S.pinned_tables(proofs),
                  held=SS.held_of(P.program_digest(window.program), tie.get("window_root"), tie.get("held"),
-                                 tie.get("pinned"), tie.get("supplied"), tie.get("outputs")))
+                                 tie.get("pinned"), tie.get("supplied"), tie.get("outputs")),
+                 positions=SS.positions_of(window.program, window.query, stmts))
     return own
 
 
@@ -1136,7 +1144,7 @@ def second_stage(a: argparse.Namespace, sets: dict, window: CS.Binding, window_d
         stmts = statements(out / "audit", window)
         (out / "statements.json").write_text(json.dumps(stmts, indent=1, sort_keys=True))
         got["pins"] = pins(proofs, stmts)
-        own = _round_two_own(*replay, sample, window, irec, brec, units, record, proofs, tie)
+        own = _round_two_own(*replay, sample, window, irec, brec, units, record, proofs, tie, stmts)
         got["round_two_python"] = SS.check_twin(own, stmts).to_json()
         got["round_two_negatives"] = {name: SS.check_twin(own, tampered).ok is False
                                       for name, tampered in (("dropped", stmts[:-1]), ("none", None))}

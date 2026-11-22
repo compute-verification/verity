@@ -99,10 +99,14 @@ from __future__ import annotations
 
 import hashlib
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
+from verity.circuits import partition_object as PO
 from verity.circuits.codec import canonical_json, definitions
+from verity.circuits.cut import member_refs
+from verity.circuits.program import RUN, input_id
+from verity.circuits.refs import runs as ref_runs
 from verity.circuits.replay_links import (
     Link, Part, Rows, Run, Wire, _by_port, _by_template, _callers_of, _fields, _fits, _get, _outputs, _port_of,
     _return_links, link_runs, links_of, parts, replay_links, replay_rows, row_at, wire_runs,
@@ -331,6 +335,67 @@ class Pos:
     port: str
     rel: tuple[int | None, ...]
     first: int
+
+
+def _pos(program: Any, tp: Any, indices: Sequence[int], port: str, e: Any) -> Pos | None:
+    """`Flock.OneCircuit.pos` of registered-reads entry `e` at the statement's units `indices`, None where it refuses:
+    each unit's parameter (``param``, else `port`, ``name[r]`` its row ``r``) one row of one input node's leaves, the
+    same node for every unit, whose rows are the entry's ``leaves``."""
+    body, offs = program.root.body, list(program.root.body.offsets)
+    param = _get(e, "param") if isinstance(_get(e, "param"), str) and _get(e, "param") else port
+    name, _, row = param.partition("[")
+    value = _get(e, "value") if isinstance(_get(e, "value"), str) else ""
+    first, node, rel = min(indices), None, {}
+    for u in indices:
+        try:
+            k, m = tp.locate(u)
+        except IndexError:
+            return None
+        x = body.nodes[k]
+        names = [p for p, _t in x.fn.signature()[0]]
+        if name not in names:
+            return None
+        i = names.index(name)
+        refs = member_refs(x.args[i], x.axes[i] if x.form == "batch" else None, m)
+        n = len(refs)
+        if row:
+            if not (row.endswith("]") and row[:-1].isdigit()):
+                return None
+            cut, at = n // x.fn.signature()[0][i][1].n, int(row[:-1])
+            if at * cut >= n:
+                return None
+            refs, n = refs.slice(at * cut, (at + 1) * cut), cut
+        got = ref_runs(refs)
+        if len(got) != 1 or got[0][0] != "n" or n == 0 or got[0][2] % n:
+            return None
+        w, lo = got[0][1], got[0][2]
+        kind = input_id(getattr(body.nodes[w].fn, "id", ""))
+        if kind is None or (node is not None and node != w):
+            return None
+        if node is None:
+            fresh = f"input/n{w}"
+            if (kind[0] != RUN and value.startswith("input/")) or (kind[0] == RUN and value != fresh) \
+                    or (offs[w + 1] - offs[w]) // n != _get(e, "leaves"):
+                return None
+        node, rel[u] = w, lo // n
+    return Pos("", port, tuple(rel.get(u) for u in range(first, max(indices) + 1)), first)
+
+
+def positions_of(program: Any, query: Mapping[str, Any], statements: Sequence[Any] | None) -> tuple[Pos, ...]:
+    """`SecondStage.positionsOf`: for each port of each statement's registered reads, the rows C, the interior
+    `program` under `query`, gives its header's ``units.indices`` (`_pos`); a port C gives none has none, which round 2
+    refuses but at a link's output, read at round 1's rows (`_at_pos`)."""
+    tp, out = PO.TemplatePartition(program, query), []
+    for j in statements or ():
+        s = _stmt(j)
+        idx = _get(_get(s.header, "units") if s else None, "indices")
+        if s is None or not isinstance(idx, list) or not idx or not all(_nat(i) for i in idx):
+            continue
+        for port, e in _entries(_get(s.registered, "ports")):
+            p = _pos(program, tp, idx, port, e)
+            if p is not None:
+                out.append(replace(p, template=s.template))
+    return tuple(out)
 
 
 @dataclass(frozen=True)
