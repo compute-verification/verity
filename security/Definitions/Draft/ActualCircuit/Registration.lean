@@ -16,9 +16,10 @@ valid (`Verity.Registration.Valid`), a decision on registered information alone.
   which the lock lists as failing as stated at the present Site.
 * `RegistrationSet`: the statement in the shape every protocol's has. Its set is all actual circuits: registration by
   itself says nothing about what the hardware computed.
-* `RegistrationEgress`: the one property of the actual circuit that follows from it, under the physical premise that
-  every wire runs on a registered link within its rate: `ResourceAccounting.Guarantees.EgressRegistered` at the Site
-  registration folds (`Verity.Site.ofLog`). Its error is `0`, and its content is the premise's.
+* `RegistrationEgress`: the one property of the actual circuit that follows from it, every rated subtree's egress within
+  its registered boundary capacity, under the physical premise that every wire runs on a registered link within its
+  rate: `ResourceAccounting.Guarantees.EgressRegistered` at the Site registration folds (`Verity.Site.ofLog`). Its
+  error is `0`, and its content is the premise's.
 -/
 
 @[expose] public section
@@ -62,30 +63,33 @@ def RunsOnRegisteredLinks (reg : Registration) (β : Fin (Site.ofLog reg).links.
   ∀ R ∈ 𝓕, ∃ link : Fin R.A.N → Fin R.A.N → Fin (Site.ofLog reg).links.length,
     (R.A.onto (Site.ofLog reg).linkPlace).Links (Site.ofLog reg).placeEnds β link
 
-/-- **The egress set** of the subtree at `i` of the registered Site: the actual circuits whose egress from the subtree
-over every `[a, b)` is at most the registered capacity of the links with exactly one end in it times `b − a`. -/
-def egressSet (reg : Registration) (i : String) (β : Fin (Site.ofLog reg).links.length → ℕ) :
+/-- **The egress set** of the registered Site: the actual circuits in which every rated subtree, each subtree `i` whose
+boundary links are registered with rates (`Site.RatedOn`) and which holds each host whole (`Site.HostsWhole`, the
+condition `EgressRegistered` reads beside the rates), sends over every `[a, b)` at most the registered capacity of the
+links with exactly one end in it times `b − a`. -/
+def egressSet (reg : Registration) (β : Fin (Site.ofLog reg).links.length → ℕ) :
     Set (Placed (Site.ofLog reg).Place) :=
-  {A | ∀ a b : ℕ, A.egress ((Site.ofLog reg).placesIn ((Site.ofLog reg).under i)) (Set.Ico a b) ≤
-    linkCapacity (Site.ofLog reg).placeEnds β ((Site.ofLog reg).placesIn ((Site.ofLog reg).under i)) * (b - a)}
+  {A | ∀ i : String,
+    (Site.ofLog reg).RatedOn β
+        ↑(boundary (Site.ofLog reg).placeEnds ((Site.ofLog reg).placesIn ((Site.ofLog reg).under i))) →
+      (Site.ofLog reg).HostsWhole i →
+      ∀ a b : ℕ, A.egress ((Site.ofLog reg).placesIn ((Site.ofLog reg).under i)) (Set.Ico a b) ≤
+        linkCapacity (Site.ofLog reg).placeEnds β ((Site.ofLog reg).placesIn ((Site.ofLog reg).under i)) * (b - a)}
 
-/-- **The property of the actual circuit that follows from registration.** If the verifier accepts (the registration
-is valid) then, except with probability `0`, the actual circuit lies in the egress set of the subtree at `i`
-(`egressSet`), given that each link across the subtree's boundary is registered with a rate (`Site.RatedOn`), that the
-subtree holds each host whole (`Site.HostsWhole`), and that every wire of every feasible run runs on a registered link
-within its rate (`RunsOnRegisteredLinks`). The acceptance does no work: `EgressRegistered` takes no validity
-hypothesis, so this holds at any acceptance, the registered Site being only where the premises are read. Not vacuous
-because: I cannot name a strategy and verifier at which its premises hold and its conclusion fails, since it is
-`EgressRegistered`, a theorem; its premises hold at a Site with one host and one rated uplink, and its content is
+/-- **The property of the actual circuit that follows from registration.** If the registration is valid then, at error
+`0`, the actual circuit is in the set of circuits whose every rated subtree's egress over an interval is at most its
+registered boundary capacity times the interval (`egressSet`). What is missing is `Placed.Links` at the registered
+Site's links made the feasible set: today `EgressRegistered` takes no validity hypothesis, so here it is the premise
+`RunsOnRegisteredLinks` on the feasible set, and the acceptance does no work. Not vacuous because: I cannot name a
+strategy and verifier at which its premises hold and its conclusion fails, since it is `EgressRegistered` at each
+subtree, a theorem; its premise holds at a Site with one host and one rated uplink, and its content is
 `RunsOnRegisteredLinks`, without which the conclusion fails for a feasible set holding a run that sends the outside a
 word wider than the uplink's rate in one tick. -/
 def RegistrationEgress : Prop :=
   ∀ (D : Registration.Digests) (A : Registration.Auditor) (c : Registration.Composite) (reg : Registration)
-    (i : String) (β : Fin (Site.ofLog reg).links.length → ℕ) (Ω : Type) [Fintype Ω]
+    (β : Fin (Site.ofLog reg).links.length → ℕ) (Ω : Type) [Fintype Ω]
     (𝓕 : Set (Actual.Run (Site.ofLog reg).Place)) (V : Finset (Site.ofLog reg).Place),
-    (Site.ofLog reg).RatedOn β
-        ↑(boundary (Site.ofLog reg).placeEnds ((Site.ofLog reg).placesIn ((Site.ofLog reg).under i))) →
-      (Site.ofLog reg).HostsWhole i → RunsOnRegisteredLinks reg β 𝓕 →
-      Sound Ω 𝓕 V (fun _ => Registration.Valid D A c reg) (Lies V fun _ => egressSet reg i β) 0
+    RunsOnRegisteredLinks reg β 𝓕 →
+      Sound Ω 𝓕 V (fun _ => Registration.Valid D A c reg) (Lies V fun _ => egressSet reg β) 0
 
 end Draft.ActualCircuit
