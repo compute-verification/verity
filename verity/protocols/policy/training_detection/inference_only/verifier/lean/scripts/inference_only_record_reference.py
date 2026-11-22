@@ -530,17 +530,12 @@ class Inputs:
         for i, w in enumerate(wires):
             put(w["reader"], w["port"], ((u, r) for u, r, _ in entries(w)), ("wire", i))
         reg = rec.get("registered", {"params": {}, "tables": [], "reads": [], "roots": [], "openings": []})
-        if not (isinstance(reg, dict) and REGISTERED <= set(reg) <= REGISTERED | {"values", "formats", "histories", "run"}
+        if not (isinstance(reg, dict) and REGISTERED <= set(reg) <= REGISTERED | {"values", "formats", "histories"}
                 and isinstance(reg["params"], dict) and all(_nat(v) and v >= 1 for v in reg["params"].values())
                 and isinstance(reg["reads"], list)):
             raise Malformed("inputs")
         histories = histories_of(reg)
         self.params = reg["params"]
-        run = reg.get("run", [])
-        if not (isinstance(run, list) and all(isinstance(v, str) and v in self.params for v in run)
-                and len(set(run)) == len(run)):
-            raise Malformed("inputs")
-        self.run = frozenset(run)
         self.tables: dict[str, dict] = {}
         for t in _objects(reg["tables"], TABLE):
             if not (isinstance(t["name"], str) and isinstance(t["param"], str) and t["name"] not in self.tables
@@ -775,7 +770,7 @@ def expand(inst, tr, form_only: bool = False) -> dict:
     slots, slot = slots_of(templates, rec)
     by = {t.tid: t for t in templates}
     inside = [all(slot[w["reader"]][u] == slot[w["writer"]][v] for u, _, v in entries(w)) for w in wires]
-    thetas = {p: theta(T, x.params, p, width_of(rec, p)) and p not in x.run for p in x.params}
+    thetas = {p: theta(T, x.params, p, width_of(rec, p)) for p in x.params}
 
     def is_theta(p: str) -> bool:
         """Whether `p` is a registered parameter that is θ: a history table's parameter, its own name, is none."""

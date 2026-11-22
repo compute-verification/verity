@@ -285,27 +285,11 @@ def NO_REGISTERED : Json :=
   Json.mkObj [("params", Json.mkObj []), ("tables", Json.arr #[]), ("reads", Json.arr #[]), ("roots", Json.arr #[]),
     ("openings", Json.arr #[])]
 
-/-- The keys `registered` may hold beside the five of `REGISTERED`. -/
-def REGISTERED_MORE : List String := ["values", "histories", "formats", "run"]
-
-/-- Whether `reg` is an object of `registered`'s keys: the five of `REGISTERED`, and any of `REGISTERED_MORE` beside
-them. -/
+/-- Whether `reg` is an object of `registered`'s keys: the five of `REGISTERED`, and any of `values`, `histories` and
+`formats` beside them. -/
 def registeredKeys (reg : Json) : Bool :=
-  (List.range (2 ^ REGISTERED_MORE.length)).any fun m =>
-    keyed reg (((List.range REGISTERED_MORE.length).filterMap fun i =>
-      if (m >>> i) % 2 == 1 then REGISTERED_MORE[i]? else none) ++ REGISTERED)
-
-/-- The registered parameters the text binds for each run, its `registered.run`: none where it states none, and none
-of them θ (`Record.isTheta`): C reads each from a run input node, never a value of the registration. -/
-def runOf (doc : Json) : List String :=
-  match valueAt (valueAt doc "registered") "run" with
-  | .arr a => a.toList.filterMap (·.getStr?.toOption)
-  | _ => []
-
-#guard registeredKeys (Json.mkObj ((REGISTERED ++ ["formats", "run"]).map (·, Json.arr #[])))
-#guard !registeredKeys (Json.mkObj ((REGISTERED ++ ["run", "supplied"]).map (·, Json.arr #[])))
-#guard runOf (Json.mkObj [("registered", Json.mkObj [("run", Json.arr #[Json.str "s"])])]) == ["s"]
-#guard runOf (Json.mkObj [("registered", Json.mkObj [])]) == []
+  [[], ["values"], ["histories"], ["formats"], ["values", "histories"], ["values", "formats"], ["histories", "formats"],
+    ["values", "histories", "formats"]].any fun more => keyed reg (more ++ REGISTERED)
 
 /-- The text's row formats, its `registered.formats`: `null` where it states none. -/
 def formatsOf (doc : Json) : Json := valueAt (valueAt doc "registered") "formats"
@@ -361,7 +345,6 @@ It reads `W`'s cuts and wires and nothing else of it: no template of its own and
 * `registered.params`, `{name: leaves}`, at least one leaf each;
 * `registered.tables`, `{name, param, offset, words, rows}`: `rows` rows of `words` leaves from leaf `offset` of a
   registered parameter, within it; names distinct;
-* `registered.run` (`runOf`), where it is stated: distinct registered parameters' names, bound for each run;
 * `registered.formats` (`formatsOk`), where it is stated: `{param: {row_schema, word_bits}}`, each of a registered
   parameter no table lies in, the schema `hm96-sha512/row/v2` or `hm96-sha512/row-seg/v1`, the width 16 or 32, not the
   default (`hm96-sha512/row/v2` at 16), and the parameter's 16-bit leaves whole leaves of the width. The width is the
@@ -390,14 +373,6 @@ def inputsOf (ts : List Tmpl) (W : Spot.Wires.Wiring) (doc : Json) : Except Stri
   let params ← pkv.toArray.toList.mapM fun (p, v) => match nat? v with
     | some n => if n ≥ 1 then pure (p, n) else throw "inputs"
     | none => throw "inputs"
-  match (reg.getObjVal? "run").toOption with
-  | none => pure ()
-  | some (.arr a) =>
-    let run ← a.toList.mapM fun v => match v with
-      | .str s => if params.any (·.1 == s) then pure s else throw "inputs"
-      | _ => throw "inputs"
-    if run.eraseDups.length != run.length then throw "inputs"
-  | some _ => throw "inputs"
   let mut decls : Array Decl :=
     (W.wires.zipIdx.map fun (w, i) => { w, bits := 16 * rowWords ts W w, fill := .wire i }).toArray
   let .arr tablesJ := valueAt reg "tables" | throw "inputs"
