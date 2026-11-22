@@ -262,10 +262,11 @@ def marked_inputs(program: Program) -> list[str]:
 
 
 def weights_held(program: Program, query: Mapping[str, Any], registered: Iterable[str],
-                 of_record: tuple[bytes, str] | None, held: Iterable[str] = ()
+                 of_record: tuple[bytes, str] | None, held: Iterable[str] = (), linked: Iterable[str] = ()
                  ) -> tuple[list[tuple[str, Any]], dict[str, dict[str, Any]]]:
     """R8's hold on the program's registered inputs (the parameters it binds at registration): each must be pinned by
-    the weights' registration of record or one whose root the verifier itself holds (``held``, `held_entries`); that
+    the weights' registration of record or one whose root the verifier itself holds (``held``, `held_entries`, or
+    round 1's record for a value a link names, ``linked``, `second_stage.round_one_held`); that
     the verifier expects it registered by name excuses nothing, since R7 holds such a value's root only where it is held. `of_record`: the registration's bytes and the SHA-512 the auditor's side holds for it, None
     where it hands none; a pin's domain is its own program's (`_of_record`). A registered input neither pins nor expects
     that any template parameter reads is refused by name, at one reader as at several (`R8-unpinned`): nothing fixes
@@ -281,7 +282,7 @@ def weights_held(program: Program, query: Mapping[str, Any], registered: Iterabl
     out, pins = _of_record(of_record) if of_record is not None else ([], {})
     if out and out[0][0] in ("R8-weights-digest", "R8-weights-form"):
         return out, {}
-    held = set(held)
+    held = set(held) | set(linked)
     shape = []
     for v in marked:
         if v not in pins:
@@ -459,7 +460,8 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], sa
           verdicts: Mapping[str, bool] | None = None,
           coins: Mapping[str, str] | None = None, released: Mapping[str, int] | None = None,
           commitments: Mapping[str, str] | None = None, attester_keys: Sequence[str] = (),
-          weights_of_record: tuple[bytes, str] | None = None) -> Verdict:
+          weights_of_record: tuple[bytes, str] | None = None,
+          linked: Sequence[Mapping[str, Any]] = ()) -> Verdict:
     """R1-R8 against the verifier's own copies: its program and query, its sampling design and scheme, the ports its layout derives
     (`{port: {"leaves", "domain"}}`), the digest of its copy of the leaf layer, its anchors, its log of this prover's
     earlier records, the parameters it expects registered (`registered`: `{parameter: words}`), of those the ones it
@@ -554,7 +556,7 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], sa
     fan, shared, through, bad = _readers(program, query, registered or {}, held or (), tied or ())
     weights, _accepted = weights_held(program, query, registered or {}, weights_of_record,
                                       held_entries(program, registered or {}, formats, window_root, held, sup, pins,
-                                                   outs, log))
+                                                   outs, log), [x["value"] for x in linked])
     keys = _KEYS | {"registered"} if v2 else _KEYS
     if not isinstance(rec, Mapping) or set(rec) != keys:
         c.fail("keys", sorted(set(rec) ^ keys) if isinstance(rec, Mapping) else rec)
@@ -1313,13 +1315,22 @@ def field_tree_name(v: str) -> bool:
 
 
 def registered_trees_held(rec: Mapping[str, Any], who: str, registered: Mapping[str, Any] | None,
-                          tmpl: str | None = None) -> str | None:
+                          tmpl: str | None = None, linked: Sequence[Mapping[str, Any]] = ()) -> str | None:
     """`OneStageZkStatement.registeredTreesHeld`'s refusal, none where it holds: each port of the registered file of
     ``who`` that opens a committed tree (`portTreeHeld`'s `treePortOf`) held to the record's root, domain and leaf
-    count at that tree's port, at the member's template ``tmpl`` (none for the one statement)."""
+    count at that tree's port, at the member's template ``tmpl`` (none for the one statement); a port of ``tmpl`` a
+    link names (``linked``, `second_stage.round_one_held`) opens the link's value alone, held to round 1's entry of it
+    (`LINKED_TREE_WHY`)."""
     by = {r["port"]: r for r in rec.get("roots", []) if isinstance(r.get("port"), str)}
     for name, e in sorted(((registered or {}).get("ports") or {}).items()):
         v = e.get("value", "")
+        if (link := next((x for x in linked if tmpl is not None and x["template"] == tmpl and x["port"] == name),
+                         None)) is not None:
+            if v != link["value"]:
+                return linked_tree_why(who, name, link["value"])
+            if (why := _held_to(who, name, link["value"], e, link["entry"])) is not None:
+                return why
+            continue
         if not v.startswith(COMMITTED) and field_tree_name(v) and (tmpl is None or f"{tmpl}/{name}" != v):
             return (f"registered: {who}'s port {name}: the field tree it opens is neither its own output's nor one C "
                     "wires into it at this row")
@@ -1329,12 +1340,26 @@ def registered_trees_held(rec: Mapping[str, Any], who: str, registered: Mapping[
         if (r := by.get(t)) is None:
             return (f"registered: {who}'s port {name} opens the committed tree {t}, and the registration holds no root "
                     f"{t}: a committed tree a statement opens is one its window registered before any coin")
-        for what, k in (("root", "root"), ("domain", "domain"), ("leaf count", "leaves")):
-            mine = e.get(k).lower() if k != "leaves" else e.get(k)
-            if r.get(k) != mine:
-                return (f"registered: {who}'s port {name} opens the committed tree {t} at another {what} than the "
-                        "registration's: a statement opens its window's registered tree, never another window's or "
-                        "another member's")
+        if (why := _held_to(who, name, t, e, r)) is not None:
+            return why
+    return None
+
+
+def linked_tree_why(who: str, port: str, value: str) -> str:
+    """`OneStageZkStatement.LINKED_TREE_WHY`."""
+    return (f"registered: {who}'s port {port}: a link names it to read round 1's {value}, and it opens another tree: a "
+            "linked port is read only at round 1's tree, and the second stage commits no tree of its own for it")
+
+
+def _held_to(who: str, name: str, t: str, e: Mapping[str, Any], r: Mapping[str, Any]) -> str | None:
+    """`OneStageZkStatement.heldTo`: port ``name``'s entry ``e``, opening tree ``t``, at ``r``'s root, domain and leaf
+    count, else `TREE_OTHER`'s refusal."""
+    for what, k in (("root", "root"), ("domain", "domain"), ("leaf count", "leaves")):
+        mine = e.get(k).lower() if k != "leaves" else e.get(k)
+        if r.get(k) != mine:
+            return (f"registered: {who}'s port {name} opens the committed tree {t} at another {what} than the "
+                    "registration's: a statement opens its window's registered tree, never another window's or "
+                    "another member's")
     return None
 
 

@@ -212,6 +212,15 @@ def Pool.spentBefore (p : Pool) (log : Array Json) : Bool :=
       jeq (getD (getD e "window") "pool_week") (Lean.toJson p.week)
   | none => false
 
+/-- A port a link of the second stage names: template `template`'s port `port` reads `value`, a port of round 1's
+record, whose `entry` there (its root, domain and leaves) is the record's as the challenger logged it. -/
+structure Linked where
+  template : String
+  port : String
+  value : String
+  entry : Json
+  deriving Inhabited
+
 /-- The verifier's own copies that R1–R8 hold the record to. -/
 structure Verifier where
   program : Program
@@ -282,6 +291,10 @@ structure Verifier where
   weightsOfRecord : Option (ByteArray × String) := none
   /-- C's supplied marks (`Supplied.marks`), by input, which R7 holds each anchor of to a pin (`anchorUnpinned`) -/
   marks : Array (String × Supplied.Mark) := #[]
+  /-- the second stage's linked ports (`SecondStage.roundOneHeld`), each held to round 1's record: R8 counts each
+  value held (`weightsHeld`), R7 expects nothing for it, and a member's registered port a link names opens round 1's
+  tree alone (`OneStageZk.portTreeHeld`); none outside a second stage -/
+  linked : Array Linked := #[]
 
 /-- Whether the verifier expects a v2 record: it expects values registered or holds certified entries. -/
 def Verifier.v2 (v : Verifier) : Bool := !(v.registered.isEmpty && v.certified.isEmpty)
@@ -448,7 +461,7 @@ def heldEntries (v : Verifier) : Array (Registered.Entry × String) :=
 registration of record's (`pinsOf`), `R8-weights-shape` for a pinned registered input whose shape isn't its pin's, then
 `R8-weights-query` for a registered input or a registration of record under a query that is no template query that
 applies; else `R8-unpinned` for a registered input neither pinned nor one whose root the verifier itself holds
-(`heldEntries`) that a template parameter reads (`Partition.inputReads`), at one reader as at several: that the verifier
+(`heldEntries`, or round 1's record for a value a link names, `Verifier.linked`) that a template parameter reads (`Partition.inputReads`), at one reader as at several: that the verifier
 expects it registered by name excuses nothing. Then the accepted pins, each an excused input (marked, pinned and
 shaped) as an entry and its root, which the members' check holds each member's registered read of it to
 (`OneTree.pinsHeld`). None for a verifier with no registration of record and no registered input. -/
@@ -458,7 +471,7 @@ def weightsHeld (v : Verifier) (codes : Array String) (pins : Array Pin) :
   let marks := v.params.filter (marked v)
   let pinned := marks.filterMap fun p => (pins.find? (·.value == p.name)).map (p, ·)
   let codes := if pinned.all fun (p, x) => pinShaped v p x then codes else codes.push "R8-weights-shape"
-  let held := (heldEntries v).map (·.1.value)
+  let held := (heldEntries v).map (·.1.value) ++ v.linked.map (·.value)
   match Partition.templateRanges? v.program v.query with
   | none => (if v.weightsOfRecord.isSome || !marks.isEmpty then codes.push "R8-weights-query" else codes, #[])
   | some rs =>

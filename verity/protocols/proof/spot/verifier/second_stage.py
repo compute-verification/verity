@@ -420,6 +420,14 @@ def _stmt(j: Any) -> Stmt | None:
     return None
 
 
+def round_one_held(links: Sequence[Link], boundary: Any) -> list[dict[str, Any]]:
+    """`SecondStage.roundOneHeld`: each link whose value round 1's record `boundary` holds, with that record's entry of
+    it, as `Docket.Linked`'s JSON."""
+    ports = _by_port(boundary)
+    return [{"template": l.template, "port": l.port, "value": l.value, "entry": dict(ports[l.value])}
+            for l in links if l.value in ports]
+
+
 def replay_returns(program: Any, key: str, rec: Any) -> tuple[str, ...]:
     """`SecondStage.replayReturns`: the names the return of the replay block `program` defines under descriptor id `key`
     has in the boundary docket, as record `rec` names its ports: its output ports ``o<j>``, one per field of what

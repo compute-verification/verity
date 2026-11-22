@@ -2220,9 +2220,11 @@ class Stream:
                 v = _refuse("interior-window", {"window_root": window_root, "boundary": boundary}).verdict
             if v.ok and program is not None:
                 earlier = self._earlier(record, supplied, outputs)
+                linked = SS.round_one_held(SS.replay_links(entry.program, descriptor_id(self.replay),
+                                                           first.docket.record) or (), first.docket.record)
                 v = V.check(record, program, query, {"law": "subset", "k": m}, SCHEME, ports, leaf_layer, anchors,
                             earlier, partition, None, registered, supplied, pinned, self.binding, schemas, window_root, held,
-                            outputs=outputs, seed_salt=seed_salt, history=history)
+                            outputs=outputs, seed_salt=seed_salt, history=history, linked=linked)
                 if v.ok and not P.in_order(program, query, m):
                     v = _refuse("population-order", {"population": m}).verdict
                 tables = {} if history is None or not v.ok else HT.roots_of(leaf_layer, history)

@@ -768,12 +768,15 @@ def _own_fields(ft: Mapping[str, Sequence[tuple[str, Mapping[str, Any]]]], name:
 
 
 def _tree_ports_held(ms: Mapping[str, Any], record: Mapping[str, Any],
-                     wired: Mapping[str, set[tuple[str, str]]] | None = None) -> None:
+                     wired: Mapping[str, set[tuple[str, str]]] | None = None,
+                     linked: Sequence[Mapping[str, Any]] = ()) -> None:
     """`OneStageZk.treePortsHeldAt`: every port of a member's registered file that opens a committed tree, a value
     ``committed/<port>``, a run input node's ``input/n<w>`` or a field tree's name, is the record's root of it, its
     root, domain and leaf count (`OneStageZk.portTreeHeld`); a port whose value is a field tree's name is opened only
     as the member's own output, ``<template>/<port>``, or at a reader row ``wired`` holds for the member at that tree
-    (`_wired_rows`), and any other refuses first (`wired_tree_why`)."""
+    (`_wired_rows`), and any other refuses first (`wired_tree_why`). A port of the member's template a link names
+    (``linked``, `second_stage.round_one_held`) opens the link's value alone, held to round 1's entry of it in the place
+    of the record's, and any other tree refuses (`linked_tree_why`)."""
     roots = record.get("roots")
     by_port = {r["port"]: r for r in (roots if isinstance(roots, list) else ())
                if isinstance(r, dict) and type(r.get("port")) is str}
@@ -783,14 +786,17 @@ def _tree_ports_held(ms: Mapping[str, Any], record: Mapping[str, Any],
         for port in sorted(reg["ports"]) if reg is not None else ():
             e = reg["ports"][port]
             value = e["value"]
+            link = next((x for x in linked if tmpl is not None and x["template"] == tmpl[0] and x["port"] == port), None)
+            if link is not None and value != link["value"]:
+                raise _Refused(DK.linked_tree_why(f"member {name}", port, link["value"]))
             field = not value.startswith(COMMITTED) and field_tree_name(value)
-            if field and (tmpl is None or f"{tmpl[0]}/{port}" != value) and (port, value) not in mine:
+            if link is None and field and (tmpl is None or f"{tmpl[0]}/{port}" != value) and (port, value) not in mine:
                 raise _Refused(wired_tree_why(name, port))
-            t = value[len(COMMITTED):] if value.startswith(COMMITTED) else value if G.is_fresh_value(value) or field \
-                else None
+            t = value if link is not None else value[len(COMMITTED):] if value.startswith(COMMITTED) else value \
+                if G.is_fresh_value(value) or field else None
             if t is None:
                 continue
-            r = by_port.get(t)
+            r = link["entry"] if link is not None else by_port.get(t)
             if r is None:
                 raise _Refused(f"registered: member {name}'s port {port} opens the committed tree {t}, and the "
                                f"registration holds no root {t}: a committed tree a statement opens is one its window "
@@ -1560,7 +1566,8 @@ def _members_run(params: Mapping[str, Any], record: Mapping[str, Any], evidence:
                 raise _Refused(strata_design(_kind(record.get("law") if subset_design(mine) else mine)))
         _laid(ms, record)
         _class(ms)
-        _tree_ports_held(ms, record, _wired_rows(program, params["query"], params["program"], ms))
+        _tree_ports_held(ms, record, _wired_rows(program, params["query"], params["program"], ms),
+                         params.get("linked") or ())
         rp = read_pins(params, program)
         pins_held(ms, EG._Root(params["program"]), P._template(program, params["query"], "the members' partition").ranges,
                   program, DK.marked_gates(program), rp)

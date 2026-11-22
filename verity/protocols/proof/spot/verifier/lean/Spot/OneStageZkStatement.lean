@@ -575,15 +575,35 @@ def TREE_OTHER (who port tree what : String) : String :=
   s!"registered: {who}'s port {port} opens the committed tree {tree} at another {what} than the registration's: " ++
     "a statement opens its window's registered tree, never another window's or another member's"
 
+/-- The refusal of member `who`'s registered port `port`, which a link names to read round 1's `value`, opening
+another tree: its own output's, a tree of its own, or another port of round 1's record. -/
+def LINKED_TREE_WHY (who port value : String) : String :=
+  s!"registered: {who}'s port {port}: a link names it to read round 1's {value}, and it opens another tree: a " ++
+    "linked port is read only at round 1's tree, and the second stage commits no tree of its own for it"
+
+/-- Registered port `q` of `who`, opening tree `t`, held to entry `e`: its root, domain and leaf count are `e`'s,
+refused by name (`TREE_OTHER`). -/
+def heldTo (who : String) (q : Flock.Registered.Port) (t : String) (e : Json) : V Unit :=
+  if getD e "root" != .str (Flock.hexOf q.root) then throw (TREE_OTHER who q.name t "root")
+  else if getD e "domain" != .str (Flock.hexOf q.domain) then throw (TREE_OTHER who q.name t "domain")
+  else if nat? (getD e "leaves") != some q.leaves then throw (TREE_OTHER who q.name t "leaf count")
+  else pure ()
+
 /-- A registered port `q` of `who` that opens a committed tree (`treePortOf`) held to the record's root at that
 tree's port among `byPort` (`rootsByPort`): its root, domain and leaf count are the record's, refused by name
 (`TREE_UNHELD`, `TREE_OTHER`). The domain binds the window, so a tree of another window refuses. A port whose value
 is a field tree's name is opened only as the member's own output, `<tmpl>/<port>` for the member's template `tmpl`,
 whose rows `Flock.Registered.outReads` reads at the leaves C gives, or at a reader row `wired` holds at that tree,
 `(row, <writer>/o<j>)` for each wire C states into the member (`fieldRoots`), whose rows
-`Flock.Registered.treeReads` reads at the writer's leaves C gives; any other refuses first (`WIRED_TREE_WHY`). -/
+`Flock.Registered.treeReads` reads at the writer's leaves C gives; any other refuses first (`WIRED_TREE_WHY`).
+The second source of admitted pairs is `linked` (`SecondStage.roundOneHeld`): a port of the member's template that
+a link names opens the link's value alone, held to round 1's record's entry of it in the place of the window's
+(`TREE_OTHER`); any other tree, its own output's among them, refuses (`LINKED_TREE_WHY`). -/
 def portTreeHeld (byPort : Std.HashMap String Json) (who : String) (tmpl : Option String)
-    (wired : Array (String × String)) (q : Flock.Registered.Port) : V Unit :=
+    (wired : Array (String × String)) (linked : Array Docket.Linked) (q : Flock.Registered.Port) : V Unit :=
+  match tmpl.bind fun t => linked.find? fun l => l.template == t && l.port == q.name with
+  | some l => if q.value != l.value then throw (LINKED_TREE_WHY who q.name l.value) else heldTo who q l.value l.entry
+  | none =>
   if !q.value.startsWith COMMITTED && fieldTreeName q.value && tmpl.all (s!"{·}/{q.name}" != q.value) &&
       !wired.contains (q.name, q.value) then
     throw (WIRED_TREE_WHY who q.name) else
@@ -592,22 +612,20 @@ def portTreeHeld (byPort : Std.HashMap String Json) (who : String) (tmpl : Optio
   | some t =>
     match byPort.get? t with
     | none => throw (TREE_UNHELD who q.name t)
-    | some e =>
-      if getD e "root" != .str (Flock.hexOf q.root) then throw (TREE_OTHER who q.name t "root")
-      else if getD e "domain" != .str (Flock.hexOf q.domain) then throw (TREE_OTHER who q.name t "domain")
-      else if nat? (getD e "leaves") != some q.leaves then throw (TREE_OTHER who q.name t "leaf count")
-      else pure ()
+    | some e => heldTo who q t e
 
 /-- **A registered file's committed trees are its window's**: every port of the registered file `j` of `who` that
 opens a committed tree is held to the record's root of it (`portTreeHeld`, at `byPort`, `rootsByPort`); no file, no
 port, at the member's template `tmpl` (none for the one statement, whose ports open no field tree). One pass over the
-file's ports, each a lookup, at the reader rows `wired` holds at a writer's field tree (`portTreeHeld`). -/
+file's ports, each a lookup, at the reader rows `wired` holds at a writer's field tree and the linked ports `linked`
+hold at round 1's record (`portTreeHeld`). -/
 def registeredTreesHeld (byPort : Std.HashMap String Json) (who : String) (j : Option Json) (tmpl : Option String := none)
-    (wired : Array (String × String) := #[]) : V Unit :=
+    (wired : Array (String × String) := #[]) (linked : Array Docket.Linked := #[]) : V Unit :=
   match j with
   | none => pure ()
   | some j =>
-    (Flock.Registered.ofJson j).mapError (s!"{who}: {·}") >>= fun own => own.forM (portTreeHeld byPort who tmpl wired)
+    (Flock.Registered.ofJson j).mapError (s!"{who}: {·}") >>= fun own =>
+      own.forM (portTreeHeld byPort who tmpl wired linked)
 
 /-- The ports the verifier's registered file `registered` reads at a run input node's tree (`isFreshValue`); none
 without a file. -/

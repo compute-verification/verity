@@ -179,11 +179,12 @@ members, each member's registered file read once, and it reads no blob. -/
 def classHeld (ms : Array Member) : V Unit :=
   ms.foldlM classStep {} >>= fun _ => pure ()
 
-/-- `treePortsHeld` at the reader rows `wired` gives each member (`wiredRows`). -/
-def treePortsHeldAt (wired : Member → Array (String × String)) (ms : Array Member) (rec : Json) : V Unit :=
+/-- `treePortsHeld` at the reader rows `wired` gives each member (`wiredRows`) and the linked ports `linked`. -/
+def treePortsHeldAt (wired : Member → Array (String × String)) (ms : Array Member) (rec : Json)
+    (linked : Array Docket.Linked := #[]) : V Unit :=
   let byPort := rootsByPort rec
   ms.forM fun m =>
-    registeredTreesHeld byPort s!"member {m.name}" m.own.registered ((templateOf m.name).map (·.1)) (wired m)
+    registeredTreesHeld byPort s!"member {m.name}" m.own.registered ((templateOf m.name).map (·.1)) (wired m) linked
 
 /-- **Every member's registered file opens only its window's committed trees** (`registeredTreesHeld` at the record
 `rec`'s roots by port, `rootsByPort`, built once): a member's own committed port at another root, domain or leaf
@@ -191,7 +192,7 @@ count than the record's (another window's tree, another member's) refuses by nam
 writer's field tree's name at a row no wire C states into the member covers (`WIRED_TREE_WHY`, at `wiredRowsOf`).
 One pass over the record's roots and the members' registered files. -/
 def treePortsHeld (p : Params) (ms : Array Member) (rec : Json) : V Unit :=
-  treePortsHeldAt (wiredRowsOf p ms) ms rec
+  treePortsHeldAt (wiredRowsOf p ms) ms rec p.base.verifier.linked
 
 /-- **The per-member form's structure**, held before its run on the parameters `p`, its members `ms`, the
 registration `c`, the evidence `e` and its statements `sts`: each member's name once (`namesOnce`), the statements'
@@ -1442,6 +1443,26 @@ private def treeRegT (c : Char) (leaves : Nat := 2) (value : String := "committe
 #guard refusal (treePortsHeldAt (fun _ => #[]) #[readerT "R/c0" (treeRegT 'a' (value := "committed/R/c0/z"))] treeRecT) ==
   TREE_OTHER "member R/c0" "x" "R/c0/z" "root"
 #guard refusal (treePortsHeldAt (fun _ => #[]) #[readerT "R/c0" (treeRegT 'c' (value := "w"))] treeRecT) == ""
+
+/-- `R`'s port `x` linked to round 1's `logits`, round 1's record holding it at `f`'s root, `d`'s domain, two leaves. -/
+private def linkedT : Array Docket.Linked := #[{ template := "R", port := "x", value := "logits", entry := hexRootT "logits" 'f' }]
+
+-- a linked port reads round 1's tree, held to round 1's record in the place of the window's, which holds no `logits`
+#guard refusal (treePortsHeldAt (fun _ => #[]) #[readerT "R/c0" (treeRegT 'f' (value := "logits"))] treeRecT linkedT) == ""
+-- cheat: at a root that is not round 1's logged root
+#guard refusal (treePortsHeldAt (fun _ => #[]) #[readerT "R/c0" (treeRegT 'a' (value := "logits"))] treeRecT linkedT) ==
+  TREE_OTHER "member R/c0" "x" "logits" "root"
+-- cheat: at a tree of round 1 the link does not name
+#guard refusal (treePortsHeldAt (fun _ => #[]) #[readerT "R/c0" (treeRegT 'f' (value := "bx"))] treeRecT linkedT) ==
+  LINKED_TREE_WHY "member R/c0" "x" "logits"
+-- cheat: at a tree of the second stage's own, its own output's tree among them
+#guard refusal (treePortsHeldAt (fun _ => #[]) #[readerT "R/c0" (treeRegT 'b' (value := "committed/R/c0/z"))] treeRecT
+  linkedT) == LINKED_TREE_WHY "member R/c0" "x" "logits"
+#guard refusal (treePortsHeldAt (fun _ => #[]) #[readerT "R/c0" (treeRegT 'a' (value := "R/o0"))] treeRecT linkedT) ==
+  LINKED_TREE_WHY "member R/c0" "x" "logits"
+-- a port no link names is held to the window's record as before
+#guard refusal (treePortsHeldAt (fun _ => #[]) #[readerT "R/c0" (treeRegT 'a')] treeRecT
+  (linkedT.map fun l => { l with port := "z" })) == ""
 -- a wired port, its value `W`'s field tree's name: refused whatever its root
 #guard refusal (treePortsHeldAt (fun _ => #[]) #[readerT "R/c0" (treeRegT 'a' (value := "W/o0"))] treeRecT) == WIRED_TREE_WHY "member R/c0" "x"
 #guard refusal (treePortsHeldAt (fun _ => #[]) #[readerT "R/c0" (treeRegT 'a' (value := "committed/W/o0"))] treeRecT) ==

@@ -316,7 +316,10 @@ def interiorSteps (i : Input) (it : Interior) (k : Select.Counts) (sample : Arra
   let boundary ← Docket.digestHex i.record
   if !interiorRunOk i.params.verifier.windowRoot v.windowRoot boundary sample then
     return .error ("interiors", #["interior-window"])
-  let v := { v with samplingDesign := Json.mkObj [("law", "subset"), ("k", Lean.toJson m)] }
+  let v := { v with samplingDesign := Json.mkObj [("law", "subset"), ("k", Lean.toJson m)],
+                    linked := SecondStage.roundOneHeld
+                      ((SecondStage.replayLinks i.params.verifier.program.prog it.replay.prog.programFn i.record).getD #[])
+                      i.record }
   let codes := Docket.check it.record v
   if !codes.isEmpty then return .error ("interiors", codes)
   if !Slots.popOk v.program v.query m then return .error ("interiors", #["population-order"])
