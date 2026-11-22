@@ -89,27 +89,31 @@ SNAP=$HF_HOME/hub/models--${MODEL//\//--}/snapshots/$REV
     "HF_HOME=$HF_HOME $PY -c \"from huggingface_hub import snapshot_download as s; s('$MODEL', revision='$REV')\""; exit 3; }
 OUT=${OUT:-${RESEARCH_RUN_DIR:-$SR}/out}
 # REGISTRATION_LANE: the lane the auditor's challenger signs the deployment's registration for (a lane takes one, ever),
-#   the lane the epochs reserve on (served_verdicts.sh's H1_LANE), with no default: the first request waits until the
-#   challenger's ledger (PP_CHALLENGER=gate:USER@HOST with PP_GATE_KEY, else the file REGISTRATION_LEDGER) signs the
-#   registration the serve wrote, under the challenger's key record (REGISTRATION_KEY, else PP_CHALLENGER_KEY). Unset: the
-#   development path, which no one signs.
-HOLD=(adapters/vllm/tools/served_run/registration_hold.py hold)
+#   the lane the epochs reserve on (served_verdicts.sh's H1_LANE), with no default: the first request waits, at most
+#   REGISTRATION_HOLD_S seconds, until the challenger's ledger REGISTRATION_LEDGER signs the registration the serve wrote,
+#   every entry tested under the pinned key record REGISTRATION_KEY (else PP_CHALLENGER_KEY) and the chain
+#   (`served_verdicts.py registration-hold`). With PP_CHALLENGER=gate:USER@HOST (and PP_GATE_KEY) the ledger is fetched
+#   from the gate's `ledger` at each look into REGISTRATION_LEDGER (ledger_fetch.py). Unset: the development path.
+HOLD=(benchmarks/one_stage/served_verdicts.py registration-hold) FETCH=()
 if [ -n "${REGISTRATION_LANE:-}" ]; then
   [ -z "${H1_LANE:-}" ] || [ "$H1_LANE" = "$REGISTRATION_LANE" ] || { echo "SMOKE REFUSED lane: REGISTRATION_LANE" \
     "$REGISTRATION_LANE is not H1_LANE $H1_LANE, the lane the epochs reserve on"; exit 3; }
-  HOLD+=(--lane "$REGISTRATION_LANE" --key "${REGISTRATION_KEY:-${PP_CHALLENGER_KEY:-}}")
+  [[ "${REGISTRATION_HOLD_S:-}" =~ ^[1-9][0-9]*$ ]] || { echo "SMOKE REFUSED registration: REGISTRATION_LANE holds the" \
+    "first request at most REGISTRATION_HOLD_S seconds, a positive integer with no default"; exit 3; }
+  [ -r "${REGISTRATION_KEY:-${PP_CHALLENGER_KEY:-}}" ] || { echo "SMOKE REFUSED registration: REGISTRATION_LANE needs" \
+    "the challenger's pinned key record, REGISTRATION_KEY or PP_CHALLENGER_KEY"; exit 3; }
+  [ -n "${REGISTRATION_LEDGER:-}" ] || { echo "SMOKE REFUSED registration: REGISTRATION_LANE needs REGISTRATION_LEDGER"; exit 3; }
   if [[ "${PP_CHALLENGER:-}" = gate:* ]]; then
     g=(ssh -o BatchMode=yes); [ -z "${PP_GATE_KEY:-}" ] || g+=(-o IdentitiesOnly=yes -i "$PP_GATE_KEY")
-    HOLD+=(--gate "$(printf '%q ' "${g[@]}" "${PP_CHALLENGER#gate:}")")
+    FETCH=(adapters/vllm/tools/served_run/ledger_fetch.py --gate "$(printf '%q ' "${g[@]}" "${PP_CHALLENGER#gate:}")" \
+      --out "$REGISTRATION_LEDGER")
   else
-    [ -r "${REGISTRATION_LEDGER:-}" ] || { echo "SMOKE REFUSED registration: REGISTRATION_LANE needs the challenger's" \
-      "ledger, PP_CHALLENGER=gate:USER@HOST or a readable REGISTRATION_LEDGER"; exit 3; }
-    HOLD+=(--ledger "$REGISTRATION_LEDGER")
+    [ -r "$REGISTRATION_LEDGER" ] || { echo "SMOKE REFUSED registration: REGISTRATION_LEDGER is unreadable and no" \
+      "PP_CHALLENGER=gate:USER@HOST fetches it"; exit 3; }
   fi
-  [ -r "${REGISTRATION_KEY:-${PP_CHALLENGER_KEY:-}}" ] || { echo "SMOKE REFUSED registration: REGISTRATION_LANE needs" \
-    "the challenger's key record, REGISTRATION_KEY or PP_CHALLENGER_KEY"; exit 3; }
+  HOLD+=(--lane "$REGISTRATION_LANE" --ledger "$REGISTRATION_LEDGER" --key "${REGISTRATION_KEY:-${PP_CHALLENGER_KEY:-}}")
 elif [ "${1:-}" != card ]; then
-  "$PY" "${HOLD[@]}" --registration /dev/null
+  "$PY" "${HOLD[@]}" /dev/null
 fi
 D=$SR/serve PRED=$SR/predicted PORT=${PORT:-18282}
 mkdir -p "$SR" "$OUT"
@@ -280,8 +284,11 @@ if [ "${1:-}" = card ]; then  # under the lease: the wipe where the application 
   "$PY" benchmarks/prove_path/prove_path.py weights-registration --serve-run "$D" --checkpoint-dir "$SNAP" --out "$WREG" \
     --deployment-record "$DREG" > "$SR/weights_registration.log" 2>&1 \
     || { say "SMOKE FAILED weights-registration ($SR/weights_registration.log)"; exit 1; }
-  "$PY" "${HOLD[@]}" --registration "$DREG" 2>&1 | tee "$SR/registration_hold.log" \
-    || { say "SMOKE FAILED registration hold: $(tail -1 "$SR/registration_hold.log")"; exit 1; }
+  if [ ${#FETCH[@]} -gt 0 ]; then "$PY" "${FETCH[@]}" > "$SR/ledger_fetch.log" 2>&1 & FETCHER=$!; fi
+  rc=0; ${REGISTRATION_LANE:+timeout -k 10s "$REGISTRATION_HOLD_S"} "$PY" "${HOLD[@]}" "$DREG" 2>&1 \
+    | tee "$SR/registration_hold.log" || rc=$?
+  [ -z "${FETCHER:-}" ] || { kill "$FETCHER" 2> /dev/null; wait "$FETCHER" 2> /dev/null || true; }
+  [ "$rc" = 0 ] || { say "SMOKE FAILED registration hold, exit $rc: $(tail -1 "$SR/registration_hold.log")"; exit 1; }
   "$PY" adapters/vllm/tools/served_run/inputs.py tokenize --port "$PORT" --dataset "$DATASET" > "$SR/tokenize.log" 2>&1 \
     || echo "TOKENIZE FAILED ($SR/tokenize.log): $(tail -1 "$SR/tokenize.log")" >> "$SR/tokenize.log"
   "$PY" "${LOAD[@]}" > "$SR/load.log" 2>&1 || { say "SMOKE FAILED request ($SR/load.log)"; exit 1; }
