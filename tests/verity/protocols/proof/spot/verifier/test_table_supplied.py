@@ -184,7 +184,7 @@ def test_an_anchor_registered_at_another_width_than_cs_node_is_refused(tmp_path)
     check = {**check, "registered": {name: 16 for name in wide}}
     got, mine = V.check(rec, **check), R.check(rec, **_docket(check))
     assert got.codes == mine.codes == ("R7-anchor-width",), (got, mine)
-    assert mine.detail["R7-anchor-width"]["inputs"] == ["embed/root", "embed/domain"]
+    assert mine.detail["R7-anchor-width"]["inputs"] == ["embed/domain", "embed/root"]
 
 
 def test_a_scheme_that_also_supplies_a_marked_anchor_is_refused(tmp_path):
