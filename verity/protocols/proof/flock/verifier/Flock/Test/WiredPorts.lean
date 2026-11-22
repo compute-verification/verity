@@ -283,6 +283,23 @@ def o1 : Registered.Port := { o0 with name := "o1", value := fieldTree "T" 1 }
 #guard (outWhy { outC with ports := #[oPort "w" 2, oPort "o0" 2], outPorts := #[("o0", 2)] } pairP 0 #[1] o0).startsWith
   "registered reads: output row o0: T returns 2 output fields and the circuit has 1 output rows"
 
+-- a linked output row: read at round 1's tree (the port's own root, domain and leaves, under round 1's name) at the
+-- rows the caller gives; its template's own field tree, and rows that are not one of round 1's per unit, refused
+def r1 : Registered.Port := { o0 with value := "o0", leaves := 24 }
+def outLinked (reg : Registered.Port) (at_ : Array (Option Nat) × Nat) : Except String (Array (Option Nat) × Nat) :=
+  outReadsAt outC regP #[0, 1] 0 reg (some at_)
+#guard (outLinked r1 (#[some 7, some 19], 0)).toOption == some (#[some 7, some 19], 0)
+def linkedWhy (reg : Registered.Port) (at_ : Array (Option Nat) × Nat) : String :=
+  match outLinked reg at_ with
+  | .error e => e
+  | .ok _ => ""
+#guard linkedWhy o0 (#[some 7, some 19], 0) == LINKED_OWN_WHY "o0" "T" 0
+#guard [(#[some 7], 0), (#[some 7, none], 0), (#[some 7, some 24], 0), (#[some 7, some 19], 1)].all fun a =>
+  linkedWhy r1 a == LINKED_ROWS_WHY "o0" "o0"
+-- an unlinked row as before: round 1's name refused, its own field tree read at the unit's leaf
+#guard (outReadsAt outC regP #[0, 1] 0 r1).toOption.isNone
+#guard (outReadsAt outC regP #[0, 1] 0 o0).toOption == some (#[some 0, some 1], 0)
+
 -- `withPositions` sends a port past the declared input rows (`outRow?`, META `input_ports`) to `outReads`; a row past
 -- the circuit's is refused
 #guard HmOut.nIn outC == 1 && HmOut.nIn outC2 == 1
