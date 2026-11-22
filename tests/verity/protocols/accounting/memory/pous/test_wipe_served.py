@@ -1,4 +1,4 @@
-"""The wipe's attach (`pous.prover.wipe_served`): its settings are the protocol's parameters of `period.json`'s
+"""The wipe's attach (`wipe.prover.wipe_served`): its settings are the protocol's parameters of `period.json`'s
 ``wipe`` and its launcher's facts the rest, and it refuses by name before any session outside its piece's process,
 with no side, private directory, pin, fact or challenger binding, and on a busy card."""
 
@@ -12,11 +12,12 @@ import pytest
 
 from verity import hooks as H
 from verity.protocols.accounting import scheme as S
-from verity.protocols.accounting.memory.pous.prover import wipe_run
-from verity.protocols.accounting.memory.pous.prover import wipe_served as WS
-from verity.protocols.accounting.memory.pous.scheme import MEMORY_ATTESTER, WIPE
+from verity.protocols.accounting.memory.wipe.prover import wipe_run
+from verity.protocols.accounting.memory.wipe.prover import wipe_served as WS
+from verity.protocols.accounting.memory.pous.scheme import MEMORY_ATTESTER
+from verity.protocols.accounting.memory.wipe.scheme import WIPE
 from verity.protocols.accounting.memory.pous.verifier.period import UNPINNED
-from verity.protocols.accounting.memory.pous.verifier.wipe_period import LIMIT_NS
+from verity.protocols.accounting.memory.wipe.verifier.wipe_period import LIMIT_NS
 
 PIN = {"party": "memory-challenger", "protocol": "wipe", "scheme": "lms-sha512/n64-w1-h20/v0", "key-sha512": "ab" * 64}
 BOUND = {"host": "auditor", "address": "auditor:7000", "command": ["ssh", "auditor"]}

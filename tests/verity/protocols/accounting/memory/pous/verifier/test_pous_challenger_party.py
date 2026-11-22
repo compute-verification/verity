@@ -401,7 +401,7 @@ def test_the_party_follows_period_json(tmp_path) -> None:
 def test_what_no_auditor_side_entry_checks_is_carried_by_storages_and_the_wipes_placements_and_never_holds():
     """Storage's and the wipe's placements carry `memory_attester.UNCHECKED`, the one table, under ``unchecked``; only
     ``trusted-device`` is read as holding, so no wording under ``unchecked`` makes a placement hold."""
-    from verity.protocols.accounting.memory.pous.verifier import wipe_party as WP
+    from verity.protocols.accounting.memory.wipe.verifier import wipe_party as WP
 
     assert set(mc.UNCHECKED) == {"attester-attended-each-block", "attester-key-pinned-outside-the-case"}
     assert all(w.startswith("not checked by any auditor-side entry: ") for w in mc.UNCHECKED.values())

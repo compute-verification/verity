@@ -94,6 +94,6 @@ tests = ["test_partition_units.py"]
 paths = [
     "benchmarks/numerical/python/verity_numerical/bench",
     "verity/protocols/accounting/network",
-    "verity/protocols/accounting/memory/pous",
+    "verity/protocols/accounting/memory/pous", "verity/protocols/accounting/memory/wipe",
     "verity/circuits", "verity/commitments", "adapters/vllm/verity_vllm/definitions", "verity/protocols/proof/flock/prover", "verity/protocols/proof/flock/prover/pod", "verity/protocols/proof/flock/prover/agreement", "verity/protocols/proof/flock/prover/tool.py", "verity/protocols/accounting/compute/pouw/prover", "verity/protocols/accounting/memory/poub/verifier/commitments", "verity/commitments/periods",
 ]

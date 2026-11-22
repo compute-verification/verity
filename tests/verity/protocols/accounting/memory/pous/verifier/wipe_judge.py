@@ -6,7 +6,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from verity.protocols.accounting.memory.pous.prover import wipe_run
+from verity.protocols.accounting.memory.wipe.prover import wipe_run
 
 
 def judge(period: Path, monkeypatch) -> list[dict]:

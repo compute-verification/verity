@@ -16,11 +16,11 @@ from verity.protocol import ProtocolDef
 from verity.protocols.accounting.memory.pous.attester import challenger_party as CP
 from verity.protocols.accounting.memory.pous.attester import challenger_session as CS
 from verity.protocols.accounting.memory.pous.attester import onsite
-from verity.protocols.accounting.memory.pous.attester import wipe_challenger as WC
+from verity.protocols.accounting.memory.wipe.attester import wipe_challenger as WC
 from verity.protocols.accounting.memory.pous.prover import challenger_prover as CPR
-from verity.protocols.accounting.memory.pous.prover import wipe_prover as WR
-from verity.protocols.accounting.memory.pous.verifier import wipe_parties as WPS
-from verity.protocols.accounting.memory.pous.verifier import wipe_party as WP
+from verity.protocols.accounting.memory.wipe.prover import wipe_prover as WR
+from verity.protocols.accounting.memory.wipe.verifier import wipe_parties as WPS
+from verity.protocols.accounting.memory.wipe.verifier import wipe_party as WP
 
 POUS_KEY, WIPE_KEY = b"pous public key", b"wipe public key"
 

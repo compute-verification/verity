@@ -18,7 +18,9 @@ from a tree infra pinned, one run at a time, each run's parameters a lane's requ
   names a run's parameters and gets a run; it never names code, a path, a host or a node's capacities. Infra's
   `vy-admin` runs the same gate (`sudo vy-verifier-gate VERB ...`, `by` vy-admin).
 - **What runs.** `/opt/vy-verifier/current` -> `/opt/vy-verifier/<commit>`, a root-owned `git archive` of that commit
-  (`pin.sh`), whose Lean executables pin.sh built; the commit is the directory's name, and every run's request names it
+  (`pin.sh`; the host's deployed files are `tools/research/src/research/pods/nebius/verifier/`, and the compose gate's pin
+  script and wrapper `tools/research/src/research/pods/nebius/compose/`, which infra installs by hand with the pin, since
+  the wrapper names this file's path in the pinned tree), whose Lean executables pin.sh built; the commit is the directory's name, and every run's request names it
   (`pinned`): a run whose pin moved before its unit started doesn't run. pin.sh appends each pin (commit, UTC time) to
   `/opt/vy-verifier/pins.jsonl`, root's and append-only (`record_pin`, `chattr +a`), before it moves `current`; a run
   starts only from the log's last pin, and its request names that line (`pin_log`), so every session can be held to a
@@ -45,7 +47,7 @@ from a tree infra pinned, one run at a time, each run's parameters a lane's requ
   (`verity/protocols/accounting/memory/poub/verifier/lean/replay.py transcript --record verifier.json`), or the record
   alone when the run left no transcript, into `runs/<run>/replay/`; a transcript that isn't the recorded one fails it.
 - **The memory attester's parties**: `wipe_party [--reads K] [--native [--threads T]]` and `challenger_party`
-  run PoUS's streamed-wipe challenger (`verity/protocols/accounting/memory/pous/verifier/wipe_party.py`, port 47611) and its block challenger
+  run PoUS's streamed-wipe challenger (`verity/protocols/accounting/memory/wipe/verifier/wipe_party.py`, port 47611) and its block challenger
   (`challenger_party.py`, port 47610), and `bw_party (--pous-session SID | --fixture) [--session SID --trusted-sha512 HEX] [--minutes M]` PoUB's
   P2 party (`verity/protocols/accounting/memory/poub/verifier/p2_parties.py`, port 47612, with the registration the host
   names; with `--session SID`, the session id the auditor gives the memory attester, it signs the session's close with
@@ -146,7 +148,7 @@ SPECS = 16
 INTS = {"--sessions": (1, 16), "--windows": (1, 64), "--samples": (1, 100_000), "--lifetime": (1, 1024),
         "--minutes": MINUTES}
 DECIMALS = {"--window-ms": (1.0, 600_000.0), "--jitter-ms": (0.0, 1_000.0), "--pace-pass-ms": (0.0, 1_000.0)}
-PARTIES = {"wipe_party": ("wipe", "verity.protocols.accounting.memory.pous.attester.wipe_challenger", 47611),
+PARTIES = {"wipe_party": ("wipe", "verity.protocols.accounting.memory.wipe.attester.wipe_challenger", 47611),
            "challenger_party": ("pous", "verity.protocols.accounting.memory.pous.attester.challenger_party", 47610),
            "bw_party": ("bw", "verity.protocols.accounting.memory.poub.verifier.p2_parties", 47612)}
 PARTY_CODE = {"bw_party": "import sys; from verity.protocols.accounting.memory.pous.attester import onsite; "

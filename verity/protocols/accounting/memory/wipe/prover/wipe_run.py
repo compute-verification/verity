@@ -46,14 +46,14 @@ from pathlib import Path
 from typing import Any, BinaryIO, Protocol, TypeVar
 
 from verity.protocols.accounting.memory.pous.attester import memory_attester as mc
-from verity.protocols.accounting.memory.pous.verifier import streamed_wipe as sw
-from verity.protocols.accounting.memory.pous.attester import wipe_challenger as WC
-from verity.protocols.accounting.memory.pous.verifier import wipe_parties as WP
-from verity.protocols.accounting.memory.pous.verifier import wipe_party
-from verity.protocols.accounting.memory.pous.verifier import wipe_period as W
+from verity.protocols.accounting.memory.wipe.verifier import streamed_wipe as sw
+from verity.protocols.accounting.memory.wipe.attester import wipe_challenger as WC
+from verity.protocols.accounting.memory.wipe.verifier import wipe_parties as WP
+from verity.protocols.accounting.memory.wipe.verifier import wipe_party
+from verity.protocols.accounting.memory.wipe.verifier import wipe_period as W
 from verity.protocols.accounting.memory.pous.verifier.period import decided_by, deployment, executables, serve
-from verity.protocols.accounting.memory.pous.verifier.wipe_party import ACK, CHALLENGE, DONE, END, FILL, READS, _read
-from verity.protocols.accounting.memory.pous.verifier.wipe_period import (LIMIT_NS, PROTOCOL, SEGMENT_BYTES, SEGMENT_LABELS,
+from verity.protocols.accounting.memory.wipe.verifier.wipe_party import ACK, CHALLENGE, DONE, END, FILL, READS, _read
+from verity.protocols.accounting.memory.wipe.verifier.wipe_period import (LIMIT_NS, PROTOCOL, SEGMENT_BYTES, SEGMENT_LABELS,
                                                                    SEGMENTS, TIER, case, egress_of, foreign_labels,
                                                                    memory_bits, params_for, uncertified)
 
@@ -64,7 +64,7 @@ T = TypeVar("T")
 #: what carries the challenger's link in a placement: the connection's addresses stay in the private record
 CHALLENGER_LINK = "the prover's connection to the memory attester's machine (its addresses in the private record)"
 #: who graded the wipe's answer, its placement's ``graded_by``
-GRADED_BY = ("graded by the developer's piece (verity/protocols/accounting/memory/pous/prover/wipe_run.py: "
+GRADED_BY = ("graded by the developer's piece (verity/protocols/accounting/memory/wipe/prover/wipe_run.py: "
              "wipe_period.answer and wipe-protocol, verity/wipe/v0 uncounted) on the served node; no auditor-side entry "
              "runs it; not certified: survivors bounded by nothing")
 

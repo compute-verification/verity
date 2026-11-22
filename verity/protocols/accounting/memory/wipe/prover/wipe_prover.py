@@ -1,5 +1,5 @@
 """The streamed wipe's prover as a party of the deployment layer (`verity.runtime`), on its node: `Prover`, over the
-messages `verity.protocols.accounting.memory.pous.verifier.wipe_parties` declares.
+messages `verity.protocols.accounting.memory.wipe.verifier.wipe_parties` declares.
 
 Its machine gives it `store` (`capabilities["store"]`, the prover a `WipeParams` makes: `wipe_store.Prover` unless
 given, `wipe_store.StoreProver` on a node). It finishes with the batches it answered, refused by name when the
@@ -17,8 +17,8 @@ from verity.channel import Message, Phase, Refused
 from verity.party import Finish, Identity, Received, Send
 from verity.protocol import ProtocolDef, Start
 from verity.protocols.accounting.memory.pous.attester.challenger_session import ONSITE_GOAL
-from verity.protocols.accounting.memory.pous.verifier import wipe_party as WP
-from verity.protocols.accounting.memory.pous.verifier.wipe_parties import CHALLENGER, MANIFEST, PROVER
+from verity.protocols.accounting.memory.wipe.verifier import wipe_party as WP
+from verity.protocols.accounting.memory.wipe.verifier.wipe_parties import CHALLENGER, MANIFEST, PROVER
 
 from . import wipe_store
 

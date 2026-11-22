@@ -16,8 +16,8 @@ from pathlib import Path
 
 from verity.commitments.crypto import lms
 from verity.protocols.accounting.memory.pous.attester import memory_attester as mc
-from verity.protocols.accounting.memory.pous.attester import wipe_challenger as WC
-from verity.protocols.accounting.memory.pous.attester import wipe_stream as WS
+from verity.protocols.accounting.memory.wipe.attester import wipe_challenger as WC
+from verity.protocols.accounting.memory.wipe.attester import wipe_stream as WS
 
 WINDOW = (1_793_088_000_123_456_789, 1_793_088_183_000_001_000)
 """The session's `(t0, t1)` it reports, in ns since the Unix epoch: the window `test_pous_wipe_period` reads back."""

@@ -24,10 +24,10 @@ import pous_reference as REF
 import pytest
 
 from verity.protocols.accounting.memory.pous.attester import memory_attester as mc
-from verity.protocols.accounting.memory.pous.prover import wipe_run
-from verity.protocols.accounting.memory.pous.verifier import streamed_wipe as sw
-from verity.protocols.accounting.memory.pous.verifier import wipe_party
-from verity.protocols.accounting.memory.pous.verifier import wipe_period as W
+from verity.protocols.accounting.memory.wipe.prover import wipe_run
+from verity.protocols.accounting.memory.wipe.verifier import streamed_wipe as sw
+from verity.protocols.accounting.memory.wipe.verifier import wipe_party
+from verity.protocols.accounting.memory.wipe.verifier import wipe_period as W
 from verity.commitments.identity import canonical_json_bytes
 
 pytest.importorskip("torch")

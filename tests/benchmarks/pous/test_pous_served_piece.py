@@ -40,7 +40,7 @@ from verity.protocols.accounting.memory.pous.attester import challenger_session 
 from verity.protocols.accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.accounting.memory.pous.prover import challenger_prover as CR
 from verity.protocols.accounting import scheme as resource_scheme
-from verity.protocols.accounting.memory.pous import scheme as pous_scheme
+from verity.protocols.accounting.memory.wipe import scheme as wipe_scheme
 from verity.protocols.accounting.memory.pous.prover import served as pous_served
 from verity.protocols.accounting.memory.pous.verifier import period
 from verity.protocols.accounting.memory.pous.verifier import setup as pous_setup
@@ -335,15 +335,15 @@ def test_a_records_wipe_row_says_its_accept_certifies_nothing_when_uncertified()
     answer = {"protocol": "verity/wipe/v0", "verdict": "accept", "reason": None, "commitment": "00", "public": public,
               "profile": {"k": 2152}}
     row = BR.subprotocol("wipe", {"answer": answer}, server=NODE, runs=[])
-    refusal = str(resource_scheme.unbounded(pous_scheme.WIPE))
+    refusal = str(resource_scheme.unbounded(wipe_scheme.WIPE))
     assert row["answer"]["verdict"] == "accept" and row["error"] == "0" and row["unbounded"]["why"] == refusal
     assert row["at"] and all(a == {"holds": False, "why": refusal} for a in row["at"].values())
     assert row["quantity"] == {"symbol": "foreign_bits", "value": m, "unit": "bits", "k": 2152, "r": 59, "M": m,
-                               "certified": False, "certifies": pous_scheme.WIPE_UNCERTIFIED}
-    assert pous_scheme.WIPE_UNCERTIFIED.startswith("not certified: survivors bounded by nothing")
+                               "certified": False, "certifies": wipe_scheme.WIPE_UNCERTIFIED}
+    assert wipe_scheme.WIPE_UNCERTIFIED.startswith("not certified: survivors bounded by nothing")
     counted = BR.subprotocol("wipe", {"answer": answer | {"public": public | {"certified": True, "foreign_bits": 7,
                                                                              "eps": "1/8"}}}, server=NODE, runs=[])
-    assert counted["quantity"]["certifies"] == pous_scheme.WIPE_CERTIFIES and counted["error"] == "1/8"
+    assert counted["quantity"]["certifies"] == wipe_scheme.WIPE_CERTIFIES and counted["error"] == "1/8"
 
 
 def test_an_honest_store_is_accepted_in_the_answer_the_composed_run_reads(served, tmp_path, monkeypatch):

@@ -11,14 +11,16 @@ untraced = ["test_pous_wipe_store.py", "test_pous_wipe_stream.py"]
 # TimedINC): test_pous_trusted fails while a file it hashes is outside these, naming the lines to add.
 inputs = ["verity/lean_process.py", "verity/protocols/accounting/memory/pous/attester/timed_audit.py", "verity/__init__.py", "verity/errors.py",
           "verity/circuits",
-          "verity/protocols/accounting/memory/pous/prover",
+          "verity/protocols/accounting/memory/pous/prover", "verity/protocols/accounting/memory/wipe/prover",
           # the wipe's declaration, whose attach runs the subprotocol (`wipe_served`), and the interface it is declared in
-          "verity/protocols/accounting/memory/pous/scheme.py", "verity/protocols/accounting/scheme.py",
+          "verity/protocols/accounting/memory/pous/scheme.py", "verity/protocols/accounting/memory/wipe/scheme.py",
+          "verity/protocols/accounting/scheme.py",
           "verity/hooks.py",
           "verity/commitments", "verity/commitments/crypto", "verity/commitments/randomness", "verity/channel.py", "verity/runtime", "tests/verity/tests/test_channel.py", "verity/config.py", "verity/party.py", "verity/protocol.py",
           "verity/protocols/accounting/memory/pous/attester/__init__.py",
+          "verity/protocols/accounting/memory/wipe/__init__.py", "verity/protocols/accounting/memory/wipe/attester/__init__.py",
           "verity/protocols/accounting/memory/pous/attester/challenger_party.py",
-          "verity/protocols/accounting/memory/pous/attester/wipe_challenger.py",
+          "verity/protocols/accounting/memory/wipe/attester/wipe_challenger.py",
           "security/Definitions/Pous.lean", "security/Definitions/Pous", "security/Proofs/Pous",
           "security/Definitions/Core/Game.lean", "security/Definitions/Assumptions/Pous.lean",
           "security/Proofs/Core/Game/Basic.lean",
@@ -35,8 +37,8 @@ inputs = ["verity/lean_process.py", "verity/protocols/accounting/memory/pous/att
           # the memory attester's key as a deployment starts it, and the wipe's native streamer, which the conftest
           # and the wipe's store tests build and run
           "verity/protocols/accounting/memory/pous/attester/onsite.py",
-          "verity/protocols/accounting/memory/pous/attester/wipe_stream.py",
-          "verity/protocols/accounting/memory/pous/attester/wipe_stream.c",
+          "verity/protocols/accounting/memory/wipe/attester/wipe_stream.py",
+          "verity/protocols/accounting/memory/wipe/attester/wipe_stream.c",
           # SPOT's registered reads, which PoUS's served weights (`pous.prover.served_weights`) name, and its one-stage
           # door, whose verdict on each sampled block the setup's check reads (`pous.verifier.setup_proof.check`), with
           # the integrity profile the door's audit loads
@@ -45,4 +47,4 @@ inputs = ["verity/lean_process.py", "verity/protocols/accounting/memory/pous/att
           "verity/protocols/proof/spot/verifier/one_stage", "verity/protocols/proof/spot/verifier/challenger",
           "verity/protocols/proof/spot/verifier/levels.py", "verity/protocols/proof/spot/verifier/service.py",
           "verity/protocols/proof/spot/verifier/window_place.py",
-          "verity/protocols/accounting/memory/pous/verifier"]
+          "verity/protocols/accounting/memory/pous/verifier", "verity/protocols/accounting/memory/wipe/verifier"]

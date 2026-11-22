@@ -17,7 +17,7 @@ untraced = [
 ]
 # The load's verbs read and write the store with `verity/protocols/accounting/network/attester/load_relay.py`, which commits with the
 # network attester's transfer rows and PoUS's P2 scheme. The rehearsal unit's RuntimeMaxSec bounds the gate's --minutes.
-inputs = ["verity/lean_process.py", "verity/protocols/accounting/network/attester/load_relay.py", "verity/protocols/accounting/network", "verity/protocols/accounting/memory/pous",
+inputs = ["verity/lean_process.py", "verity/protocols/accounting/network/attester/load_relay.py", "verity/protocols/accounting/network", "verity/protocols/accounting/memory/pous", "verity/protocols/accounting/memory/wipe",
           "verity/channel.py", "verity/release.py",
           "tools/research/src/research/pods/nebius/challenger/vy-certifier@.service",
           "verity/__init__.py", "verity/errors.py", 

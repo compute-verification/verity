@@ -48,7 +48,7 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
 from typing import Any, BinaryIO, Protocol
 
-from verity.protocols.accounting.memory.pous.verifier import streamed_wipe as sw
+from verity.protocols.accounting.memory.wipe.verifier import streamed_wipe as sw
 
 LABEL = sw.LABEL_BYTES
 STAGING = 1 << 20
