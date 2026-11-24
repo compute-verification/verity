@@ -12,8 +12,7 @@ import Mathlib.Algebra.Order.BigOperators.Group.Finset
 A proof of resource use shows that a set `S` of gates, a declared computation, uses at least `x` of a resource. The
 physical constraints then leave the rest of the run at most the limit less `x`:
 
-* `work_outside`, `gates_outside`: under `ComputeRate`, the gates of `A[X, [a, b))` outside `S` do at most
-  `Φ_X (b − a) − x` work, and number at most that at a pricing of at least one a gate;
+* `work_outside`: under `ComputeRate`, the gates of `A[X, [a, b))` outside `S` do at most `Φ_X (b − a) − x` work;
 * `state_outside`: under `MemoryAt`, `X` carries at most `M_X − x` bits outside `S` across the tick;
 * `ingress_outside`: under `Links`, `A[X, [a, b))` reads at most `β_X (b − a) − x` bits outside `S` from outside `X`.
 
@@ -48,16 +47,6 @@ theorem work_outside {𝒳 : Set (Finset L)} {π : Fin A.N → ℕ} {compute : F
   have h1 := h X hX a b
   have h2 := work_inter_add_sdiff A π (A.region X (Set.Ico a b)) S
   omega
-
-/-- **Gates outside `S`**: at a pricing of at least one a computed gate, the gates of `A[X, [a, b))` outside `S` number
-at most `Φ_X (b − a) − x`. -/
-theorem gates_outside {𝒳 : Set (Finset L)} {π : Fin A.N → ℕ} {compute : Finset L → ℕ} (h : A.ComputeRate 𝒳 π compute)
-    (hπ : ∀ g, A.isInput g = false → 1 ≤ π g) {X : Finset L} (hX : X ∈ 𝒳) (a b : ℕ) (S : Finset (Fin A.N)) {x : ℕ}
-    (hx : x ≤ A.work π (A.region X (Set.Ico a b) ∩ S)) :
-    (A.region X (Set.Ico a b) \ S).card ≤ compute X * (b - a) - x := by
-  refine le_trans ?_ (work_outside A h hX a b S hx)
-  rw [card_eq_sum_ones]
-  exact sum_le_sum fun g hg => hπ g ((mem_region A).1 (mem_sdiff.1 hg).1).1
 
 /-- **State outside `S`**: if `X` carries at least `x` bits of `S` across the tick `t`, it carries at most `M_X − x`
 outside `S`. -/
