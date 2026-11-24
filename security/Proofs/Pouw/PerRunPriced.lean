@@ -157,6 +157,18 @@ theorem pr_computePricedLt_le [Nonempty ΩQ] [Nonempty ΩS] {p : Price} {pRead W
   rw [← pr_equiv (Equiv.prodComm ΩW (ΩQ × ΩS))] at this
   exact this
 
+/-- **What the compute residual bounds, under the priced guarantee, at the coins flipped.** `Run.pr_accepts_residual_perRun_le`
+with the certificate on the priced sum: the bits the compute account read from device memory, at `pRead` each, come off
+the certificate before it comes off the cap. -/
+theorem pr_accepts_residual_perRunPriced_le [Nonempty ΩQ] [Nonempty ΩS] {p : Price} {pRead W ε : ℝ}
+    (h : r.ComputeSoundPerRunPriced p pRead W ε) (cap : ℕ) (lhs rest : ΩW × ΩQ × ΩS → ℝ)
+    (hdev : ∀ ω (x : ℕ), x ≤ r.work p ω → lhs ω ≤ ((cap - x : ℕ) : ℝ) + rest ω) :
+    pr (fun ω => r.accepts .compute ω ∧
+      ((cap - ⌈W - pRead * r.pouwRead ω⌉₊ : ℕ) : ℝ) + rest ω < lhs ω) ≤ ε :=
+  (pr_mono fun ω hω => ⟨hω.1, lt_of_not_ge fun hW =>
+    absurd (hdev ω ⌈W - pRead * r.pouwRead ω⌉₊ (Nat.ceil_le.mpr (by linarith))) (not_le.mpr hω.2)⟩).trans
+    (r.pr_computePricedLt_le h)
+
 theorem jointPerRunPriced [Nonempty ΩW] [Nonempty ΩQ] [Nonempty ΩS] {p : Price} {pRead W Q S εW εQ εS : ℝ}
     (hW : r.ComputeSoundPerRunPriced p pRead W εW) (hQ : r.BandwidthSoundPerRun Q εQ)
     (hS : r.CapacitySoundPerRun S εS) :
