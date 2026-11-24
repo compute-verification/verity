@@ -13,6 +13,7 @@ public import Definitions.Core.Site
 public import Definitions.Core.Period
 public import Definitions.Core.ProofSystem
 public import Definitions.Core.Structure
+public import Definitions.Core.RedBlue
 public import Definitions.Core.Rec
 public import Definitions.Core.CoinBytes
 public import Definitions.Core.FirstHit
