@@ -8,20 +8,21 @@ public import Definitions.Core.Structure
 A machine (`Machine`) is a set of nodes and the links between them. A node holds bits and may compute: a GPU's die, its
 device memory, a host's processor, the world outside. A computation over `T` cycles (`Computation`) is a circuit with,
 for every computed gate, the cycle and the node it is computed in, and for every cycle, the gates whose values each
-node holds at its end and the gates whose values each link carries during the next. A value can be held at several
+node holds at its end, the gates whose values each link carries during the next, and the copies of its units each node
+runs. A value can be held at several
 nodes. A cycle is one period of the machine's fastest clock, and a value of `w` bits counts `w` (`Circuit.width`).
 
 * **Order** (`Computation.Order`). A gate reads only gates computed in its own cycle at its own node and gates its node
   held at the end of the cycle before. A node holds only input gates at the start; later it holds a gate only if it
   computed it in that cycle, held it at the end of the cycle before, or a link carried it there, and a link carries
   only what its source held.
-* **Limits** (`Computation.Within`). Each node has functional units, circuits `unit i` with `count i` of each: the gates
-  a node computes in a cycle are tiled by copies of its units (`Tiling`), at most `count i` of unit `i`, so they number
-  at most `Node.rate`. A node holds at most `state` bits at the end of a cycle, and a link carries at most `link p q`
-  bits a cycle.
+* **Limits** (`Computation.Within`). Each node has functional units, circuits `unit i`, and resources: the gates a node
+  computes in a cycle are tiled by disjoint copies of its units, and the copies use at most `cap j` of each resource
+  `j`, a copy of unit `i` using `use j i`. A node holds at most `state` bits at the end of a cycle, and a link carries
+  at most `link p q` bits a cycle.
 
 `feasible M T` is the computations a machine `M` can run in `T` cycles. Three kinds of number bound three resources:
-work (`rate`), memory (`state`) and bandwidth (`link`).
+work (`cap`), memory (`state`) and bandwidth (`link`).
 -/
 
 @[expose] public section
@@ -45,32 +46,30 @@ structure Copy (K C : Circuit) (G : Finset (Fin C.N)) where
     (C.op (φ g) v).cast (w g) = K.op g fun a => (v (φ a)).cast (w a)
   outputs : ∀ g h, K.isInput g = false → h ∉ G → φ g ∈ C.reads h → ∀ g', g ∉ K.reads g'
 
-/-- **A node's limits**: its functional units, `count i` of the circuit `unit i`, and the bits it holds. -/
+/-- **A node's limits**: its functional units, the circuits `unit i`; its resources, of which one copy of unit `i` uses
+`use j i` of resource `j` and a cycle has `cap j`; and the bits it holds. With one resource per unit, used by that unit
+alone, `cap` counts the copies of each unit; a resource several units use is one they share. -/
 structure Node where
   r : ℕ
   unit : Fin r → Circuit
-  count : Fin r → ℕ
+  m : ℕ
+  use : Fin m → Fin r → ℕ
+  cap : Fin m → ℕ
   state : ℕ
 
-/-- The gates a node computes in a cycle, at most: every unit's gates. -/
-def Node.rate (n : Node) : ℕ := ∑ i, n.count i * (n.unit i).size (n.unit i).computed
+/-- A node computes at most `W` gates in a cycle: whatever numbers of copies of its units fit its resources have at
+most `W` gates. -/
+def Node.GatesWithin (n : Node) (W : ℕ) : Prop :=
+  ∀ count : Fin n.r → ℕ, (∀ j, ∑ i, n.use j i * count i ≤ n.cap j) →
+    ∑ i, count i * (n.unit i).size (n.unit i).computed ≤ W
 
 /-- **A machine**: its nodes' limits and the bits each link carries in a cycle (`0` where there is no link). -/
 structure Machine (ι : Type) where
   node : ι → Node
   link : ι → ι → ℕ
 
-/-- **A tiling** of the gates `G` of `C` by copies of a node's units: disjoint copies that together are `G`, at most
-`count i` of unit `i`. -/
-structure Tiling (C : Circuit) (G : Finset (Fin C.N)) (n : Node) where
-  tiles : Finset (Fin n.r × Finset (Fin C.N))
-  copy : ∀ x ∈ tiles, Nonempty (Copy (n.unit x.1) C x.2)
-  disjoint : ∀ x ∈ tiles, ∀ y ∈ tiles, x ≠ y → Disjoint x.2 y.2
-  cover : tiles.biUnion Prod.snd = G
-  count : ∀ i, (tiles.filter fun x => x.1 = i).card ≤ n.count i
-
-/-- **A computation** over `T` cycles on nodes `ι`. -/
-structure Computation (ι : Type) (T : ℕ) where
+/-- **A computation** over `T` cycles on the machine `M`. -/
+structure Computation {ι : Type} (M : Machine ι) (T : ℕ) where
   C : Circuit
   /-- the cycle a computed gate is computed in -/
   cycle : Fin C.N → ℕ
@@ -78,6 +77,8 @@ structure Computation (ι : Type) (T : ℕ) where
   cycle_le : ∀ g, C.isInput g = false → cycle g ≤ T
   /-- the node a computed gate is computed at -/
   place : Fin C.N → ι
+  /-- `tiles c p`: the copies of its units node `p` runs in cycle `c`, each a unit and the gates of its copy -/
+  tiles : ℕ → (p : ι) → Finset (Fin (M.node p).r × Finset (Fin C.N))
   /-- the gates whose values a node holds at the end of a cycle -/
   hold : ℕ → ι → Finset (Fin C.N)
   /-- `sent c p q`: the gates whose values the link from `p` to `q` carries in cycle `c + 1` -/
@@ -85,11 +86,12 @@ structure Computation (ι : Type) (T : ℕ) where
 
 namespace Computation
 
-variable {ι : Type} {T : ℕ} (X : Computation ι T)
+variable {ι : Type} {M : Machine ι} {T : ℕ} (X : Computation M T)
 
 open Classical in
 /-- The gates node `p` computes in cycle `c`. -/
-noncomputable def gatesAt (c : ℕ) (p : ι) : Finset (Fin X.C.N) := X.C.computed.filter fun g => X.cycle g = c ∧ X.place g = p
+noncomputable def gatesAt (c : ℕ) (p : ι) : Finset (Fin X.C.N) :=
+  X.C.computed.filter fun g => X.cycle g = c ∧ X.place g = p
 
 /-- **Order**: what a gate may read, and where a value may be. -/
 structure Order : Prop where
@@ -100,16 +102,31 @@ structure Order : Prop where
     (X.C.isInput a = false ∧ X.cycle a = c + 1 ∧ X.place a = p) ∨ a ∈ X.hold c p ∨ ∃ q, a ∈ X.sent c q p
   sent : ∀ c p q, X.sent c p q ⊆ X.hold c p
 
-/-- **Within the machine `M`**, at every cycle. -/
-structure Within (M : Machine ι) : Prop where
-  work : ∀ c p, Nonempty (Tiling X.C (X.gatesAt c p) (M.node p))
+/-- **Within the machine's limits**, at every cycle and node: the gates computed are tiled by disjoint copies of the
+node's units, which use at most each resource's `cap`; the node holds at most `state` bits; and each link carries at
+most its capacity. -/
+structure Within : Prop where
+  copy : ∀ c p, ∀ x ∈ X.tiles c p, Nonempty (Copy ((M.node p).unit x.1) X.C x.2)
+  disjoint : ∀ c p, ∀ x ∈ X.tiles c p, ∀ y ∈ X.tiles c p, x ≠ y → Disjoint x.2 y.2
+  cover : ∀ c p, (X.tiles c p).biUnion Prod.snd = X.gatesAt c p
+  work : ∀ c p j, ∑ x ∈ X.tiles c p, (M.node p).use j x.1 ≤ (M.node p).cap j
   state : ∀ c p, X.C.width (X.hold c p) ≤ (M.node p).state
   link : ∀ c p q, X.C.width (X.sent c p q) ≤ M.link p q
+
+open Classical in
+/-- What node `p`'s copies inside the gates `S` use of its resource `j`, over the `T` cycles. -/
+noncomputable def usedIn (p : ι) (j : Fin (M.node p).m) (S : Finset (Fin X.C.N)) : ℕ :=
+  ∑ c ∈ range T, ∑ x ∈ (X.tiles (c + 1) p).filter fun x => x.2 ⊆ S, (M.node p).use j x.1
+
+open Classical in
+/-- What node `p`'s copies not inside the gates `S` use of its resource `j`, over the `T` cycles. -/
+noncomputable def usedOut (p : ι) (j : Fin (M.node p).m) (S : Finset (Fin X.C.N)) : ℕ :=
+  ∑ c ∈ range T, ∑ x ∈ (X.tiles (c + 1) p).filter fun x => ¬ x.2 ⊆ S, (M.node p).use j x.1
 
 end Computation
 
 /-- **The computations a machine can run in `T` cycles**: the ordered ones within its limits. -/
-def feasible {ι : Type} (M : Machine ι) (T : ℕ) : Set (Computation ι T) := {X | X.Order ∧ X.Within M}
+def feasible {ι : Type} (M : Machine ι) (T : ℕ) : Set (Computation M T) := {X | X.Order ∧ X.Within}
 
 /-! ### What a proof of resource use establishes, and what is prohibited
 
@@ -120,33 +137,42 @@ of resource use establishes that such an `S` uses at least `x` of a resource; a 
 /-- A permitted part of a circuit: a property of a set of its gates. -/
 abbrev Permitted := (C : Circuit) → Finset (Fin C.N) → Prop
 
-variable {ι : Type} {T : ℕ}
+variable {ι : Type} {M : Machine ι} {T : ℕ}
 
 /-- **Work used**: a permitted part has at least `x` computed gates. -/
-def usesWork (P : Permitted) (x : ℕ) : Set (Computation ι T) :=
+def usesWork (P : Permitted) (x : ℕ) : Set (Computation M T) :=
   {X | ∃ S, P X.C S ∧ x ≤ X.C.size (X.C.computed ∩ S)}
 
 /-- **Work prohibited**: more than `r` computed gates lie outside every permitted part. -/
-def needsWork (P : Permitted) (r : ℕ) : Set (Computation ι T) :=
+def needsWork (P : Permitted) (r : ℕ) : Set (Computation M T) :=
   {X | ∀ S, P X.C S → r < X.C.size (X.C.computed \ S)}
 
+/-- **A resource used** at node `p`: copies inside a permitted part use at least `x` of its resource `j`. -/
+def usesUnits (P : Permitted) (p : ι) (j : Fin (M.node p).m) (x : ℕ) : Set (Computation M T) :=
+  {X | ∃ S, P X.C S ∧ x ≤ X.usedIn p j S}
+
+/-- **A resource prohibited** at node `p`: copies not inside a permitted part use more than `r` of its resource `j`,
+whatever the part. -/
+def needsUnits (P : Permitted) (p : ι) (j : Fin (M.node p).m) (r : ℕ) : Set (Computation M T) :=
+  {X | ∀ S, P X.C S → r < X.usedOut p j S}
+
 /-- **Memory used** at the nodes `A`: at the end of every cycle they hold at least `x` bits of a permitted part. -/
-def usesMemory (P : Permitted) (A : Finset ι) (x : ℕ) : Set (Computation ι T) :=
+def usesMemory (P : Permitted) (A : Finset ι) (x : ℕ) : Set (Computation M T) :=
   {X | ∃ S, P X.C S ∧ ∀ c ≤ T, x ≤ ∑ p ∈ A, X.C.width (X.hold c p ∩ S)}
 
 /-- **Memory prohibited** at the nodes `A`: at the end of some cycle they hold more than `r` bits outside any permitted
 part. -/
-def needsMemory (P : Permitted) (A : Finset ι) (r : ℕ) : Set (Computation ι T) :=
+def needsMemory (P : Permitted) (A : Finset ι) (r : ℕ) : Set (Computation M T) :=
   {X | ∀ S, P X.C S → ∃ c ≤ T, r < ∑ p ∈ A, X.C.width (X.hold c p \ S)}
 
 /-- **Bandwidth used** on the link from `p` to `q`: over the `T` cycles it carries at least `x` bits of a permitted
 part. -/
-def usesBandwidth (P : Permitted) (p q : ι) (x : ℕ) : Set (Computation ι T) :=
+def usesBandwidth (P : Permitted) (p q : ι) (x : ℕ) : Set (Computation M T) :=
   {X | ∃ S, P X.C S ∧ x ≤ ∑ c ∈ range T, X.C.width (X.sent c p q ∩ S)}
 
 /-- **Bandwidth prohibited** on the link from `p` to `q`: over the `T` cycles it carries more than `r` bits outside any
 permitted part. -/
-def needsBandwidth (P : Permitted) (p q : ι) (r : ℕ) : Set (Computation ι T) :=
+def needsBandwidth (P : Permitted) (p q : ι) (r : ℕ) : Set (Computation M T) :=
   {X | ∀ S, P X.C S → r < ∑ c ∈ range T, X.C.width (X.sent c p q \ S)}
 
 end Verity.Hardware
