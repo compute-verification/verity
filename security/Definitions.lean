@@ -45,7 +45,6 @@ public import Definitions.Certifier.RecordRows
 public import Definitions.Certifier.MonitoringPeriod
 public import Definitions.Certifier.Witness
 public import Definitions.Certifier.ResponseTie
-public import Definitions.Registration.ChipStore
 public import Definitions.Registration.Server
 public import Definitions.Registration.Sheets
 public import Definitions.Registration.View
