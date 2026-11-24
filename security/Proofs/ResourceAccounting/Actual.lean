@@ -2,6 +2,7 @@ module
 
 public import Proofs.ResourceAccounting.Actual.Split
 public import Proofs.ResourceAccounting.Actual.Physical
+public import Proofs.ResourceAccounting.Actual.Outside
 public import Proofs.ResourceAccounting.Actual.ServerBlocks
 public import Proofs.ResourceAccounting.Actual.Threaded
 public import Proofs.ResourceAccounting.Actual.Slowdown

@@ -1,0 +1,164 @@
+module
+
+public import Proofs.ResourceAccounting.Actual.Physical
+public import Definitions.Registration.Server
+import Mathlib.Algebra.BigOperators.Ring.Finset
+import Mathlib.Algebra.Order.BigOperators.Group.Finset
+
+/-!
+# What the limits leave outside a set of gates
+
+A proof of resource use shows that a set `S` of gates, a declared computation, uses at least `x` of a resource. The
+physical constraints then leave the rest of the run at most the limit less `x`:
+
+* `work_outside`, `gates_outside`: under `ComputeRate`, the gates of `A[X, [a, b))` outside `S` do at most
+  `Φ_X (b − a) − x` work, and number at most that at a pricing of at least one a gate;
+* `state_outside`: under `MemoryAt`, `X` carries at most `M_X − x` bits outside `S` across the tick;
+* `ingress_outside`: under `Links`, `A[X, [a, b))` reads at most `β_X (b − a) − x` bits outside `S` from outside `X`.
+
+So no run within the limits both uses `x` in `S` and more than the rest outside it (`work_excludes`,
+`state_excludes`, `ingress_excludes`).
+
+`feasible_ofLeaves` is the feasible set at limits per leaf and per link (`Hardware.ofLeaves`), and `server_dies`,
+`server_drams` and `server_store` are a server's limits over its dies, its device memories and their links.
+-/
+
+@[expose] public section
+
+namespace ResourceAccounting.SecurityProofs.Actual
+
+open Verity Finset
+
+variable {L : Type*} (A : Placed L)
+
+theorem work_inter_add_sdiff (π : Fin A.N → ℕ) (R S : Finset (Fin A.N)) :
+    A.work π (R ∩ S) + A.work π (R \ S) = A.work π R := by
+  unfold Placed.work
+  exact sum_inter_add_sum_sdiff R S π
+
+/-- **Work outside `S`**: if the gates of `A[X, [a, b))` in `S` do at least `x` work, those outside `S` do at most
+`Φ_X (b − a) − x`. -/
+theorem work_outside {𝒳 : Set (Finset L)} {π : Fin A.N → ℕ} {compute : Finset L → ℕ} (h : A.ComputeRate 𝒳 π compute)
+    {X : Finset L} (hX : X ∈ 𝒳) (a b : ℕ) (S : Finset (Fin A.N)) {x : ℕ}
+    (hx : x ≤ A.work π (A.region X (Set.Ico a b) ∩ S)) :
+    A.work π (A.region X (Set.Ico a b) \ S) ≤ compute X * (b - a) - x := by
+  have h1 := h X hX a b
+  have h2 := work_inter_add_sdiff A π (A.region X (Set.Ico a b)) S
+  omega
+
+/-- **Gates outside `S`**: at a pricing of at least one a computed gate, the gates of `A[X, [a, b))` outside `S` number
+at most `Φ_X (b − a) − x`. -/
+theorem gates_outside {𝒳 : Set (Finset L)} {π : Fin A.N → ℕ} {compute : Finset L → ℕ} (h : A.ComputeRate 𝒳 π compute)
+    (hπ : ∀ g, A.isInput g = false → 1 ≤ π g) {X : Finset L} (hX : X ∈ 𝒳) (a b : ℕ) (S : Finset (Fin A.N)) {x : ℕ}
+    (hx : x ≤ A.work π (A.region X (Set.Ico a b) ∩ S)) :
+    (A.region X (Set.Ico a b) \ S).card ≤ compute X * (b - a) - x := by
+  refine le_trans ?_ (work_outside A h hX a b S hx)
+  rw [card_eq_sum_ones]
+  exact sum_le_sum fun g hg => hπ g ((mem_region A).1 (mem_sdiff.1 hg).1).1
+
+/-- **State outside `S`**: if `X` carries at least `x` bits of `S` across the tick `t`, it carries at most `M_X − x`
+outside `S`. -/
+theorem state_outside {𝒳 : Set (Finset L)} {M : Finset L → ℕ} {T : Set ℕ} (h : A.MemoryAt 𝒳 M T) {X : Finset L}
+    (hX : X ∈ 𝒳) {t : ℕ} (ht : t ∈ T) (S : Finset (Fin A.N)) {x : ℕ} (hx : x ≤ A.stateIn X t S) :
+    A.stateIn X t Sᶜ ≤ M X - x := by
+  have h1 := h X hX t ht
+  have h2 := state_eq_stateIn_add_compl A X t S
+  omega
+
+open Classical in
+/-- **Ingress outside `S`**: if `A[X, [a, b))` reads at least `x` bits of `S` from outside `X`, it reads at most
+`β_X (b − a) − x` bits outside `S` from there. -/
+theorem ingress_outside {E : Type*} [Fintype E] {ends : E → L × L} {β : E → ℕ} {link : Fin A.N → Fin A.N → E}
+    (h : A.Links ends β link) (X : Finset L) (a b : ℕ) (S : Finset (Fin A.N)) {x : ℕ}
+    (hx : x ≤ A.width (((A.into (A.region X (Set.Ico a b))).filter fun g => A.x g ∉ X) ∩ S)) :
+    A.width (((A.into (A.region X (Set.Ico a b))).filter fun g => A.x g ∉ X) ∩ Sᶜ) ≤
+      linkCapacity ends β X * (b - a) - x := by
+  have h1 := ingress_le A h X a b
+  unfold Placed.ingress at h1
+  have h2 := width_inter_add_compl A ((A.into (A.region X (Set.Ico a b))).filter fun g => A.x g ∉ X) S
+  omega
+
+/-- **Work excluded**: no run at compute rate `Φ_X` both does `x` work in `S` and more than `Φ_X (b − a) − x` outside
+it, in `A[X, [a, b))`. -/
+theorem work_excludes {𝒳 : Set (Finset L)} {π : Fin A.N → ℕ} {compute : Finset L → ℕ} (h : A.ComputeRate 𝒳 π compute)
+    {X : Finset L} (hX : X ∈ 𝒳) (a b : ℕ) (S : Finset (Fin A.N)) (x : ℕ) :
+    ¬ (x ≤ A.work π (A.region X (Set.Ico a b) ∩ S) ∧
+      compute X * (b - a) - x < A.work π (A.region X (Set.Ico a b) \ S)) :=
+  fun hh => absurd (work_outside A h hX a b S hh.1) (not_le.mpr hh.2)
+
+/-- **Memory excluded**: no run within memory `M_X` at the tick `t` carries both `x` bits of `S` and more than
+`M_X − x` bits outside it across `t`. -/
+theorem state_excludes {𝒳 : Set (Finset L)} {M : Finset L → ℕ} {T : Set ℕ} (h : A.MemoryAt 𝒳 M T) {X : Finset L}
+    (hX : X ∈ 𝒳) {t : ℕ} (ht : t ∈ T) (S : Finset (Fin A.N)) (x : ℕ) :
+    ¬ (x ≤ A.stateIn X t S ∧ M X - x < A.stateIn X t Sᶜ) :=
+  fun hh => absurd (state_outside A h hX ht S hh.1) (not_le.mpr hh.2)
+
+open Classical in
+/-- **Bandwidth excluded**: no run on links of capacity `β_X` reads both `x` bits of `S` and more than
+`β_X (b − a) − x` bits outside it into `A[X, [a, b))` from outside `X`. -/
+theorem ingress_excludes {E : Type*} [Fintype E] {ends : E → L × L} {β : E → ℕ} {link : Fin A.N → Fin A.N → E}
+    (h : A.Links ends β link) (X : Finset L) (a b : ℕ) (S : Finset (Fin A.N)) (x : ℕ) :
+    ¬ (x ≤ A.width (((A.into (A.region X (Set.Ico a b))).filter fun g => A.x g ∉ X) ∩ S) ∧
+      linkCapacity ends β X * (b - a) - x <
+        A.width (((A.into (A.region X (Set.Ico a b))).filter fun g => A.x g ∉ X) ∩ Sᶜ)) :=
+  fun hh => absurd (ingress_outside A h X a b S hh.1) (not_le.mpr hh.2)
+
+/-- Compute rate at every leaf is compute rate at every set of leaves, at the sum of its leaves'. -/
+theorem computeRate_of_leaves [DecidableEq L] {π : Fin A.N → ℕ} {c : L → ℕ}
+    (h : ∀ p a b, A.work π (A.region {p} (Set.Ico a b)) ≤ c p * (b - a)) :
+    A.ComputeRate Set.univ π (fun X => ∑ p ∈ X, c p) := by
+  intro X _ a b
+  have hmaps : ∀ g ∈ A.region X (Set.Ico a b), A.x g ∈ X := fun g hg => ((mem_region A).1 hg).2.1
+  unfold Placed.work
+  change _ ≤ (∑ p ∈ X, c p) * (b - a)
+  rw [sum_mul, ← sum_fiberwise_of_maps_to hmaps]
+  refine sum_le_sum fun p hp => ?_
+  have hfib : (A.region X (Set.Ico a b)).filter (fun g => A.x g = p) = A.region {p} (Set.Ico a b) := by
+    ext g
+    simp only [mem_filter, mem_region A, mem_singleton]
+    constructor
+    · rintro ⟨⟨hi, -, ht⟩, rfl⟩
+      exact ⟨hi, rfl, ht⟩
+    · rintro ⟨hi, rfl, ht⟩
+      exact ⟨⟨hi, hp, ht⟩, rfl⟩
+  rw [hfib]
+  exact h p a b
+
+/-- **The feasible set at limits per leaf and per link**: a gate reads gates placed no later than itself, each leaf
+does at most its work a tick, every set of leaves carries at most its leaves' bits, and the links hold. -/
+theorem feasible_ofLeaves [DecidableEq L] {E : Type*} (c M : L → ℕ) (ends : E → L × L) (β : E → ℕ) (u : Usage A E)
+    (hc : A.Causal fun _ _ => 0) (hw : ∀ p a b, A.work u.π (A.region {p} (Set.Ico a b)) ≤ c p * (b - a))
+    (hm : ∀ X t, A.state X t ≤ ∑ p ∈ X, M p) (hl : A.Links ends β u.link) :
+    Feasible (Hardware.ofLeaves c M ends β) A u := by
+  refine ⟨hc, computeRate_of_leaves A hw, fun k p _ hD => ?_, fun X _ t => hm X t, hl⟩
+  simp [Hardware.ofLeaves] at hD
+
+section Server
+
+variable (n die host chip dram ram queue world store bus peer net : ℕ)
+
+/-- A server's dies together do `n` times one die's work a tick. -/
+theorem server_dies :
+    (server n die host chip dram ram queue world store bus peer net).compute (dies n) = n * die := by
+  simp [server, Hardware.ofLeaves, dies, sum_image (f := fun p : Loc n => _) fun i _ j _ h => Loc.die.inj h]
+
+/-- A server's device memories together carry `n` times one's bits. -/
+theorem server_drams :
+    (server n die host chip dram ram queue world store bus peer net).M (drams n) = n * dram := by
+  simp [server, Hardware.ofLeaves, drams, sum_image (f := fun p : Loc n => _) fun i _ j _ h => Loc.mem.inj h]
+
+/-- The links into a server's device memories together carry `n` times one's bits a tick. -/
+theorem server_store :
+    linkCapacity (server n die host chip dram ram queue world store bus peer net).ends
+      (server n die host chip dram ram queue world store bus peer net).β (drams n) = n * store := by
+  classical
+  have hb : boundary (server n die host chip dram ram queue world store bus peer net).ends (drams n) =
+      univ.image Wire.store := by
+    ext e
+    cases e <;> simp [boundary, server, Hardware.ofLeaves, Wire.ends, drams]
+  rw [linkCapacity, hb, sum_image fun i _ j _ h => Wire.store.inj h]
+  simp [server, Hardware.ofLeaves]
+
+end Server
+
+end ResourceAccounting.SecurityProofs.Actual
