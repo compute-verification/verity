@@ -1,5 +1,6 @@
 module
 
+public import Definitions.Core.Uniform
 public import Definitions.Registration.Physical
 public import Definitions.Slowdown.Fit
 
@@ -23,7 +24,8 @@ prohibited. Each set is a predicate on a computation `M` alone, at public parame
   multiplications that meets the recipe `p`'s premises (`Trains`).
 
 `Slowdown.SecurityProofs.secure` is the emptiness, at `Y` the fit bound (`Frame.bound`) on what the limits less the
-amounts leave (`Frame.unaccounted`).
+amounts leave (`Frame.unaccounted`). The audits' part is `Sound`: outside an error `δ` over their coins, a computation
+they accept is in `A`.
 -/
 
 @[expose] public section
@@ -48,6 +50,18 @@ structure Frame (L E : Type*) where
   missed : Finset (Fin (n * cuts.J))
 
 namespace Frame
+
+/-- **The frame of one server** `X`, a location of the hardware. -/
+abbrev single {L E : Type*} (hw : Hardware L E) (X : Finset L) (hX : X ∈ hw.units) (t : ℕ) (cuts : Cuts t)
+    (missed : Finset (Fin (1 * cuts.J))) : Frame L E where
+  hw := hw
+  n := 1
+  server _ := X
+  disjoint i j h := absurd (Subsingleton.elim i j) h
+  unit _ := hX
+  t := t
+  cuts := cuts
+  missed := missed
 
 variable {L E : Type*} (F : Frame L E)
 
@@ -179,6 +193,12 @@ def B (p : Recipe) (Y : ℝ) : Set (Computation L E) :=
     (start : Fin T.m → Fin (F.n * F.cuts.J)), Trains F M p c emb T start ∧ Y < T.M.card}
 
 end Trains
+
+/-- **The audits are sound** at the amounts `x_s`, `x_b` and `x_w` with error `δ`: over their coins, uniform, the
+probability that they accept and the computation `M ω` done under those coins is not in `A` is at most `δ`. -/
+def Sound [DecidableEq L] {Ω : Type} [Fintype Ω] (F : Frame L E) (x_s x_b x_w : ℕ) (accept : Ω → Prop)
+    (M : Ω → Computation L E) (δ : ℝ) : Prop :=
+  Claims.Pr (fun ω => accept ω ∧ M ω ∉ A F x_s x_b x_w) ≤ δ
 
 namespace Frame
 

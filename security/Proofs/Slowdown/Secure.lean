@@ -3,6 +3,7 @@ module
 public import Definitions.Slowdown.Security
 public import Proofs.Slowdown.FitRate
 public import Proofs.ResourceAccounting.Actual.Outside
+public import Proofs.Flock.Claims.Prob
 
 /-!
 # No computation is feasible, accounted for and prohibited
@@ -22,6 +23,11 @@ is at least the fit bound (`Frame.bound`) and the bits a covered window can read
 * The count. `fitRate_of_reads_but` bounds the counted multiplications by the fit bound over the covered windows plus
   those placed in the missed windows, which number at most the work the limits leave there plus those shared with the
   declared circuit (`card_missed_le`).
+
+`secure_pr` is the claim over the audits' coins: where every computation is feasible and the audits are sound with
+error `δ` (`Sound`), they accept a prohibited computation with probability at most `δ`. `single_m`, `single_b` and
+`single_Φ` are the limits of a frame of one server, and `server_m`, `server_b` and `server_Φ` those of a server of
+`n` GPUs with its host and switch.
 -/
 
 @[expose] public section
@@ -152,5 +158,55 @@ theorem secure {L E : Type*} [Fintype E] [DecidableEq L] (F : Frame L E) (x_s x_
     rw [← sub_le_iff_le_add, le_div_iff₀' hc, mul_sub]
     linarith
   exact absurd (h2.trans hY) (not_le.2 hlt)
+
+/-- **The audits accept a prohibited computation with probability at most `δ`**, where every computation the coins
+give is feasible and the audits are sound with error `δ`. -/
+theorem secure_pr {L E : Type*} [Fintype E] [DecidableEq L] (F : Frame L E) (x_s x_b x_w : ℕ) (p : Recipe) (Y : ℝ)
+    (hbw : 0 ≤ p.b_w) (hwe : 0 < p.w_e) (hgap : (F.unaccounted x_s x_b p : ℝ) < p.Nstar * p.b_w)
+    (hY : F.bound x_s x_b x_w p ≤ Y) {Ω : Type} [Fintype Ω] (accept : Ω → Prop) (M : Ω → Computation L E) (δ : ℝ)
+    (hH : ∀ ω, M ω ∈ H F) (hA : Sound F x_s x_b x_w accept M δ) :
+    Claims.Pr (fun ω => accept ω ∧ M ω ∈ B F p Y) ≤ δ :=
+  (Claims.Pr_mono fun ω h => ⟨h.1, fun hin => secure F x_s x_b x_w p Y hbw hwe hgap hY (M ω) (hH ω) hin h.2⟩).trans hA
+
+section Single
+
+variable {L E : Type*} (hw : Hardware L E) (X : Finset L) (hX : X ∈ hw.units) (t : ℕ) (cuts : Cuts t)
+  (missed : Finset (Fin (1 * cuts.J)))
+
+theorem single_m : (Frame.single hw X hX t cuts missed).m = hw.M X :=
+  sup_const (s := (univ : Finset (Fin 1))) univ_nonempty _
+
+theorem single_b [Fintype E] : (Frame.single hw X hX t cuts missed).b = linkCapacity hw.ends hw.β X :=
+  sup_const (s := (univ : Finset (Fin 1))) univ_nonempty _
+
+theorem single_Φ : (Frame.single hw X hX t cuts missed).Φ = hw.compute X :=
+  sup_const (s := (univ : Finset (Fin 1))) univ_nonempty _
+
+end Single
+
+section Server
+
+variable (n die host fabric chip dram ram queue world store bus peer net : ℕ) (t : ℕ) (cuts : Cuts t)
+  (missed : Finset (Fin (1 * cuts.J)))
+
+/-- A server of `n` GPUs carries `n (chip + dram) + ram + queue` bits across a tick. -/
+theorem server_m :
+    (Frame.single (server n die host fabric chip dram ram queue world store bus peer net) (Loc.inside n)
+      (Set.mem_univ _) t cuts missed).m = n * (chip + dram) + ram + queue :=
+  (single_m _ _ _ t cuts missed).trans (server_memory n die host fabric chip dram ram queue world store bus peer net)
+
+/-- A server of `n` GPUs reads `net` bits a tick from outside. -/
+theorem server_b :
+    (Frame.single (server n die host fabric chip dram ram queue world store bus peer net) (Loc.inside n)
+      (Set.mem_univ _) t cuts missed).b = net :=
+  (single_b _ _ _ t cuts missed).trans (server_link n die host fabric chip dram ram queue world store bus peer net)
+
+/-- A server of `n` GPUs does `n die + host + fabric` work a tick. -/
+theorem server_Φ :
+    (Frame.single (server n die host fabric chip dram ram queue world store bus peer net) (Loc.inside n)
+      (Set.mem_univ _) t cuts missed).Φ = n * die + host + fabric :=
+  (single_Φ _ _ _ t cuts missed).trans (server_compute n die host fabric chip dram ram queue world store bus peer net)
+
+end Server
 
 end Slowdown.SecurityProofs
