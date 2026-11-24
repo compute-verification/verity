@@ -13,11 +13,13 @@ A proof of resource use shows that a set `S` of gates, a declared computation, u
 physical constraints then leave the rest of the run at most the limit less `x`:
 
 * `work_outside`: under `ComputeRate`, the gates of `A[X, [a, b))` outside `S` do at most `Φ_X (b − a) − x` work;
-* `state_outside`: under `MemoryAt`, `X` carries at most `M_X − x` bits outside `S` across the tick;
+* `state_outside`: under `MemoryAt`, `X` carries at most `M_X − x` bits outside `S` across the tick
+  (`state_outside_of_held`: the same from a run's state, with `S` counted where it is held);
 * `ingress_outside`: under `Links`, `A[X, [a, b))` reads at most `β_X (b − a) − x` bits outside `S` from outside `X`.
 
 So no run within the limits both uses `x` in `S` and more than the rest outside it (`work_excludes`,
-`state_excludes`, `ingress_excludes`).
+`state_excludes`, `ingress_excludes`). A capacity certificate is in bit-ticks over a window, an average:
+`card_short_ticks_mul_le` bounds the ticks at which the account holds fewer than `x` bits.
 
 `feasible_ofLeaves` is the feasible set at limits per leaf and per link (`Hardware.ofLeaves`), and `server_dies`,
 `server_drams` and `server_store` are a server's limits over its dies, its device memories and their links, and
@@ -67,6 +69,48 @@ theorem state_outside {𝒳 : Set (Finset L)} {M : Finset L → ℕ} {T : Set �
   have h1 := h X hX t ht
   have h2 := state_eq_stateIn_add_compl A X t S
   omega
+
+/-- **State outside `S`, from what is held**: if the run's state of `X` at `t`, what its leaves hold and what is in
+flight between them, is at most `M` bits and at least `x` of them are of `S`, then `X` carries at most `M − x` bits
+outside `S` across `t`. A gate of `S` counts when it is held, whether or not it is read again. -/
+theorem state_outside_of_held {R : Actual.Run L} {X : Finset L} {t M x : ℕ} (hM : R.mem X t ≤ M)
+    (S : Finset (Fin R.A.N)) (hx : x ≤ R.A.width (R.state X t ∩ S)) : R.A.stateIn X t Sᶜ ≤ M - x := by
+  classical
+  have h1 : R.A.stateIn X t Sᶜ ≤ R.A.width (R.state X t ∩ Sᶜ) := by
+    unfold Placed.stateIn
+    refine width_mono R.A (inter_subset_inter (fun a ha => ?_) (Finset.Subset.refl _))
+    obtain ⟨hai, hxa⟩ := Finset.mem_filter.1 ha
+    simp only [Actual.Run.state, Finset.mem_filter, Finset.mem_univ, true_and]
+    exact Or.inr ⟨hai, hxa⟩
+  have h2 := width_inter_add_compl R.A (R.state X t) S
+  unfold Actual.Run.mem at hM
+  omega
+
+/-- **From a capacity certificate to the ticks that fall short**: if account `a` holds at most `m` bits of device memory
+at each tick of the window `w` and at least `C` bit-ticks over it, the ticks at which it holds fewer than `x ≤ m` bits
+number at most `(m · len − C) / (m − x)`. -/
+theorem card_short_ticks_mul_le {ι α : Type} (sc : Schedule ι α) (w : Window) (a : α) {m x C : ℕ}
+    (hm : ∀ t ∈ w.ticks, (sc t).mem a ≤ m) (hx : x ≤ m) (hC : C ≤ sc.held w a) :
+    (w.ticks.filter fun t => (sc t).mem a < x).card * (m - x) ≤ m * w.len - C := by
+  unfold Schedule.held at hC
+  have hsplit := sum_filter_add_sum_filter_not w.ticks (fun t => (sc t).mem a < x) fun t => (sc t).mem a
+  have hbad : ∑ t ∈ w.ticks.filter (fun t => (sc t).mem a < x), (sc t).mem a ≤
+      (w.ticks.filter fun t => (sc t).mem a < x).card * x :=
+    (sum_le_card_nsmul _ _ x fun t ht => (mem_filter.1 ht).2.le).trans (by rw [smul_eq_mul])
+  have hgood : ∑ t ∈ w.ticks.filter (fun t => ¬ (sc t).mem a < x), (sc t).mem a ≤
+      (w.ticks.filter fun t => ¬ (sc t).mem a < x).card * m :=
+    (sum_le_card_nsmul _ _ m fun t ht => hm t (mem_filter.1 ht).1).trans (by rw [smul_eq_mul])
+  have hcard := card_filter_add_card_filter_not (s := w.ticks) fun t => (sc t).mem a < x
+  have hlen : w.ticks.card = w.len := by simp [Window.ticks]
+  have h1 : (w.ticks.filter fun t => (sc t).mem a < x).card * (m - x) +
+      (w.ticks.filter fun t => (sc t).mem a < x).card * x =
+      (w.ticks.filter fun t => (sc t).mem a < x).card * m := by
+    rw [← Nat.mul_add, Nat.sub_add_cancel hx]
+  have h2 : m * w.len = (w.ticks.filter fun t => (sc t).mem a < x).card * m +
+      (w.ticks.filter fun t => ¬ (sc t).mem a < x).card * m := by
+    rw [← hlen, ← hcard]
+    ring
+  exact Nat.le_sub_of_add_le (by linarith)
 
 /-- **Ingress outside `S`**: if `A[X, [a, b))` reads at least `x` bits of `S` from outside `X`, it reads at most
 `β_X (b − a) − x` bits outside `S` from there. -/
