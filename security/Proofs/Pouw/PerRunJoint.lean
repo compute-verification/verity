@@ -52,6 +52,17 @@ theorem pr_computeLt_le [Nonempty ΩQ] [Nonempty ΩS] {p : Price} {W ε : ℝ} (
   rw [← pr_equiv (Equiv.prodComm ΩW (ΩQ × ΩS))] at this
   exact this
 
+/-- **What the compute residual bounds holds on an accepted run**, at the coins flipped: a quantity `lhs` that, at every
+coin, is at most the cap less any amount the compute account's work reaches, plus `rest`, exceeds the cap less the
+certificate plus `rest` on a run the compute audit accepts with probability at most `ε`. With
+`Slowdown.Cut.SecurityProofs.on_device` at each coin, `lhs` is `γ` times the run's training MACs. -/
+theorem pr_accepts_residual_perRun_le [Nonempty ΩQ] [Nonempty ΩS] {p : Price} {W ε : ℝ}
+    (h : r.ComputeSoundPerRun p W ε) (cap : ℕ) (lhs rest : ΩW × ΩQ × ΩS → ℝ)
+    (hdev : ∀ ω (x : ℕ), x ≤ r.work p ω → lhs ω ≤ ((cap - x : ℕ) : ℝ) + rest ω) :
+    pr (fun ω => r.accepts .compute ω ∧ ((cap - ⌈W⌉₊ : ℕ) : ℝ) + rest ω < lhs ω) ≤ ε :=
+  (pr_mono fun ω hω => ⟨hω.1, lt_of_not_ge fun hW =>
+    absurd (hdev ω ⌈W⌉₊ (Nat.ceil_le.mpr hW)) (not_le.mpr hω.2)⟩).trans (r.pr_computeLt_le h)
+
 theorem pr_bandwidthLt_le [Nonempty ΩW] [Nonempty ΩS] {Q ε : ℝ} (h : r.BandwidthSoundPerRun Q ε) :
     pr (fun ω => r.accepts .bandwidth ω ∧ (r.read ω : ℝ) < Q) ≤ ε := by
   have := pr_prod_le
