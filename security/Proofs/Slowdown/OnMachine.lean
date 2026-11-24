@@ -46,7 +46,7 @@ theorem on_machine {ι V κ : Type} [Fintype ι] [DecidableEq ι] [DecidableEq V
     (βw βx b : ℝ) (hw : 0 < βw) (hx : 0 < βx) (hb : 0 < b) (hval : ValuesInjective W val)
     (hshare : NoSharedPair W val) (hH : Assumptions.Hardness d ![W.allW, W.allX] val ![βw, βx] k)
     (hE : Assumptions.Exports W b) (hR : ReadsOn d P G k T' S) (hγ : ∀ s, γ ≤ (W.mac s).card)
-    {M : Hardware.Machine κ} {T : ℕ} (X : Hardware.Computation M d.D T) (hX : X.Within) (R : Finset M.Res)
+    {M : Hardware.Network κ} {T : ℕ} (X : Hardware.Computation M d.D T) (hX : X.Within) (R : Finset M.Res)
     (h1 : ∀ g ∈ d.D.computed, 1 ≤ ∑ e ∈ R, X.cost e g) {x : ℚ≥0} (hx' : x ≤ X.used R (G.biUnion P.gates)) :
     (γ : ℝ) * W.N ≤
       (((∑ e ∈ R, (M.node e.1).cap e.2) * T - x : ℚ≥0) : ℝ) + γ * workHEOn T' S (βw * βx) b W.O := by

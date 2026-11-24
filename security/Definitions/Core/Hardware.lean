@@ -9,7 +9,7 @@ public import Mathlib.Algebra.Order.BigOperators.Group.Finset
 /-!
 # A hardware model: the computations a machine can run (trusted)
 
-A machine (`Machine`) is a set of nodes and the links between them. A node holds bits and may compute: a GPU's die, its
+A machine (`Network`) is a set of nodes and the links between them. A node holds bits and may compute: a GPU's die, its
 device memory, a host's processor, the world outside. A computation of a circuit over `T` cycles (`Computation`) is,
 for every computed gate, the cycle and the node it is computed in and its kind (the functional unit that computes it),
 and for every cycle, the gates whose values each node holds at its end and the gates whose values each link carries
@@ -39,7 +39,7 @@ open scoped NNRat
 
 /-- **A node's limits**: its kinds of gate and its resources, a gate of kind `i` using `use i j` of resource `j`, of
 which a cycle has `cap j`; and the bits it holds. -/
-structure Node where
+structure Component where
   Kind : Type
   Res : Type
   use : Kind → Res → ℚ≥0
@@ -47,15 +47,15 @@ structure Node where
   state : ℕ
 
 /-- **A machine**: its nodes' limits and the bits each link carries in a cycle (`0` where there is no link). -/
-structure Machine (ι : Type) where
-  node : ι → Node
+structure Network (ι : Type) where
+  node : ι → Component
   link : ι → ι → ℕ
 
 /-- A resource of a machine: a node and a resource of it. -/
-abbrev Machine.Res {ι : Type} (M : Machine ι) : Type := (p : ι) × (M.node p).Res
+abbrev Network.Res {ι : Type} (M : Network ι) : Type := (p : ι) × (M.node p).Res
 
 /-- **A computation** of the circuit `C` over `T` cycles on the machine `M`. -/
-structure Computation {ι : Type} (M : Machine ι) (C : Circuit) (T : ℕ) where
+structure Computation {ι : Type} (M : Network ι) (C : Circuit) (T : ℕ) where
   /-- the cycle a computed gate is computed in -/
   cycle : Fin C.N → ℕ
   cycle_pos : ∀ g, C.isInput g = false → 1 ≤ cycle g
@@ -71,7 +71,7 @@ structure Computation {ι : Type} (M : Machine ι) (C : Circuit) (T : ℕ) where
 
 namespace Computation
 
-variable {ι : Type} {M : Machine ι} {C : Circuit} {T : ℕ} (X : Computation M C T)
+variable {ι : Type} {M : Network ι} {C : Circuit} {T : ℕ} (X : Computation M C T)
 
 open Classical in
 /-- What the gate `g` uses of the resource `e`: its kind's use, at the resource's node, and nothing elsewhere. -/
@@ -124,7 +124,8 @@ structure Within : Prop where
 end Computation
 
 /-- **The computations of `C` a machine can run in `T` cycles**: the ordered ones within its limits. -/
-def feasible {ι : Type} (M : Machine ι) (C : Circuit) (T : ℕ) : Set (Computation M C T) := {X | X.Order ∧ X.Within}
+def feasible {ι : Type} (M : Network ι) (C : Circuit) (T : ℕ) : Set (Computation M C T) :=
+  {X | X.Order ∧ X.Within}
 
 /-! ### A server of GPUs -/
 
@@ -139,7 +140,7 @@ inductive Loc (n : ℕ)
 /-- **A server of `n` GPUs**: each die reads its device memory at `read` bits a cycle and writes it at `write`, exchanges
 `bus` bits a cycle with the host each way and `peer` with each other die, and the host exchanges `net` with the world
 outside. Device memory computes nothing, and the host is the side compute. -/
-def server (n : ℕ) (die mem host outside : Node) (read write bus peer net : ℕ) : Machine (Loc n) where
+def server (n : ℕ) (die mem host outside : Component) (read write bus peer net : ℕ) : Network (Loc n) where
   node
     | .die _ => die
     | .mem _ => mem
@@ -170,7 +171,7 @@ of resource use establishes that such an `S` uses at least `x` of a resource; a 
 /-- A permitted part of a circuit: a property of a set of its gates. -/
 abbrev Permitted := (C : Circuit) → Finset (Fin C.N) → Prop
 
-variable {ι : Type} {M : Machine ι} {C : Circuit} {T : ℕ}
+variable {ι : Type} {M : Network ι} {C : Circuit} {T : ℕ}
 
 /-- **Work used**: a permitted part uses at least `x` of the resources `R`. -/
 def usesWork (P : Permitted) (R : Finset M.Res) (x : ℚ≥0) : Set (Computation M C T) :=

@@ -54,7 +54,7 @@ theorem width_biUnion_le (C : Circuit) {α : Type} (s : Finset α) (f : α → F
 
 namespace Computation
 
-variable {ι : Type} {M : Machine ι} {C : Circuit} {T : ℕ} (X : Computation M C T)
+variable {ι : Type} {M : Network ι} {C : Circuit} {T : ℕ} (X : Computation M C T)
 
 /-- **A resource's use over the run**: the gates use at most `T` cycles of it. -/
 theorem cost_le (hW : X.Within) (e : M.Res) : ∑ g ∈ C.computed, X.cost e g ≤ (M.node e.1).cap e.2 * T := by
@@ -237,7 +237,7 @@ theorem blocks_outside {κ : Type} (B : Finset κ) (m : κ → Finset (Fin C.N))
 
 end Computation
 
-variable {ι : Type} {M : Machine ι} {C : Circuit} {T : ℕ} (P : Permitted)
+variable {ι : Type} {M : Network ι} {C : Circuit} {T : ℕ} (P : Permitted)
 
 /-- **Work**: no computation the machine can run uses `x` of the resources `R` inside a permitted part and more than
 the resources' remainder outside every one. -/
@@ -274,7 +274,7 @@ theorem bandwidth_excludes (E : Finset (ι × ι)) (x : ℕ) :
 
 section Server
 
-variable {n : ℕ} (die mem host outside : Node) (read write bus peer net : ℕ)
+variable {n : ℕ} (die mem host outside : Component) (read write bus peer net : ℕ)
 
 /-- A server's dies together read their device memories at `n · read` bits a cycle. -/
 theorem server_reads :
