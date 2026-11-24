@@ -39,6 +39,16 @@ theorem work_inter_add_sdiff (π : Fin A.N → ℕ) (R S : Finset (Fin A.N)) :
   unfold Placed.work
   exact sum_inter_add_sum_sdiff R S π
 
+/-- A set's width in `G` is at most its width outside `S` plus its width in `S ∩ G`. -/
+theorem width_inter_le_split (R S G : Finset (Fin A.N)) :
+    A.width (R ∩ G) ≤ A.width (R ∩ Sᶜ) + A.width (R ∩ (S ∩ G)) := by
+  classical
+  refine (width_mono A fun g hg => ?_).trans (width_union_le A _ _)
+  obtain ⟨h1, h2⟩ := mem_inter.1 hg
+  by_cases hs : g ∈ S
+  · exact mem_union_right _ (mem_inter.2 ⟨h1, mem_inter.2 ⟨hs, h2⟩⟩)
+  · exact mem_union_left _ (mem_inter.2 ⟨h1, mem_compl.2 hs⟩)
+
 /-- **Work outside `S`**: if the gates of `A[X, [a, b))` in `S` do at least `x` work, those outside `S` do at most
 `Φ_X (b − a) − x`. -/
 theorem work_outside {𝒳 : Set (Finset L)} {π : Fin A.N → ℕ} {compute : Finset L → ℕ} (h : A.ComputeRate 𝒳 π compute)
@@ -70,6 +80,25 @@ theorem ingress_outside {E : Type*} [Fintype E] {ends : E → L × L} {β : E �
   rw [Finset.filter_congr_decidable] at h1
   have h2 := width_inter_add_compl A ((A.into (A.region X (Set.Ico a b))).filter fun g => A.x g ∉ X) S
   omega
+
+/-- What `X` carries across `t` in `G` is at most what it carries outside `S` plus what it carries in `S ∩ G`. -/
+theorem stateIn_le_split (X : Finset L) (t : ℕ) (S G : Finset (Fin A.N)) :
+    A.stateIn X t G ≤ A.stateIn X t Sᶜ + A.stateIn X t (S ∩ G) := by
+  unfold Placed.stateIn
+  exact width_inter_le_split A _ S G
+
+/-- Gates each priced at least 1 number at most the work of the region they are in. -/
+theorem card_filter_le_work {α : Type*} (π : Fin A.N → ℕ) (R : Finset (Fin A.N)) (s : Finset α) (f : α ↪ Fin A.N)
+    (hπ : ∀ g ∈ s, 1 ≤ π (f g)) [DecidablePred fun g => f g ∈ R] :
+    (s.filter fun g => f g ∈ R).card ≤ A.work π R := by
+  unfold Placed.work
+  calc (s.filter fun g => f g ∈ R).card = ∑ _g ∈ s.filter (fun g => f g ∈ R), 1 := by
+        rw [sum_const, smul_eq_mul, mul_one]
+    _ ≤ ∑ g ∈ s.filter (fun g => f g ∈ R), π (f g) := sum_le_sum fun g hg => hπ g (mem_filter.1 hg).1
+    _ = ∑ a ∈ (s.filter fun g => f g ∈ R).map f, π a := (sum_map _ f π).symm
+    _ ≤ ∑ a ∈ R, π a := sum_le_sum_of_subset fun a ha => by
+        obtain ⟨g, hg, rfl⟩ := mem_map.1 ha
+        exact (mem_filter.1 hg).2
 
 /-- **Work excluded**: no run at compute rate `Φ_X` both does `x` work in `S` and more than `Φ_X (b − a) − x` outside
 it, in `A[X, [a, b))`. -/
