@@ -76,10 +76,7 @@ def server (n die host fabric chip dram ram queue world store bus peer net : ℕ
     Wire.ends
     (fun | .store _ => store | .bus _ => bus | .peer _ => peer | .net => net)
 
-/-- The dies of a server. -/
-def dies (n : ℕ) : Finset (Loc n) := univ.image Loc.die
-
-/-- The device memories of a server. -/
-def drams (n : ℕ) : Finset (Loc n) := univ.image Loc.mem
+/-- The developer's side of a server: every leaf but the world outside. Its one boundary link is `net`. -/
+def Loc.inside (n : ℕ) : Finset (Loc n) := univ.erase Loc.outside
 
 end ResourceAccounting

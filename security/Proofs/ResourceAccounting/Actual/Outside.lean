@@ -20,9 +20,9 @@ physical constraints then leave the rest of the run at most the limit less `x`:
 A capacity certificate is in bit-ticks over a window, an average: `card_short_ticks_mul_le` bounds the ticks at which
 the account holds fewer than `x` bits.
 
-`feasible_ofLeaves` is the feasible set at limits per leaf and per link (`Hardware.ofLeaves`), and `server_dies`,
-`server_drams` and `server_store` are a server's limits over its dies, its device memories and their links, and
-`server_all` the whole server's work a tick. `server_gpu_fits`: each GPU of a server is a device of the device model,
+`feasible_ofLeaves_iff` is the feasible set at limits per leaf and per link (`Hardware.ofLeaves`), and
+`server_compute`, `server_memory` and `server_link` are a server's limits: its work a tick, the bits it carries and
+the bits a tick across its boundary. `server_gpu_fits`: each GPU of a server is a device of the device model,
 its die the chip, its device memory the memory, and its links to the host and the switch the side channels, so the
 joint audit's guarantees hold of each GPU.
 -/
@@ -164,52 +164,63 @@ theorem computeRate_of_leaves [DecidableEq L] {π : Fin A.N → ℕ} {c : L → 
   rw [hfib]
   exact h p a b
 
-/-- **The feasible set at limits per leaf and per link**: a gate reads gates placed no later than itself, each leaf
-does at most its work a tick, every set of leaves carries at most its leaves' bits, and the links hold. -/
-theorem feasible_ofLeaves [DecidableEq L] {E : Type*} (c M : L → ℕ) (ends : E → L × L) (β : E → ℕ) (u : Usage A E)
-    (hc : A.Causal fun _ _ => 0) (hw : ∀ p a b, A.work u.π (A.region {p} (Set.Ico a b)) ≤ c p * (b - a))
-    (hm : ∀ X t, A.state X t ≤ ∑ p ∈ X, M p) (hl : A.Links ends β u.link) :
-    Feasible (Hardware.ofLeaves c M ends β) A u := by
-  refine ⟨hc, computeRate_of_leaves A hw, fun k p _ hD => ?_, fun X _ t => hm X t, hl⟩
-  simp [Hardware.ofLeaves] at hD
+/-- **The feasible set at limits per leaf and per link is four clauses**: a gate reads gates placed no later than
+itself, each leaf does at most its work a tick, every set of leaves carries at most its leaves' bits, and the links
+hold. `Feasible`'s sequential-speed clause holds of every run there. -/
+theorem feasible_ofLeaves_iff [DecidableEq L] {E : Type*} (c M : L → ℕ) (ends : E → L × L) (β : E → ℕ) (u : Usage A E) :
+    Feasible (Hardware.ofLeaves c M ends β) A u ↔
+      (A.Causal fun _ _ => 0) ∧ (∀ p a b, A.work u.π (A.region {p} (Set.Ico a b)) ≤ c p * (b - a)) ∧
+        (∀ X t, A.state X t ≤ ∑ p ∈ X, M p) ∧ A.Links ends β u.link := by
+  constructor
+  · rintro ⟨hc, hw, -, hm, hl⟩
+    refine ⟨hc, fun p a b => ?_, fun X t => hm X (Set.mem_univ _) t, hl⟩
+    have h := hw {p} (Set.mem_univ _) a b
+    simpa [Hardware.ofLeaves] using h
+  · rintro ⟨hc, hw, hm, hl⟩
+    refine ⟨hc, computeRate_of_leaves A hw, fun k p _ hD => ?_, fun X _ t => hm X t, hl⟩
+    simp [Hardware.ofLeaves] at hD
 
 section Server
 
 variable (n die host fabric chip dram ram queue world store bus peer net : ℕ)
 
-/-- A server's dies together do `n` times one die's work a tick. -/
-theorem server_dies :
-    (server n die host fabric chip dram ram queue world store bus peer net).compute (dies n) = n * die := by
-  simp [server, Hardware.ofLeaves, dies, sum_image (f := fun p : Loc n => _) fun i _ j _ h => Loc.die.inj h]
-
-/-- A server's device memories together carry `n` times one's bits. -/
-theorem server_drams :
-    (server n die host fabric chip dram ram queue world store bus peer net).M (drams n) = n * dram := by
-  simp [server, Hardware.ofLeaves, drams, sum_image (f := fun p : Loc n => _) fun i _ j _ h => Loc.mem.inj h]
-
-/-- The links into a server's device memories together carry `n` times one's bits a tick. -/
-theorem server_store :
-    linkCapacity (server n die host fabric chip dram ram queue world store bus peer net).ends
-      (server n die host fabric chip dram ram queue world store bus peer net).β (drams n) = n * store := by
-  classical
-  have hb : boundary (server n die host fabric chip dram ram queue world store bus peer net).ends (drams n) =
-      univ.image Wire.store := by
-    ext e
-    cases e <;> simp [boundary, server, Hardware.ofLeaves, Wire.ends, drams]
-  rw [linkCapacity, hb, sum_image fun i _ j _ h => Wire.store.inj h]
-  simp [server, Hardware.ofLeaves]
-
-/-- A whole server does its `n` dies' work, its host's and its switch's a tick. -/
-theorem server_all :
-    (server n die host fabric chip dram ram queue world store bus peer net).compute univ = n * die + host + fabric := by
-  calc (server n die host fabric chip dram ram queue world store bus peer net).compute univ
+/-- A server does its `n` dies' work, its host's and its switch's a tick. -/
+theorem server_compute :
+    (server n die host fabric chip dram ram queue world store bus peer net).compute (Loc.inside n) =
+      n * die + host + fabric := by
+  calc (server n die host fabric chip dram ram queue world store bus peer net).compute (Loc.inside n)
       = ∑ p : Loc n, ((∑ i : Fin n, if p = Loc.die i then die else 0) + (if p = Loc.host then host else 0)
           + if p = Loc.switch then fabric else 0) := by
-        simp only [server, Hardware.ofLeaves]
+        simp only [server, Hardware.ofLeaves, Loc.inside, ← filter_ne' univ Loc.outside, sum_filter]
         exact sum_congr rfl fun p _ => by cases p <;> simp
     _ = n * die + host + fabric := by
         rw [sum_add_distrib, sum_add_distrib, sum_comm]
         simp
+
+/-- A server carries its `n` dies' and device memories' bits, its host's and its switch's. -/
+theorem server_memory :
+    (server n die host fabric chip dram ram queue world store bus peer net).M (Loc.inside n) =
+      n * (chip + dram) + ram + queue := by
+  calc (server n die host fabric chip dram ram queue world store bus peer net).M (Loc.inside n)
+      = ∑ p : Loc n, ((∑ i : Fin n, ((if p = Loc.die i then chip else 0) + if p = Loc.mem i then dram else 0))
+          + (if p = Loc.host then ram else 0) + if p = Loc.switch then queue else 0) := by
+        simp only [server, Hardware.ofLeaves, Loc.inside, ← filter_ne' univ Loc.outside, sum_filter]
+        exact sum_congr rfl fun p _ => by cases p <;> simp
+    _ = n * (chip + dram) + ram + queue := by
+        rw [sum_add_distrib, sum_add_distrib, sum_comm]
+        simp [sum_add_distrib, mul_add]
+
+/-- The one link across a server's boundary is its host's to the world outside. -/
+theorem server_link :
+    linkCapacity (server n die host fabric chip dram ram queue world store bus peer net).ends
+      (server n die host fabric chip dram ram queue world store bus peer net).β (Loc.inside n) = net := by
+  classical
+  have hb : boundary (server n die host fabric chip dram ram queue world store bus peer net).ends (Loc.inside n) =
+      {Wire.net} := by
+    ext e
+    cases e <;> simp [boundary, server, Hardware.ofLeaves, Wire.ends, Loc.inside]
+  rw [linkCapacity, hb, sum_singleton]
+  simp [server, Hardware.ofLeaves]
 
 open Classical in
 /-- **Each GPU of a server is a device.** The schedule a run feasible on the server induces at GPU `i` fits the device

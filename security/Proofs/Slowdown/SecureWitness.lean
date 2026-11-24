@@ -87,7 +87,8 @@ theorem region_eq (X : Finset Bool) {I : Set ℕ} (h : 0 ∈ I) :
   exact and_congr_left fun _ => by simp; omega
 
 theorem feasible : Feasible frame.hw run usage := by
-  refine feasible_ofLeaves run _ _ _ _ usage (fun _ _ _ => le_rfl) (fun p a b => ?_) (fun X t => ?_) ⟨by decide, ?_⟩
+  refine (feasible_ofLeaves_iff run _ _ _ _ usage).2
+    ⟨fun _ _ _ => le_rfl, fun p a b => ?_, fun X t => ?_, ⟨by decide, ?_⟩⟩
   · by_cases h : (0 : ℕ) ∈ Set.Ico a b
     · rw [region_eq _ h]
       have hc : ∀ p : Bool, run.work usage.π (univ.filter fun g : Fin 4 => 2 ≤ g.val ∧ run.x g ∈ ({p} : Finset Bool)) ≤ 1 := by
