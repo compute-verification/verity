@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Slowdown.CutCharged
+public import Proofs.Slowdown.OnMachine
 public import Proofs.Slowdown.Layered
 public import Proofs.Slowdown.FitKeep
 public import Proofs.Slowdown.WeightsSlotsWitness
