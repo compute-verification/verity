@@ -138,14 +138,14 @@ theorem window_eq (i : Fin (frame I).n) (j : Fin (frame I).cuts.J) :
   rw [region_eq _ (show (0 : ℕ) ∈ Set.Ico 0 1 from ⟨le_rfl, Nat.one_pos⟩)]
   decide
 
-/-- **A computation that is feasible and accounted for**, at the amounts `1`, `1` and `1`: the declared circuit's
-gates hold the one bit the server carries, the window reads the one bit its link delivers, and they do the one unit of
-work the server does. -/
-theorem served_mem : served ∈ H (frame I) ∧ served ∈ A (frame I) 1 1 1 := by
+/-- **A computation that is feasible and accounted for**, at the amounts `1`, `1`, `1` and `1`: the declared
+circuit's gates hold the one bit the server carries, the window reads the one bit its link delivers and no other, and
+they do the one unit of work the server does. -/
+theorem served_mem : served ∈ H (frame I) ∧ served ∈ A (frame I) 1 1 1 1 := by
   refine ⟨feasible, fun i j => ?_⟩
   have hj : j = (0 : Fin 1) := Subsingleton.elim _ _
   subst hj
-  refine ⟨fun _ => ⟨?_, ?_⟩, fun _ => ?_⟩
+  refine ⟨fun _ => ⟨?_, ?_, ?_⟩, fun _ => ?_⟩
   · change 1 ≤ run.stateIn {true} 0 univ
     unfold Placed.stateIn
     rw [region_eq _ (Set.mem_Ici.2 (le_refl 0)), Finset.filter_congr_decidable]
@@ -153,6 +153,11 @@ theorem served_mem : served ∈ H (frame I) ∧ served ∈ A (frame I) 1 1 1 := 
   · change 1 ≤ run.width (((run.into (run.region ((frame I).server i) ((frame I).span 0))).filter
       fun g => run.x g ∉ ({true} : Finset Bool)) ∩ univ)
     rw [window_eq]
+    decide
+  · change run.ingress ((frame I).server i) ((frame I).span 0) ≤ 1
+    unfold Placed.ingress
+    rw [window_eq, Finset.filter_congr_decidable]
+    change run.width ((run.into {3}).filter fun g => run.x g ∉ ({true} : Finset Bool)) ≤ 1
     decide
   · change 1 ≤ run.work usage.π (run.region ((frame I).server i) ((frame I).span 0) ∩ univ)
     rw [window_eq]
@@ -162,17 +167,17 @@ theorem ω_eq : (frame I).ω = 1 := by
   change (frame ∅).ω = 1
   decide
 
-theorem unaccounted_eq : (frame I).unaccounted 1 1 recipe = 0 := by
+theorem unaccounted_eq : (frame I).unaccounted 1 1 1 recipe = 0 := by
   have hm : (frame I).m = 1 := (single_m _ _ _ 1 cuts I).trans (by decide)
   have hb : (frame I).b = 1 := (single_b _ _ _ 1 cuts I).trans (by
     simp [linkCapacity, boundary, Hardware.ofLeaves])
   simp [Frame.unaccounted, hm, ω_eq, hb]
 
-/-- **`secure`'s conditions on the amounts and the recipe hold** at the amounts `1`, `1` and `1` and the count
+/-- **`secure`'s conditions on the amounts and the recipe hold** at the amounts `1`, `1`, `1` and `1` and the count
 `Y = 0`: the audits account for all the server's memory, all its link carries and all its work, so a covered window
 can read no bit of a reference training algorithm, a missed one has no work left for it, and the fit bound is `0`. -/
 theorem params : 0 ≤ recipe.b_w ∧ 0 < recipe.w_e ∧
-    ((frame I).unaccounted 1 1 recipe : ℝ) < recipe.Nstar * recipe.b_w ∧ (frame I).bound 1 1 1 recipe ≤ 0 := by
+    ((frame I).unaccounted 1 1 1 recipe : ℝ) < recipe.Nstar * recipe.b_w ∧ (frame I).bound 1 1 1 1 recipe ≤ 0 := by
   have hΦ : (frame I).Φ = 1 := (single_Φ _ _ _ 1 cuts I).trans (by decide)
   refine ⟨by norm_num, by norm_num, ?_, ?_⟩
   · rw [unaccounted_eq]
@@ -290,13 +295,13 @@ theorem trained_mem : trained ∈ H (frame I) ∧ trained ∈ B (frame I) recipe
     norm_num⟩
 
 /-- `secure` at the witness: the run with no gate the declared circuit's is not accounted for. -/
-theorem trained_not_accounted : trained ∉ A (frame I) 1 1 1 := fun hA =>
-  secure (frame I) 1 1 1 recipe 0 (params I).1 (params I).2.1 (params I).2.2.1 (params I).2.2.2 trained
+theorem trained_not_accounted : trained ∉ A (frame I) 1 1 1 1 := fun hA =>
+  secure (frame I) 1 1 1 1 recipe 0 (params I).1 (params I).2.1 (params I).2.2.1 (params I).2.2.2 trained
     (trained_mem I).1 hA (trained_mem I).2
 
 /-- `secure` at the witness: the run with every gate the declared circuit's is not prohibited. -/
 theorem served_not_prohibited : served ∉ B (frame I) recipe 0 :=
-  secure (frame I) 1 1 1 recipe 0 (params I).1 (params I).2.1 (params I).2.2.1 (params I).2.2.2 served
+  secure (frame I) 1 1 1 1 recipe 0 (params I).1 (params I).2.1 (params I).2.2.1 (params I).2.2.2 served
     (served_mem I).1 (served_mem I).2
 
 end Slowdown.SecurityProofs.SecureWitness

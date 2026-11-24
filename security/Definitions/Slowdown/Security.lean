@@ -16,9 +16,10 @@ prohibited. Each set is a predicate on a computation `M` alone, at public parame
   with what each gate uses of its location's compute and the link each wire runs on, the registered inputs, and the
   gates of the declared circuit (`declared`), which the audits' amounts are about.
 * **`H F`**, the feasible computations: `ResourceAccounting.Feasible` on the frame's hardware.
-* **`A F x_s x_b x_w`**, what the audits account for: at each window they cover, the declared circuit's gates hold at
-  least `x_s` bits on the window's server at the cut that opens it and the window reads at least `x_b` bits of them
-  from outside its server; at each window they miss, the declared circuit's gates do at least `x_w` work.
+* **`A F x_s x_b x_w y_b`**, what the audits account for: at each window they cover, the declared circuit's gates hold
+  at least `x_s` bits on the window's server at the cut that opens it, and the window reads at least `x_b` bits of
+  them, and at most `y_b` bits in all, from outside its server; at each window they miss, the declared circuit's gates
+  do at least `x_w` work.
 * **`B F p Y`**, the prohibited computations: those holding a reference training algorithm of more than `Y` counted
   multiplications that meets the recipe `p`'s premises (`Trains`).
 
@@ -119,14 +120,16 @@ variable {L E : Type*}
 (`ResourceAccounting.Feasible`). -/
 def H (F : Frame L E) : Set (Computation L E) := {M | Feasible F.hw M.run M.usage}
 
-/-- **`𝒜`, the computations consistent with what the audits account for**, at the amounts `x_s`, `x_b` and `x_w`. At
-each window the memory and bandwidth audits cover, the declared circuit's gates hold at least `x_s` bits on the
-window's server at the cut that opens it, and the window reads at least `x_b` bits of them from outside its server. At
-each window they miss, the declared circuit's gates do at least `x_w` work. -/
-def A [DecidableEq L] (F : Frame L E) (x_s x_b x_w : ℕ) : Set (Computation L E) :=
+/-- **`𝒜`, the computations consistent with what the audits account for**, at the amounts `x_s`, `x_b`, `x_w` and
+`y_b`. At each window the memory and bandwidth audits cover, the declared circuit's gates hold at least `x_s` bits on
+the window's server at the cut that opens it, and the window reads at least `x_b` bits of them from outside its
+server and at most `y_b` bits in all from there (the network attester's count; every feasible computation reads at
+most what the server's links carry). At each window they miss, the declared circuit's gates do at least `x_w` work. -/
+def A [DecidableEq L] (F : Frame L E) (x_s x_b x_w y_b : ℕ) : Set (Computation L E) :=
   {M | ∀ i j,
     (finProdFinEquiv (i, j) ∉ F.missed →
-      x_s ≤ M.carries F i j M.declared ∧ x_b ≤ M.reads F i j M.declared) ∧
+      x_s ≤ M.carries F i j M.declared ∧ x_b ≤ M.reads F i j M.declared ∧
+        M.run.ingress (F.server i) (F.span j) ≤ y_b) ∧
     (finProdFinEquiv (i, j) ∈ F.missed → x_w ≤ M.run.work M.usage.π (M.window F i j ∩ M.declared))}
 
 /-- **A recipe**: the parameters of the premises on a reference training algorithm. `Nstar` is the fewest weights that
@@ -197,18 +200,18 @@ namespace Frame
 variable [Fintype E] (F : Frame L E)
 
 /-- **The bits of a reference training algorithm a covered window can read**: what the memory limit leaves beside the
-`x_s` bits accounted for, what the links leave beside the `x_b` bits accounted for, and what the algorithm shares with
-the declared circuit. -/
-noncomputable def unaccounted (x_s x_b : ℕ) (p : Recipe) : ℕ :=
-  (F.m - x_s + p.o_s) + (F.b * F.ω - x_b + p.o_b)
+`x_s` bits accounted for, what the smaller of the links' capacity and the `y_b` bits that entered leaves beside the
+`x_b` bits accounted for, and what the algorithm shares with the declared circuit. -/
+noncomputable def unaccounted (x_s x_b y_b : ℕ) (p : Recipe) : ℕ :=
+  (F.m - x_s + p.o_s) + (min (F.b * F.ω) y_b - x_b + p.o_b)
 
 /-- **The fit bound**: the counted multiplications a computation can hold of a reference training algorithm, when a
 covered window reads at most `S' = unaccounted` bits of it: `n J · reuse · N* S'² / (4 w_e (N* b_w − S'))` over the
 windows, and for each missed window the work its server's limit leaves beside the `x_w` accounted for, with the
 multiplications shared with the declared circuit. -/
-noncomputable def bound (x_s x_b x_w : ℕ) (p : Recipe) : ℝ :=
-  (F.n * F.cuts.J : ℕ) * p.reuse * p.Nstar * (F.unaccounted x_s x_b p : ℝ) ^ 2 /
-      (4 * p.w_e * (p.Nstar * p.b_w - (F.unaccounted x_s x_b p : ℝ))) +
+noncomputable def bound (x_s x_b x_w y_b : ℕ) (p : Recipe) : ℝ :=
+  (F.n * F.cuts.J : ℕ) * p.reuse * p.Nstar * (F.unaccounted x_s x_b y_b p : ℝ) ^ 2 /
+      (4 * p.w_e * (p.Nstar * p.b_w - (F.unaccounted x_s x_b y_b p : ℝ))) +
     (F.missed.card * (F.Φ * F.ω - x_w + p.o_w) : ℕ)
 
 end Frame
