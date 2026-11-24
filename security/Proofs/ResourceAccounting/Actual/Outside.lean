@@ -162,6 +162,17 @@ theorem server_store :
   rw [linkCapacity, hb, sum_image fun i _ j _ h => Wire.store.inj h]
   simp [server, Hardware.ofLeaves]
 
+/-- A whole server does its `n` dies' work and its host's a tick. -/
+theorem server_all :
+    (server n die host chip dram ram queue world store bus peer net).compute univ = n * die + host := by
+  calc (server n die host chip dram ram queue world store bus peer net).compute univ
+      = ∑ p : Loc n, ((∑ i : Fin n, if p = Loc.die i then die else 0) + if p = Loc.host then host else 0) := by
+        simp only [server, Hardware.ofLeaves]
+        exact sum_congr rfl fun p _ => by cases p <;> simp
+    _ = n * die + host := by
+        rw [sum_add_distrib, sum_comm]
+        simp
+
 open Classical in
 /-- **Each GPU of a server is a device.** The schedule a run feasible on the server induces at GPU `i` fits the device
 with the die's state, the device memory's bits, the memory link's bandwidth and the host and switch links as side

@@ -17,6 +17,9 @@ gates each. With `HECharged`'s count for the blocks of `G`: `γ N ≤ r + γ (T'
 `on_machine_priced` is the same in the machine's own units: at a pricing where each MAC costs at least one unit, `N ≤ r + (T' + …)`, with
 no floor on a gate's price or a MAC's gates.
 
+`on_server` is `on_machine_priced` on a server of `n` GPUs and its host (`ResourceAccounting.server`), one circuit split
+across them: `Φ` is `n · die + host`.
+
 `on_device` reads `x` off the device model: when the blocks of `G` hold every gate of an account `a` and the pricing is
 `p` on each op class, `x` is any amount at most `a`'s work in the schedule the run induces
 (`ResourceAccounting.SecurityProofs.Actual.covers_work`), which is what the compute audit's accept certifies.
@@ -139,6 +142,26 @@ theorem on_machine_priced {ι V : Type} {L : Type*} [Fintype ι] [DecidableEq ι
   have hin' : ((∑ u ∈ Gᶜ, (W.inside (P.gates u)).card : ℕ) : ℝ) ≤ ((compute X * t - x : ℕ) : ℝ) := by
     exact_mod_cast hin
   linarith
+
+/-- **Training work on a server of GPUs.** The registered circuit is split across a server's `n` GPUs and its host,
+feasible there at a pricing where each MAC costs at least one unit, and done by tick `t`. If the blocks of `G` do at
+least `x` of the work, `N` is at most what the whole server has left, `(n · die + host) t − x`, and the count for the
+blocks of `G`. -/
+theorem on_server {ι V : Type} [Fintype ι] [DecidableEq ι] [DecidableEq V] (d : RegisteredCircuit)
+    (W : Work d.D ι) (val : Finset (Fin d.D.N) → V) (k m T' S : ℕ) (P : Partition d.D m) (G : Finset (Fin m))
+    (βw βx b : ℝ) (hw : 0 < βw) (hx : 0 < βx) (hb : 0 < b) (hval : ValuesInjective W val)
+    (hshare : NoSharedPair W val) (hH : Assumptions.Hardness d ![W.allW, W.allX] val ![βw, βx] k)
+    (hE : Assumptions.Exports W b) (hR : ReadsOn d P G k T' S)
+    (n die host chip dram ram queue world store bus peer net : ℕ)
+    (px : Fin d.D.N → Loc n) (pt pcell : Fin d.D.N → ℕ) (pinj : Function.Injective fun g => (px g, pcell g, pt g))
+    (usage : Usage (⟨d.D, px, pt, pcell, pinj⟩ : Placed (Loc n)) (Wire n))
+    (hF : Feasible (server n die host chip dram ram queue world store bus peer net) ⟨d.D, px, pt, pcell, pinj⟩ usage)
+    (hmac : ∀ s, 1 ≤ ∑ g ∈ W.mac s, usage.π g) (t : ℕ) (hall : ∀ g, d.D.isInput g = false → pt g < t) {x : ℕ}
+    (hx' : x ≤ ∑ g ∈ d.D.computed ∩ G.biUnion P.gates, usage.π g) :
+    (W.N : ℝ) ≤ (((n * die + host) * t - x : ℕ) : ℝ) + workHEOn T' S (βw * βx) b W.O := by
+  have h := on_machine_priced d W val k m T' S P G βw βx b hw hx hb hval hshare hH hE hR px pt pcell pinj hF.2.1 hmac
+    (X := univ) (Set.mem_univ _) t (fun g hg => ⟨mem_univ _, hall g hg⟩) hx'
+  rwa [ResourceAccounting.SecurityProofs.Actual.server_all] at h
 
 /-- `on_machine_priced` with the work of the blocks of `G` read off an account: every gate charged to `a` is in a block of
 `G`, and `x` is at most `a`'s work over the device's gates in `[0, t)` at the pricing `π'`. -/
