@@ -2,6 +2,7 @@ module
 
 public import Proofs.Slowdown.CutCharged
 public import Proofs.ResourceAccounting.Actual.Outside
+public import Proofs.ResourceAccounting.Actual.Device
 
 /-!
 # Training work on a machine whose work is mostly used by inference blocks
@@ -12,6 +13,10 @@ least one a gate, the gates of the other blocks number at most what the location
 (`ResourceAccounting.SecurityProofs.Actual.gates_outside`), and they hold whole at most `r / γ` MACs of at least `γ`
 gates each. With `HECharged`'s count for the blocks of `G`: `γ N ≤ r + γ (T' + ½ √(S O / q) + ½ √(S T' / (q b)))`
 (`on_machine`).
+
+`on_device` reads `x` off the device model: when the blocks of `G` hold every gate of an account `a` and the pricing is
+`p` on each op class, `x` is any amount at most `a`'s work in the schedule the run induces
+(`ResourceAccounting.SecurityProofs.Actual.covers_work`), which is what the compute audit's accept certifies.
 -/
 
 @[expose] public section
@@ -72,5 +77,60 @@ theorem on_machine {ι V : Type} {L : Type*} [Fintype ι] [DecidableEq ι] [Deci
     exact_mod_cast hin
   have hγ0 : (0 : ℝ) ≤ γ := Nat.cast_nonneg γ
   nlinarith [mul_le_mul_of_nonneg_left hN hγ0]
+
+/-- `on_machine` with the work of the blocks of `G` read off an account: every gate charged to `a` is in a block of
+`G`, and `x` is at most `a`'s work over the device's gates in `[0, t)` at the pricing `π'`. -/
+theorem on_machine_acct {ι V α : Type} {L : Type*} [Fintype ι] [DecidableEq ι] [DecidableEq V] (d : RegisteredCircuit)
+    (W : Work d.D ι) (val : Finset (Fin d.D.N) → V) (k m γ T' S : ℕ) (P : Partition d.D m) (G : Finset (Fin m))
+    (βw βx b : ℝ) (hw : 0 < βw) (hx : 0 < βx) (hb : 0 < b) (hval : ValuesInjective W val)
+    (hshare : NoSharedPair W val) (hH : Assumptions.Hardness d ![W.allW, W.allX] val ![βw, βx] k)
+    (hE : Assumptions.Exports W b) (hR : ReadsOn d P G k T' S) (hγ : ∀ s, γ ≤ (W.mac s).card)
+    (px : Fin d.D.N → L) (pt pcell : Fin d.D.N → ℕ) (pinj : Function.Injective fun g => (px g, pcell g, pt g))
+    {𝒳 : Set (Finset L)} {π : Fin d.D.N → ℕ} {compute : Finset L → ℕ}
+    (hrate : (⟨d.D, px, pt, pcell, pinj⟩ : Placed L).ComputeRate 𝒳 π compute)
+    (hπ : ∀ g, d.D.isInput g = false → 1 ≤ π g) {X : Finset L} (hX : X ∈ 𝒳) (t : ℕ)
+    (hall : ∀ g, d.D.isInput g = false → px g ∈ X ∧ pt g < t) {x : ℕ}
+    (A : Placed L) (hA : A = ⟨d.D, px, pt, pcell, pinj⟩) (π' : Fin A.N → ℕ) (acct : Fin A.N → α) (a : α)
+    [DecidablePred fun g => acct g = a]
+    (hπ' : ∀ g, π' g = π (Fin.cast (by rw [hA]) g))
+    (hacct : ∀ g, acct g = a → Fin.cast (by rw [hA]) g ∈ G.biUnion P.gates)
+    (hW : x ≤ A.work π' ((A.region X (Set.Ico 0 (0 + t))).filter fun g => acct g = a)) :
+    (γ : ℝ) * W.N ≤ ((compute X * t - x : ℕ) : ℝ) + γ * workHEOn T' S (βw * βx) b W.O := by
+  subst hA
+  refine on_machine d W val k m γ T' S P G βw βx b hw hx hb hval hshare hH hE hR hγ px pt pcell pinj hrate hπ hX t
+    hall (hW.trans ?_)
+  unfold Placed.work
+  rw [sum_congr rfl fun g _ => hπ' g]
+  refine sum_le_sum_of_subset fun g hg => ?_
+  obtain ⟨hg, ha⟩ := mem_filter.mp hg
+  obtain ⟨hc, -, -⟩ := (ResourceAccounting.SecurityProofs.Actual.mem_region _).1 hg
+  exact mem_inter.mpr ⟨mem_filter.mpr ⟨mem_univ _, hc⟩, hacct g ha⟩
+
+open Classical in
+/-- **Training work on a device whose compute account is the inference blocks.** The run `R` is the registered circuit
+placed at the device `chip ∪ mem` over `[0, t)`, every gate charged to the account `a` is in a block of `G`, and `a`'s
+work in the schedule the run induces is at least `x` at the price `p`. Then `γ N` is at most what the device has left,
+`Φ t − x`, and `γ` times `HECharged`'s count for the blocks of `G`. -/
+theorem on_device {ι V α ι' E : Type} {L : Type*} [Fintype ι] [DecidableEq ι] [DecidableEq V] [DecidableEq α]
+    (d : RegisteredCircuit)
+    (W : Work d.D ι) (val : Finset (Fin d.D.N) → V) (k m γ T' S : ℕ) (P : Partition d.D m) (G : Finset (Fin m))
+    (βw βx b : ℝ) (hw : 0 < βw) (hx : 0 < βx) (hb : 0 < b) (hval : ValuesInjective W val)
+    (hshare : NoSharedPair W val) (hH : Assumptions.Hardness d ![W.allW, W.allX] val ![βw, βx] k)
+    (hE : Assumptions.Exports W b) (hR : ReadsOn d P G k T' S) (hγ : ∀ s, γ ≤ (W.mac s).card)
+    (px : Fin d.D.N → L) (pt pcell : Fin d.D.N → ℕ) (pinj : Function.Injective fun g => (px g, pcell g, pt g))
+    {𝒳 : Set (Finset L)} {π : Fin d.D.N → ℕ} {compute : Finset L → ℕ}
+    (hrate : (⟨d.D, px, pt, pcell, pinj⟩ : Placed L).ComputeRate 𝒳 π compute)
+    (hπ : ∀ g, d.D.isInput g = false → 1 ≤ π g) (chip mem : Finset L) (hX : chip ∪ mem ∈ 𝒳) (t : ℕ)
+    (hall : ∀ g, d.D.isInput g = false → px g ∈ chip ∪ mem ∧ pt g < t) {x : ℕ}
+    (R : Actual.Run L) (hA : R.A = ⟨d.D, px, pt, pcell, pinj⟩) (cls : Fin R.A.N → Option OpClass)
+    (acct : Fin R.A.N → α) (link : Fin R.A.N → Fin R.A.N → E) (hbm : E × L) (side : ι' → E × L) (p : Price) (a : α)
+    (hcls : ∀ g, (cls g).elim 0 p = π (Fin.cast (by rw [hA]) g))
+    (hacct : ∀ g, acct g = a → Fin.cast (by rw [hA]) g ∈ G.biUnion P.gates)
+    (hW : x ≤ (R.schedule chip mem cls acct link hbm side).work ⟨0, t⟩ a p) :
+    (γ : ℝ) * W.N ≤ ((compute (chip ∪ mem) * t - x : ℕ) : ℝ) + γ * workHEOn T' S (βw * βx) b W.O := by
+  rw [← ResourceAccounting.SecurityProofs.Actual.covers_work R chip mem cls acct link hbm side
+    (π := fun g => (cls g).elim 0 p) (fun _ _ => rfl) ⟨0, t⟩ a] at hW
+  exact on_machine_acct d W val k m γ T' S P G βw βx b hw hx hb hval hshare hH hE hR hγ px pt pcell pinj hrate hπ hX t
+    hall R.A hA _ acct a hcls hacct hW
 
 end Slowdown.Cut.SecurityProofs
