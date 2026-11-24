@@ -67,6 +67,17 @@ theorem pr_accepts_compute_le {p : Price} {W ε : ℝ} (h : r.ComputeSound p W �
     pr (fun ω => r.accepts .compute ω ∧ ∀ x : ΩW, Bad (x, ω.2)) ≤ ε :=
   (pr_mono fun ω hω => ⟨hω.1, fun x => lt_of_not_ge fun hge => hB _ hge (hω.2 x)⟩).trans (r.pr_computeShort_le h)
 
+/-- **What the compute residual bounds holds in an accepted run**, outside the audit's error: a quantity `lhs` that, at
+every coin, is at most the cap less any amount the compute account's work reaches, plus `rest`, exceeds the cap less the
+certificate plus `rest` on every one of the compute audit's own coins, in a run it accepts, with probability at most
+`ε`. With `Slowdown.Cut.SecurityProofs.on_device` at each coin, `lhs` is `γ` times the training MACs. -/
+theorem pr_accepts_residual_le {p : Price} {W ε : ℝ} (h : r.ComputeSound p W ε) (cap : ℕ)
+    (lhs rest : ΩW × ΩQ × ΩS → ℝ) (hdev : ∀ ω (x : ℕ), x ≤ r.work p ω → lhs ω ≤ ((cap - x : ℕ) : ℝ) + rest ω) :
+    pr (fun ω => r.accepts .compute ω ∧
+      ∀ x : ΩW, ((cap - ⌈W⌉₊ : ℕ) : ℝ) + rest (x, ω.2) < lhs (x, ω.2)) ≤ ε :=
+  r.pr_accepts_compute_le h (fun ω => ((cap - ⌈W⌉₊ : ℕ) : ℝ) + rest ω < lhs ω) fun ω hW =>
+    not_lt.mpr (hdev ω ⌈W⌉₊ (Nat.ceil_le.mpr hW))
+
 /-- The bandwidth certificate's form of `pr_accepts_compute_le`. -/
 theorem pr_accepts_bandwidth_le {Q ε : ℝ} (h : r.BandwidthSound Q ε) (Bad : ΩW × ΩQ × ΩS → Prop)
     (hB : ∀ ω, Q ≤ r.read ω → ¬Bad ω) :
