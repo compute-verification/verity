@@ -4708,27 +4708,27 @@
   },
   "Flock.SecurityProofs.SampledKSLivePub": {
    "type_hash": "73bba6ca03a2bea3af5929f64cc490770d7705ec7e5b87dee4831fda9891a268",
-   "unfolded_hash": "94f106f24a30fb648285d056263009257c98121c6a8fe68a6c78979fa15fe396",
    "missing": "nontrivial",
-   "why": "nontrivial instance needs a fixture the kernel builds, or the statement restated to conclude a claims predicate over the record's verifier"
+   "why": "nontrivial instance needs a fixture the kernel builds, or the statement restated to conclude a claims predicate over the record's verifier",
+   "unfolded_hash": "94f106f24a30fb648285d056263009257c98121c6a8fe68a6c78979fa15fe396"
   },
   "Flock.SecurityProofs.SampledKSLiveV2": {
    "type_hash": "43e16e73206c75e215db6b95d1b2daba857ef90f89f56300e63260c0414d8aa5",
-   "unfolded_hash": "de168b0ac1d5c0463239cadacabae773703954ba8cac24169d90ce249a2e38ba",
    "missing": "nontrivial",
-   "why": "nontrivial instance needs a fixture the kernel builds, or the statement restated to conclude a claims predicate over the record's verifier"
+   "why": "nontrivial instance needs a fixture the kernel builds, or the statement restated to conclude a claims predicate over the record's verifier",
+   "unfolded_hash": "de168b0ac1d5c0463239cadacabae773703954ba8cac24169d90ce249a2e38ba"
   },
   "Flock.SecurityProofs.SampledKSLiveV3": {
    "type_hash": "363e8e7a18f9b0417428098088fd441f7724d15f39eee5ae5f424e4559e7f84b",
-   "unfolded_hash": "9ac9996b97d78e8215eed13c67ad40db69c97b35981b59b443f62c47d36fcfce",
    "missing": "nontrivial",
-   "why": "nontrivial instance needs a fixture the kernel builds, or the statement restated to conclude a claims predicate over the record's verifier"
+   "why": "nontrivial instance needs a fixture the kernel builds, or the statement restated to conclude a claims predicate over the record's verifier",
+   "unfolded_hash": "9ac9996b97d78e8215eed13c67ad40db69c97b35981b59b443f62c47d36fcfce"
   },
   "Flock.SecurityProofs.SampledKSLiveV5": {
    "type_hash": "1da5c430cbb43b0232626e9ac21f59025a435c8829d4500927b3bd052f108f35",
-   "unfolded_hash": "58bb5cbb8cc0b48501c5e640ec5d267fa0dcd20534db6c40d7a4c98ee183d90f",
    "missing": "nontrivial",
-   "why": "nontrivial instance needs a fixture the kernel builds, or the statement restated to conclude a claims predicate over the record's verifier"
+   "why": "nontrivial instance needs a fixture the kernel builds, or the statement restated to conclude a claims predicate over the record's verifier",
+   "unfolded_hash": "58bb5cbb8cc0b48501c5e640ec5d267fa0dcd20534db6c40d7a4c98ee183d90f"
   },
   "Flock.SecurityProofs.ServedRowsLinked": "2cde2f3d97c487723b8f8899ebf241205f576cceca38ba6d92a6a1872108aba6",
   "Flock.SecurityProofs.SessionLoopZK": "a4028bdba4de3cb93455dbf5d27c01dc1e341693a308bf26b99de7a4451e2862",
