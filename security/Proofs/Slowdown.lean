@@ -2,6 +2,7 @@ module
 
 public import Proofs.Slowdown.CutCharged
 public import Proofs.Slowdown.Secure
+public import Proofs.Slowdown.SecureWitness
 public import Proofs.Slowdown.Layered
 public import Proofs.Slowdown.FitKeep
 public import Proofs.Slowdown.WeightsSlotsWitness
