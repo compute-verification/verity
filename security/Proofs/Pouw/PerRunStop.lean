@@ -105,8 +105,7 @@ theorem w1Stop_computeSoundPerRunPriced [Fintype Q] [DecidableEq Q] [Fintype R] 
     pRead hq real
 
 /-- **At W1 priced, what the compute residual bounds**: `Run.pr_accepts_residual_perRunPriced_le` at
-`w1Stop_computeSoundPerRunPriced`'s certificate and error. With `Slowdown.Cut.SecurityProofs.on_device` at each coin,
-`lhs` is `γ` times the run's training MACs and `cap` the device's compute over the period. -/
+`w1Stop_computeSoundPerRunPriced`'s certificate and error, with `cap` the device's compute over the period. -/
 theorem w1Stop_residual [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (dv : PearlC.W1.W1Device)
     (hdv : PearlC.W1BudgetAbort.Positive dv) (salt : S → List ℕ) {P : PearlC.Protocol Q R S}
     {D : PearlC.Layout → Prop} {g : ℝ} {δ : ℕ → ℕ → ℝ} (hg : g < 1)

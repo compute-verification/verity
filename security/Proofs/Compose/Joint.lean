@@ -70,7 +70,7 @@ theorem pr_accepts_compute_le {p : Price} {W ε : ℝ} (h : r.ComputeSound p W �
 /-- **What the compute residual bounds holds in an accepted run**, outside the audit's error: a quantity `lhs` that, at
 every coin, is at most the cap less any amount the compute account's work reaches, plus `rest`, exceeds the cap less the
 certificate plus `rest` on every one of the compute audit's own coins, in a run it accepts, with probability at most
-`ε`. With `Slowdown.Cut.SecurityProofs.on_device` at each coin, `lhs` is `γ` times the training MACs. -/
+`ε`. -/
 theorem pr_accepts_residual_le {p : Price} {W ε : ℝ} (h : r.ComputeSound p W ε) (cap : ℕ)
     (lhs rest : ΩW × ΩQ × ΩS → ℝ) (hdev : ∀ ω (x : ℕ), x ≤ r.work p ω → lhs ω ≤ ((cap - x : ℕ) : ℝ) + rest ω) :
     pr (fun ω => r.accepts .compute ω ∧

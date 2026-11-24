@@ -25,6 +25,7 @@ public import Definitions.Slowdown.Dark
 public import Definitions.Slowdown.Factor
 public import Definitions.Slowdown.Covering
 public import Definitions.Slowdown.Cut
+public import Definitions.Slowdown.Security
 public import Definitions.Pous
 public import Definitions.Pous.Guarantees.StreamedWipeFamily
 public import Definitions.Pous.Guarantees.StreamedWipeReads
