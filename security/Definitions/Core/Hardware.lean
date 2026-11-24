@@ -3,6 +3,8 @@ module
 public import Definitions.Core.Structure
 public import Mathlib.Tactic.DeriveFintype
 public import Mathlib.Data.Fintype.Sum
+public import Mathlib.Data.NNRat.Defs
+public import Mathlib.Algebra.Order.BigOperators.Group.Finset
 
 /-!
 # A hardware model: the computations a machine can run (trusted)
@@ -18,7 +20,7 @@ value of `w` bits counts `w` (`Circuit.width`).
   held at the end of the cycle before. A node holds only input gates at the start; later it holds a gate only if it
   computed it in that cycle, held it at the end of the cycle before, or a link carried it there, and a link carries
   only what its source held.
-* **Limits** (`Computation.Within`). A node has resources, of which a gate of kind `i` uses `use j i` of resource `j`:
+* **Limits** (`Computation.Within`). A node has resources, of which a gate of kind `i` uses `use i j` of resource `j`:
   the gates a node computes in a cycle use at most `cap j` of each. A node holds at most `state` bits at the end of a
   cycle, and a link carries at most `link p q` bits a cycle.
 
@@ -33,14 +35,15 @@ statement that needs it, that a prohibited computation needs so many gates of a 
 namespace Verity.Hardware
 
 open Finset
+open scoped NNRat
 
-/-- **A node's limits**: `r` kinds of gate and `m` resources, a gate of kind `i` using `use j i` of resource `j`, of
+/-- **A node's limits**: its kinds of gate and its resources, a gate of kind `i` using `use i j` of resource `j`, of
 which a cycle has `cap j`; and the bits it holds. -/
 structure Node where
-  r : ℕ
-  m : ℕ
-  use : Fin m → Fin r → ℕ
-  cap : Fin m → ℕ
+  Kind : Type
+  Res : Type
+  use : Kind → Res → ℚ≥0
+  cap : Res → ℚ≥0
   state : ℕ
 
 /-- **A machine**: its nodes' limits and the bits each link carries in a cycle (`0` where there is no link). -/
@@ -49,7 +52,7 @@ structure Machine (ι : Type) where
   link : ι → ι → ℕ
 
 /-- A resource of a machine: a node and a resource of it. -/
-abbrev Machine.Res {ι : Type} (M : Machine ι) : Type := (p : ι) × Fin (M.node p).m
+abbrev Machine.Res {ι : Type} (M : Machine ι) : Type := (p : ι) × (M.node p).Res
 
 /-- **A computation** over `T` cycles on the machine `M`. -/
 structure Computation {ι : Type} (M : Machine ι) (T : ℕ) where
@@ -61,7 +64,7 @@ structure Computation {ι : Type} (M : Machine ι) (T : ℕ) where
   /-- the node a computed gate is computed at -/
   place : Fin C.N → ι
   /-- a computed gate's kind, among its node's -/
-  kind : (g : Fin C.N) → Fin (M.node (place g)).r
+  kind : (g : Fin C.N) → (M.node (place g)).Kind
   /-- the gates whose values a node holds at the end of a cycle -/
   hold : ℕ → ι → Finset (Fin C.N)
   /-- `sent c p q`: the gates whose values the link from `p` to `q` carries in cycle `c + 1` -/
@@ -73,14 +76,14 @@ variable {ι : Type} {M : Machine ι} {T : ℕ} (X : Computation M T)
 
 open Classical in
 /-- What the gate `g` uses of the resource `e`: its kind's use, at the resource's node, and nothing elsewhere. -/
-noncomputable def cost (e : M.Res) (g : Fin X.C.N) : ℕ :=
-  if h : X.place g = e.1 then (M.node e.1).use e.2 (h ▸ X.kind g) else 0
+noncomputable def cost (e : M.Res) (g : Fin X.C.N) : ℚ≥0 :=
+  if h : X.place g = e.1 then (M.node e.1).use (h ▸ X.kind g) e.2 else 0
 
 /-- The gates computed in cycle `c`. -/
 def gatesAt (c : ℕ) : Finset (Fin X.C.N) := X.C.computed.filter fun g => X.cycle g = c
 
 /-- What the gates `S` use of the resources `R`. -/
-noncomputable def used (R : Finset M.Res) (S : Finset (Fin X.C.N)) : ℕ :=
+noncomputable def used (R : Finset M.Res) (S : Finset (Fin X.C.N)) : ℚ≥0 :=
   ∑ e ∈ R, ∑ g ∈ X.C.computed ∩ S, X.cost e g
 
 /-- The bits of the gates `S` that the nodes `A` hold at the end of cycle `c`. -/
@@ -171,11 +174,11 @@ abbrev Permitted := (C : Circuit) → Finset (Fin C.N) → Prop
 variable {ι : Type} {M : Machine ι} {T : ℕ}
 
 /-- **Work used**: a permitted part uses at least `x` of the resources `R`. -/
-def usesWork (P : Permitted) (R : Finset M.Res) (x : ℕ) : Set (Computation M T) :=
+def usesWork (P : Permitted) (R : Finset M.Res) (x : ℚ≥0) : Set (Computation M T) :=
   {X | ∃ S, P X.C S ∧ x ≤ X.used R S}
 
 /-- **Work prohibited**: the gates outside a permitted part use more than `r` of the resources `R`, whatever the part. -/
-def needsWork (P : Permitted) (R : Finset M.Res) (r : ℕ) : Set (Computation M T) :=
+def needsWork (P : Permitted) (R : Finset M.Res) (r : ℚ≥0) : Set (Computation M T) :=
   {X | ∀ S, P X.C S → r < X.used R Sᶜ}
 
 /-- **Memory used** at the nodes `A`: at the end of every cycle they hold at least `x` bits of a permitted part. -/

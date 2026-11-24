@@ -27,6 +27,7 @@ So no feasible computation both uses `x` inside a permitted part and needs more 
 namespace Verity.Hardware
 
 open Finset
+open scoped NNRat
 
 theorem width_inter_add_diff (C : Circuit) (A S : Finset (Fin C.N)) :
     C.width (A ∩ S) + C.width (A \ S) = C.width A := by
@@ -71,7 +72,7 @@ theorem cost_le (hW : X.Within) (e : M.Res) : ∑ g ∈ X.C.computed, X.cost e g
   rw [hz, add_zero]
   calc ∑ c ∈ range T, ∑ g ∈ X.C.computed with X.cycle g = c + 1, X.cost e g
       ≤ ∑ _c ∈ range T, (M.node e.1).cap e.2 := sum_le_sum fun c _ => hW.work (c + 1) e
-    _ = (M.node e.1).cap e.2 * T := by rw [sum_const, card_range, smul_eq_mul, mul_comm]
+    _ = (M.node e.1).cap e.2 * T := by rw [sum_const, card_range, nsmul_eq_mul, mul_comm]
 
 theorem used_add_compl (R : Finset M.Res) (S : Finset (Fin X.C.N)) :
     X.used R S + X.used R Sᶜ = ∑ e ∈ R, ∑ g ∈ X.C.computed, X.cost e g := by
@@ -80,7 +81,7 @@ theorem used_add_compl (R : Finset M.Res) (S : Finset (Fin X.C.N)) :
   refine sum_congr rfl fun e _ => ?_
   have h := sum_sdiff (f := X.cost e) (inter_subset_left : X.C.computed ∩ S ⊆ X.C.computed)
   rw [sdiff_inter_self_left, sdiff_eq_inter_compl] at h
-  omega
+  rw [add_comm, h]
 
 /-- **The resources' use over the run**: the gates use at most `T` cycles of the resources `R`. -/
 theorem used_le (hW : X.Within) (R : Finset M.Res) (S : Finset (Fin X.C.N)) :
@@ -90,17 +91,16 @@ theorem used_le (hW : X.Within) (R : Finset M.Res) (S : Finset (Fin X.C.N)) :
 
 /-- **Work outside a permitted part**: if `S` uses `x` of the resources `R`, the gates outside `S` use at most those
 resources' `T` cycles less `x`. -/
-theorem work_outside (hW : X.Within) (R : Finset M.Res) {S : Finset (Fin X.C.N)} {x : ℕ} (hx : x ≤ X.used R S) :
-    X.used R Sᶜ ≤ (∑ e ∈ R, (M.node e.1).cap e.2) * T - x := by
-  have h := X.used_le hW R S
-  omega
+theorem work_outside (hW : X.Within) (R : Finset M.Res) {S : Finset (Fin X.C.N)} {x : ℚ≥0} (hx : x ≤ X.used R S) :
+    X.used R Sᶜ ≤ (∑ e ∈ R, (M.node e.1).cap e.2) * T - x :=
+  (le_tsub_of_add_le_left (X.used_le hW R S)).trans (tsub_le_tsub_left hx _)
 
 /-- **Gates outside a permitted part**: where every computed gate uses at least one of the resources `R`, the computed
 gates outside `S` number at most what they use. -/
 theorem gates_outside (R : Finset M.Res) (S : Finset (Fin X.C.N))
-    (h1 : ∀ g ∈ X.C.computed, 1 ≤ ∑ e ∈ R, X.cost e g) : X.C.size (X.C.computed \ S) ≤ X.used R Sᶜ := by
+    (h1 : ∀ g ∈ X.C.computed, 1 ≤ ∑ e ∈ R, X.cost e g) : (X.C.size (X.C.computed \ S) : ℚ≥0) ≤ X.used R Sᶜ := by
   simp only [used, Circuit.size]
-  rw [sum_comm, sdiff_eq_inter_compl, card_eq_sum_ones]
+  rw [sum_comm, sdiff_eq_inter_compl, card_eq_sum_ones, Nat.cast_sum, Nat.cast_one]
   exact sum_le_sum fun g hg => h1 g (mem_inter.mp hg).1
 
 /-- A value held at the end of cycle `c + j` that is an input or was computed by cycle `c` is held at some node at the
@@ -241,7 +241,7 @@ variable {ι : Type} {M : Machine ι} {T : ℕ} (P : Permitted)
 
 /-- **Work**: no computation the machine can run uses `x` of the resources `R` inside a permitted part and more than
 the resources' remainder outside every one. -/
-theorem work_excludes (R : Finset M.Res) (x : ℕ) :
+theorem work_excludes (R : Finset M.Res) (x : ℚ≥0) :
     needsWork P R ((∑ e ∈ R, (M.node e.1).cap e.2) * T - x) ∩ usesWork P R x ∩ feasible M T =
       (∅ : Set (Computation M T)) := by
   ext X
@@ -286,6 +286,15 @@ theorem server_reads :
 theorem server_mems :
     ∑ p ∈ mems n, ((server n die mem host outside read write bus peer net).node p).state = n * mem.state := by
   rw [mems, sum_image fun i _ j _ h => by simpa using h]
+  simp [server]
+
+open Classical in
+/-- A server's dies together have `n` times one die's resource `j`. -/
+theorem server_dies (j : die.Res) :
+    ∑ e ∈ univ.image fun i : Fin n =>
+        (⟨Loc.die i, j⟩ : (server n die mem host outside read write bus peer net).Res),
+      ((server n die mem host outside read write bus peer net).node e.1).cap e.2 = n * die.cap j := by
+  rw [sum_image fun i _ k _ h => by simpa using congrArg Sigma.fst h]
   simp [server]
 
 end Server
