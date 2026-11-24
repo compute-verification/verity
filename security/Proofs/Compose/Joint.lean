@@ -59,6 +59,26 @@ theorem pr_capacityShort_le {S ε : ℝ} (h : r.CapacitySound S ε) :
   rw [← pr_equiv (Equiv.prodAssoc ΩW ΩQ ΩS).symm] at this
   exact this
 
+/-- **What the compute certificate implies holds in an accepted run**, outside the audit's error: for any property
+`Bad` that the compute account's work reaching `W` rules out, the probability that the compute audit accepts and `Bad`
+holds on every one of its own coins is at most `ε`. -/
+theorem pr_accepts_compute_le {p : Price} {W ε : ℝ} (h : r.ComputeSound p W ε) (Bad : ΩW × ΩQ × ΩS → Prop)
+    (hB : ∀ ω, W ≤ r.work p ω → ¬Bad ω) :
+    pr (fun ω => r.accepts .compute ω ∧ ∀ x : ΩW, Bad (x, ω.2)) ≤ ε :=
+  (pr_mono fun ω hω => ⟨hω.1, fun x => lt_of_not_ge fun hge => hB _ hge (hω.2 x)⟩).trans (r.pr_computeShort_le h)
+
+/-- The bandwidth certificate's form of `pr_accepts_compute_le`. -/
+theorem pr_accepts_bandwidth_le {Q ε : ℝ} (h : r.BandwidthSound Q ε) (Bad : ΩW × ΩQ × ΩS → Prop)
+    (hB : ∀ ω, Q ≤ r.read ω → ¬Bad ω) :
+    pr (fun ω => r.accepts .bandwidth ω ∧ ∀ q : ΩQ, Bad (ω.1, q, ω.2.2)) ≤ ε :=
+  (pr_mono fun ω hω => ⟨hω.1, fun q => lt_of_not_ge fun hge => hB _ hge (hω.2 q)⟩).trans (r.pr_bandwidthShort_le h)
+
+/-- The capacity certificate's form of `pr_accepts_compute_le`. -/
+theorem pr_accepts_capacity_le {S ε : ℝ} (h : r.CapacitySound S ε) (Bad : ΩW × ΩQ × ΩS → Prop)
+    (hB : ∀ ω, S * (r.win .capacity).len ≤ r.held ω → ¬Bad ω) :
+    pr (fun ω => r.accepts .capacity ω ∧ ∀ s : ΩS, Bad (ω.1, ω.2.1, s)) ≤ ε :=
+  (pr_mono fun ω hω => ⟨hω.1, fun s => lt_of_not_ge fun hge => hB _ hge (hω.2 s)⟩).trans (r.pr_capacityShort_le h)
+
 theorem joint {p : Price} {W Q S εW εQ εS : ℝ} (hW : r.ComputeSound p W εW) (hQ : r.BandwidthSound Q εQ)
     (hS : r.CapacitySound S εS) :
     pr (fun ω => r.Accepted ω ∧ (r.ComputeShort p W ω ∨ r.BandwidthShort Q ω ∨ r.CapacityShort S ω))
