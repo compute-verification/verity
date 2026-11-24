@@ -69,7 +69,7 @@ public import Proofs.Core.SiteSubtree
 public import Proofs.Core.QSort
 public import Proofs.Core.Fp32
 public import Proofs.Core.HongKung
-public import Proofs.Core.RedBlue
+public import Proofs.Core.Hardware
 public import Proofs.Core.UnionBound
 public import Definitions.Core.Annotation
 
