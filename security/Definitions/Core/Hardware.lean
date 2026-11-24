@@ -1,6 +1,8 @@
 module
 
 public import Definitions.Core.Structure
+public import Mathlib.Tactic.DeriveFintype
+public import Mathlib.Data.Fintype.Sum
 
 /-!
 # A hardware model: the computations a machine can run (trusted)
@@ -114,14 +116,15 @@ structure Within : Prop where
   link : ∀ c p q, X.C.width (X.sent c p q) ≤ M.link p q
 
 open Classical in
-/-- What the copies inside the gates `S` use, over the `T` cycles, of the resources `j p` of the nodes `p ∈ A`. -/
-noncomputable def usedIn (A : Finset ι) (j : (p : ι) → Fin (M.node p).m) (S : Finset (Fin X.C.N)) : ℕ :=
-  ∑ p ∈ A, ∑ c ∈ range T, ∑ x ∈ (X.tiles (c + 1) p).filter fun x => x.2 ⊆ S, (M.node p).use (j p) x.1
+/-- What the copies inside the gates `S` use, over the `T` cycles, of the resources `R`, each a node and a resource of
+it. -/
+noncomputable def usedIn (R : Finset ((p : ι) × Fin (M.node p).m)) (S : Finset (Fin X.C.N)) : ℕ :=
+  ∑ e ∈ R, ∑ c ∈ range T, ∑ x ∈ (X.tiles (c + 1) e.1).filter fun x => x.2 ⊆ S, (M.node e.1).use e.2 x.1
 
 open Classical in
-/-- What the copies not inside the gates `S` use, over the `T` cycles, of the resources `j p` of the nodes `p ∈ A`. -/
-noncomputable def usedOut (A : Finset ι) (j : (p : ι) → Fin (M.node p).m) (S : Finset (Fin X.C.N)) : ℕ :=
-  ∑ p ∈ A, ∑ c ∈ range T, ∑ x ∈ (X.tiles (c + 1) p).filter fun x => ¬ x.2 ⊆ S, (M.node p).use (j p) x.1
+/-- What the copies not inside the gates `S` use, over the `T` cycles, of the resources `R`. -/
+noncomputable def usedOut (R : Finset ((p : ι) × Fin (M.node p).m)) (S : Finset (Fin X.C.N)) : ℕ :=
+  ∑ e ∈ R, ∑ c ∈ range T, ∑ x ∈ (X.tiles (c + 1) e.1).filter fun x => ¬ x.2 ⊆ S, (M.node e.1).use e.2 x.1
 
 /-- The bits of the gates `S` that the links `E` carry over the `T` cycles. -/
 def carried (E : Finset (ι × ι)) (S : Finset (Fin X.C.N)) : ℕ :=
@@ -134,6 +137,41 @@ end Computation
 
 /-- **The computations a machine can run in `T` cycles**: the ordered ones within its limits. -/
 def feasible {ι : Type} (M : Machine ι) (T : ℕ) : Set (Computation M T) := {X | X.Order ∧ X.Within}
+
+/-! ### A server of GPUs -/
+
+/-- **The nodes of a server of `n` GPUs**: each GPU's die and its device memory, the host, and the world outside. -/
+inductive Loc (n : ℕ)
+  | die (i : Fin n)
+  | mem (i : Fin n)
+  | host
+  | outside
+  deriving DecidableEq, Fintype
+
+/-- **A server of `n` GPUs**: each die reads its device memory at `read` bits a cycle and writes it at `write`, exchanges
+`bus` bits a cycle with the host each way and `peer` with each other die, and the host exchanges `net` with the world
+outside. Device memory computes nothing, and the host is the side compute. -/
+def server (n : ℕ) (die mem host outside : Node) (read write bus peer net : ℕ) : Machine (Loc n) where
+  node
+    | .die _ => die
+    | .mem _ => mem
+    | .host => host
+    | .outside => outside
+  link
+    | .mem i, .die j => if i = j then read else 0
+    | .die i, .mem j => if i = j then write else 0
+    | .host, .die _ => bus
+    | .die _, .host => bus
+    | .die i, .die j => if i = j then 0 else peer
+    | .outside, .host => net
+    | .host, .outside => net
+    | _, _ => 0
+
+/-- The device memories of a server. -/
+def mems (n : ℕ) : Finset (Loc n) := Finset.univ.image Loc.mem
+
+/-- The links on which the dies read their device memories. -/
+def reads (n : ℕ) : Finset (Loc n × Loc n) := Finset.univ.image fun i => (Loc.mem i, Loc.die i)
 
 /-! ### What a proof of resource use establishes, and what is prohibited
 
@@ -154,14 +192,14 @@ def usesWork (P : Permitted) (x : ℕ) : Set (Computation M T) :=
 def needsWork (P : Permitted) (r : ℕ) : Set (Computation M T) :=
   {X | ∀ S, P X.C S → r < X.C.size (X.C.computed \ S)}
 
-/-- **A resource used** at the nodes `A`: copies inside a permitted part use at least `x` of their resources `j`. -/
-def usesUnits (P : Permitted) (A : Finset ι) (j : (p : ι) → Fin (M.node p).m) (x : ℕ) : Set (Computation M T) :=
-  {X | ∃ S, P X.C S ∧ x ≤ X.usedIn A j S}
+/-- **Resources used**: copies inside a permitted part use at least `x` of the resources `R`. -/
+def usesUnits (P : Permitted) (R : Finset ((p : ι) × Fin (M.node p).m)) (x : ℕ) : Set (Computation M T) :=
+  {X | ∃ S, P X.C S ∧ x ≤ X.usedIn R S}
 
-/-- **A resource prohibited** at the nodes `A`: copies not inside a permitted part use more than `r` of their resources
-`j`, whatever the part. -/
-def needsUnits (P : Permitted) (A : Finset ι) (j : (p : ι) → Fin (M.node p).m) (r : ℕ) : Set (Computation M T) :=
-  {X | ∀ S, P X.C S → r < X.usedOut A j S}
+/-- **Resources prohibited**: copies not inside a permitted part use more than `r` of the resources `R`, whatever the
+part. -/
+def needsUnits (P : Permitted) (R : Finset ((p : ι) × Fin (M.node p).m)) (r : ℕ) : Set (Computation M T) :=
+  {X | ∀ S, P X.C S → r < X.usedOut R S}
 
 /-- **Memory used** at the nodes `A`: at the end of every cycle they hold at least `x` bits of a permitted part. -/
 def usesMemory (P : Permitted) (A : Finset ι) (x : ℕ) : Set (Computation M T) :=

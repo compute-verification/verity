@@ -78,19 +78,19 @@ theorem work [Fintype ι] (hW : X.Within) {W : ι → ℕ} (hG : ∀ p, (M.node 
         sum_le_sum fun c _ => card_biUnion_le.trans (sum_le_sum fun p _ => X.gatesAt_card hW (c + 1) p (hG p))
     _ = T * ∑ p, W p := by rw [sum_const, card_range, smul_eq_mul]
 
-/-- **A resource outside a permitted part**: if the copies inside `S` use `x` of the resources `j` of the nodes `A`,
-the other copies use at most those resources' `T` cycles less `x`. -/
-theorem units_outside (hW : X.Within) (A : Finset ι) (j : (p : ι) → Fin (M.node p).m) {S : Finset (Fin X.C.N)}
-    {x : ℕ} (hx : x ≤ X.usedIn A j S) : X.usedOut A j S ≤ (∑ p ∈ A, (M.node p).cap (j p)) * T - x := by
+/-- **Resources outside a permitted part**: if the copies inside `S` use `x` of the resources `R`, the other copies
+use at most those resources' `T` cycles less `x`. -/
+theorem units_outside (hW : X.Within) (R : Finset ((p : ι) × Fin (M.node p).m)) {S : Finset (Fin X.C.N)} {x : ℕ}
+    (hx : x ≤ X.usedIn R S) : X.usedOut R S ≤ (∑ e ∈ R, (M.node e.1).cap e.2) * T - x := by
   classical
-  have h : X.usedIn A j S + X.usedOut A j S ≤ ∑ p ∈ A, ∑ _c ∈ range T, (M.node p).cap (j p) := by
+  have h : X.usedIn R S + X.usedOut R S ≤ ∑ e ∈ R, ∑ _c ∈ range T, (M.node e.1).cap e.2 := by
     simp only [usedIn, usedOut]
     rw [← sum_add_distrib]
-    refine sum_le_sum fun p _ => ?_
+    refine sum_le_sum fun e _ => ?_
     rw [← sum_add_distrib]
     refine sum_le_sum fun c _ => ?_
     rw [sum_filter_add_sum_filter_not]
-    exact hW.work (c + 1) p (j p)
+    exact hW.work (c + 1) e.1 e.2
   simp only [sum_const, card_range, smul_eq_mul] at h
   rw [← Finset.mul_sum, mul_comm] at h
   omega
@@ -161,6 +161,25 @@ theorem bandwidth_outside (hW : X.Within) (E : Finset (ι × ι)) {S : Finset (F
   rw [← Finset.mul_sum, mul_comm] at h
   omega
 
+/-- **Blocks outside a permitted part**: of pairwise disjoint sets of computed gates, MACs say, those not inside `S`
+number at most the computed gates outside `S`. -/
+theorem blocks_outside {κ : Type} (B : Finset κ) (m : κ → Finset (Fin X.C.N)) (hm : ∀ b ∈ B, m b ⊆ X.C.computed)
+    (hd : ∀ b ∈ B, ∀ b' ∈ B, b ≠ b' → Disjoint (m b) (m b')) (S : Finset (Fin X.C.N)) :
+    (B.filter fun b => ¬ m b ⊆ S).card ≤ X.C.size (X.C.computed \ S) := by
+  classical
+  rcases isEmpty_or_nonempty (Fin X.C.N) with hE | hN
+  · have h0 : (B.filter fun b => ¬ m b ⊆ S) = ∅ :=
+      filter_eq_empty_iff.mpr fun b _ h => h (by rw [eq_empty_of_isEmpty (m b)]; exact empty_subset _)
+    rw [h0]
+    exact Nat.zero_le _
+  have hex : ∀ b ∈ B.filter fun b => ¬ m b ⊆ S, ∃ g, g ∈ m b ∧ g ∉ S := fun b hb =>
+    not_subset.mp (mem_filter.mp hb).2
+  choose! f hf using hex
+  refine card_le_card_of_injOn f (fun b hb => ?_) fun b hb b' hb' e => ?_
+  · exact mem_sdiff.mpr ⟨hm b (mem_filter.mp hb).1 (hf b hb).1, (hf b hb).2⟩
+  · by_contra hne
+    exact disjoint_left.mp (hd b (mem_filter.mp hb).1 b' (mem_filter.mp hb').1 hne) (hf b hb).1 (e ▸ (hf b' hb').1)
+
 end Computation
 
 variable {ι : Type} {M : Machine ι} {T : ℕ} (P : Permitted)
@@ -174,15 +193,15 @@ theorem work_excludes [Fintype ι] {W : ι → ℕ} (hG : ∀ p, (M.node p).Gate
   rintro ⟨⟨hB, S, hP, hx⟩, -, hW⟩
   exact absurd (X.work_outside hW hG hx) (not_le.mpr (hB S hP))
 
-/-- **A resource**: no computation the machine can run uses `x` of the resources `j` of the nodes `A` in copies inside
-a permitted part and more than the resources' remainder in copies outside every one. -/
-theorem units_excludes (A : Finset ι) (j : (p : ι) → Fin (M.node p).m) (x : ℕ) :
-    needsUnits P A j ((∑ p ∈ A, (M.node p).cap (j p)) * T - x) ∩ usesUnits P A j x ∩ feasible M T =
+/-- **Resources**: no computation the machine can run uses `x` of the resources `R` in copies inside a permitted part
+and more than the resources' remainder in copies outside every one. -/
+theorem units_excludes (R : Finset ((p : ι) × Fin (M.node p).m)) (x : ℕ) :
+    needsUnits P R ((∑ e ∈ R, (M.node e.1).cap e.2) * T - x) ∩ usesUnits P R x ∩ feasible M T =
       (∅ : Set (Computation M T)) := by
   ext X
   simp only [Set.mem_inter_iff, Set.mem_empty_iff_false, iff_false]
   rintro ⟨⟨hB, S, hP, hx⟩, -, hW⟩
-  exact absurd (X.units_outside hW A j hx) (not_le.mpr (hB S hP))
+  exact absurd (X.units_outside hW R hx) (not_le.mpr (hB S hP))
 
 /-- **Memory**: no computation the machine can run holds `x` bits of a permitted part at the nodes `A` at the end of
 every cycle and, at the end of some cycle, more than their remaining state outside any. -/
@@ -204,5 +223,33 @@ theorem bandwidth_excludes (E : Finset (ι × ι)) (x : ℕ) :
   simp only [Set.mem_inter_iff, Set.mem_empty_iff_false, iff_false]
   rintro ⟨⟨hB, S, hP, hx⟩, -, hW⟩
   exact absurd (X.bandwidth_outside hW E hx) (not_le.mpr (hB S hP))
+
+/-! ### A server of GPUs -/
+
+section Server
+
+variable {n : ℕ} (die mem host outside : Node) (read write bus peer net : ℕ)
+
+/-- A server's dies together read their device memories at `n · read` bits a cycle. -/
+theorem server_reads :
+    ∑ e ∈ reads n, (server n die mem host outside read write bus peer net).link e.1 e.2 = n * read := by
+  rw [reads, sum_image fun i _ j _ h => by simpa using congrArg Prod.fst h]
+  simp [server]
+
+/-- A server's device memories together hold `n` times one's state. -/
+theorem server_mems :
+    ∑ p ∈ mems n, ((server n die mem host outside read write bus peer net).node p).state = n * mem.state := by
+  rw [mems, sum_image fun i _ j _ h => by simpa using h]
+  simp [server]
+
+/-- A server's dies together have `n` times one die's resource `j`. -/
+theorem server_dies (j : Fin die.m) :
+    ∑ e ∈ univ.image fun i : Fin n =>
+        (⟨Loc.die i, j⟩ : (p : Loc n) × Fin ((server n die mem host outside read write bus peer net).node p).m),
+      ((server n die mem host outside read write bus peer net).node e.1).cap e.2 = n * die.cap j := by
+  rw [sum_image fun i _ k _ h => by simpa using congrArg Sigma.fst h]
+  simp [server]
+
+end Server
 
 end Verity.Hardware
