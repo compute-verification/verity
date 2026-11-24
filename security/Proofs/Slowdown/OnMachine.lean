@@ -91,22 +91,23 @@ theorem on_machine {ι V : Type} {L : Type*} [Fintype ι] [DecidableEq ι] [Deci
   have hγ0 : (0 : ℝ) ≤ γ := Nat.cast_nonneg γ
   nlinarith [mul_le_mul_of_nonneg_left hN hγ0]
 
-/-- **Training work on a server of GPUs.** The registered circuit is split across a server's `n` GPUs and its host,
-feasible there at a pricing where each MAC costs at least `γ`, and done by tick `t`. If the blocks of `G` do at least
-`x` of the work, `γ N` is at most what the whole server has left, `(n · die + host) t − x`, and `γ` times the count
-for the blocks of `G`. -/
+/-- **Training work on a server of GPUs.** The registered circuit is split across a server's `n` GPUs, its host and
+its switch, feasible there at a pricing where each MAC costs at least `γ`, and done by tick `t`. If the blocks of `G`
+do at least `x` of the work, `γ N` is at most what the whole server has left, `(n · die + host + fabric) t − x`, and
+`γ` times the count for the blocks of `G`. -/
 theorem on_server {ι V : Type} [Fintype ι] [DecidableEq ι] [DecidableEq V] (d : RegisteredCircuit)
     (W : Work d.D ι) (val : Finset (Fin d.D.N) → V) (k m γ T' S : ℕ) (P : Partition d.D m) (G : Finset (Fin m))
     (βw βx b : ℝ) (hw : 0 < βw) (hx : 0 < βx) (hb : 0 < b) (hval : ValuesInjective W val)
     (hshare : NoSharedPair W val) (hH : Assumptions.Hardness d ![W.allW, W.allX] val ![βw, βx] k)
     (hE : Assumptions.Exports W b) (hR : ReadsOn d P G k T' S)
-    (n die host chip dram ram queue world store bus peer net : ℕ)
+    (n die host fabric chip dram ram queue world store bus peer net : ℕ)
     (px : Fin d.D.N → Loc n) (pt pcell : Fin d.D.N → ℕ) (pinj : Function.Injective fun g => (px g, pcell g, pt g))
     (usage : Usage (⟨d.D, px, pt, pcell, pinj⟩ : Placed (Loc n)) (Wire n))
-    (hF : Feasible (server n die host chip dram ram queue world store bus peer net) ⟨d.D, px, pt, pcell, pinj⟩ usage)
+    (hF : Feasible (server n die host fabric chip dram ram queue world store bus peer net) ⟨d.D, px, pt, pcell, pinj⟩
+      usage)
     (hmac : ∀ s, γ ≤ ∑ g ∈ W.mac s, usage.π g) (t : ℕ) (hall : ∀ g, d.D.isInput g = false → pt g < t) {x : ℕ}
     (hx' : x ≤ ∑ g ∈ d.D.computed ∩ G.biUnion P.gates, usage.π g) :
-    (γ : ℝ) * W.N ≤ (((n * die + host) * t - x : ℕ) : ℝ) + γ * workHEOn T' S (βw * βx) b W.O := by
+    (γ : ℝ) * W.N ≤ (((n * die + host + fabric) * t - x : ℕ) : ℝ) + γ * workHEOn T' S (βw * βx) b W.O := by
   have h := on_machine d W val k m γ T' S P G βw βx b hw hx hb hval hshare hH hE hR px pt pcell pinj hF.2.1 hmac
     (X := univ) (Set.mem_univ _) t (fun g hg => ⟨mem_univ _, hall g hg⟩) hx'
   rwa [ResourceAccounting.SecurityProofs.Actual.server_all] at h

@@ -20,9 +20,10 @@ So no run within the limits both uses `x` in `S` and more than the rest outside 
 `state_excludes`, `ingress_excludes`).
 
 `feasible_ofLeaves` is the feasible set at limits per leaf and per link (`Hardware.ofLeaves`), and `server_dies`,
-`server_drams` and `server_store` are a server's limits over its dies, its device memories and their links. `server_gpu_fits`: each GPU of a server is a device of the device model, its die the chip, its
-device memory the memory, and its links to the host and the switch the side channels, so the joint audit's guarantees
-hold of each GPU.
+`server_drams` and `server_store` are a server's limits over its dies, its device memories and their links, and
+`server_all` the whole server's work a tick. `server_gpu_fits`: each GPU of a server is a device of the device model,
+its die the chip, its device memory the memory, and its links to the host and the switch the side channels, so the
+joint audit's guarantees hold of each GPU.
 -/
 
 @[expose] public section
@@ -127,39 +128,40 @@ theorem feasible_ofLeaves [DecidableEq L] {E : Type*} (c M : L → ℕ) (ends : 
 
 section Server
 
-variable (n die host chip dram ram queue world store bus peer net : ℕ)
+variable (n die host fabric chip dram ram queue world store bus peer net : ℕ)
 
 /-- A server's dies together do `n` times one die's work a tick. -/
 theorem server_dies :
-    (server n die host chip dram ram queue world store bus peer net).compute (dies n) = n * die := by
+    (server n die host fabric chip dram ram queue world store bus peer net).compute (dies n) = n * die := by
   simp [server, Hardware.ofLeaves, dies, sum_image (f := fun p : Loc n => _) fun i _ j _ h => Loc.die.inj h]
 
 /-- A server's device memories together carry `n` times one's bits. -/
 theorem server_drams :
-    (server n die host chip dram ram queue world store bus peer net).M (drams n) = n * dram := by
+    (server n die host fabric chip dram ram queue world store bus peer net).M (drams n) = n * dram := by
   simp [server, Hardware.ofLeaves, drams, sum_image (f := fun p : Loc n => _) fun i _ j _ h => Loc.mem.inj h]
 
 /-- The links into a server's device memories together carry `n` times one's bits a tick. -/
 theorem server_store :
-    linkCapacity (server n die host chip dram ram queue world store bus peer net).ends
-      (server n die host chip dram ram queue world store bus peer net).β (drams n) = n * store := by
+    linkCapacity (server n die host fabric chip dram ram queue world store bus peer net).ends
+      (server n die host fabric chip dram ram queue world store bus peer net).β (drams n) = n * store := by
   classical
-  have hb : boundary (server n die host chip dram ram queue world store bus peer net).ends (drams n) =
+  have hb : boundary (server n die host fabric chip dram ram queue world store bus peer net).ends (drams n) =
       univ.image Wire.store := by
     ext e
     cases e <;> simp [boundary, server, Hardware.ofLeaves, Wire.ends, drams]
   rw [linkCapacity, hb, sum_image fun i _ j _ h => Wire.store.inj h]
   simp [server, Hardware.ofLeaves]
 
-/-- A whole server does its `n` dies' work and its host's a tick. -/
+/-- A whole server does its `n` dies' work, its host's and its switch's a tick. -/
 theorem server_all :
-    (server n die host chip dram ram queue world store bus peer net).compute univ = n * die + host := by
-  calc (server n die host chip dram ram queue world store bus peer net).compute univ
-      = ∑ p : Loc n, ((∑ i : Fin n, if p = Loc.die i then die else 0) + if p = Loc.host then host else 0) := by
+    (server n die host fabric chip dram ram queue world store bus peer net).compute univ = n * die + host + fabric := by
+  calc (server n die host fabric chip dram ram queue world store bus peer net).compute univ
+      = ∑ p : Loc n, ((∑ i : Fin n, if p = Loc.die i then die else 0) + (if p = Loc.host then host else 0)
+          + if p = Loc.switch then fabric else 0) := by
         simp only [server, Hardware.ofLeaves]
         exact sum_congr rfl fun p _ => by cases p <;> simp
-    _ = n * die + host := by
-        rw [sum_add_distrib, sum_comm]
+    _ = n * die + host + fabric := by
+        rw [sum_add_distrib, sum_add_distrib, sum_comm]
         simp
 
 open Classical in
@@ -167,8 +169,9 @@ open Classical in
 with the die's state, the device memory's bits, the memory link's bandwidth and the host and switch links as side
 channels, when each op class runs at most at its rate there. -/
 theorem server_gpu_fits {α : Type} [Fintype α] (R : Actual.Run (Loc n))
-    {usage : Usage R.A (Wire n)} (hF : Feasible (server n die host chip dram ram queue world store bus peer net) R.A usage)
-    (hM : R.Memory Set.univ (server n die host chip dram ram queue world store bus peer net).M) (i : Fin n)
+    {usage : Usage R.A (Wire n)}
+    (hF : Feasible (server n die host fabric chip dram ram queue world store bus peer net) R.A usage)
+    (hM : R.Memory Set.univ (server n die host fabric chip dram ram queue world store bus peer net).M) (i : Fin n)
     (rate : OpClass → ℕ) (cls : Fin R.A.N → Option OpClass) (acct : Fin R.A.N → α)
     (hΦ : ∀ o, R.A.ComputeRate {{Loc.die i} ∪ {Loc.mem i}} (R.A.classPrice cls o) (fun _ => rate o)) :
     (R.schedule {Loc.die i} {Loc.mem i} cls acct usage.link (Wire.store i, Loc.die i)
