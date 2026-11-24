@@ -10,7 +10,8 @@ A gate that `A[X, [t, t'))` reads from outside itself is placed outside `X`, and
 `X`. In `X` it is an input gate, or a computed gate placed before `t`: one placed at or after `t'` would be read by a gate
 of the region, which runs before `t'`, before its own tick, which `Forward X` refuses. Either way `A[X, [t, ∞))` reads it
 from outside itself, so it counts in `state X t`. The same holds of the reads in any set `G` of gates, with
-`stateIn X t G` in place of `state X t` (`width_into_region_inter_le`).
+`stateIn X t G` in place of `state X t` (`width_into_region_inter_le`), and there only the part of the ingress in `G`
+counts (`width_into_region_inter_le_boundary`).
 -/
 
 @[expose] public section
@@ -42,16 +43,23 @@ theorem stateIn_univ (X : Finset L) (t : ℕ) : A.stateIn X t univ = A.state X t
   unfold Placed.stateIn Placed.state
   rw [inter_univ]
 
-/-- **The split in `G`**: what `A[X, [t, t'))` reads from outside itself in the gates `G` is at most the part in `G` of
-what `X` carries across `t` plus what crossed `X`'s boundary during `[t, t')`, when wires run forward in time inside
-`X`. -/
-theorem width_into_region_inter_le (X : Finset L) (t t' : ℕ) (G : Finset (Fin A.N)) (h : A.Forward X) :
-    A.width (A.into (A.region X (Set.Ico t t')) ∩ G) ≤ A.stateIn X t G + A.ingress X (Set.Ico t t') := by
+theorem stateIn_mono (X : Finset L) (t : ℕ) {G G' : Finset (Fin A.N)} (h : G ⊆ G') :
+    A.stateIn X t G ≤ A.stateIn X t G' := by
+  unfold Placed.stateIn
+  exact width_mono A (inter_subset_inter (Finset.Subset.refl _) h)
+
+/-- **The split in `G`, each part in `G`**: what `A[X, [t, t'))` reads from outside itself in the gates `G` is at most
+the part in `G` of what `X` carries across `t` plus the part in `G` of what crossed `X`'s boundary during `[t, t')`,
+when wires run forward in time inside `X`. -/
+theorem width_into_region_inter_le_boundary (X : Finset L) (t t' : ℕ) (G : Finset (Fin A.N)) (h : A.Forward X)
+    [DecidablePred fun a => A.x a ∉ X] :
+    A.width (A.into (A.region X (Set.Ico t t')) ∩ G) ≤ A.stateIn X t G +
+      A.width (((A.into (A.region X (Set.Ico t t'))).filter fun a => A.x a ∉ X) ∩ G) := by
   classical
-  unfold Placed.stateIn Placed.ingress
+  unfold Placed.stateIn
   refine (width_mono A fun a ha => ?_).trans (width_union_le A _ _)
   obtain ⟨hai, haG⟩ := mem_inter.1 ha
-  rw [mem_union, mem_inter, mem_filter, mem_filter]
+  simp only [mem_union, mem_inter, mem_filter]
   obtain ⟨ha, g, hg, hag⟩ := (mem_into A).1 hai
   by_cases hx : A.x a ∈ X
   · refine Or.inl ⟨⟨(mem_into A).2 ⟨fun ha' => ha ?_, g, ?_, hag⟩, hx⟩, haG⟩
@@ -60,7 +68,17 @@ theorem width_into_region_inter_le (X : Finset L) (t t' : ℕ) (G : Finset (Fin 
       exact (mem_region A).2 ⟨hai, hx, hat, (h g a hag hai hx hgx).trans_lt hgt⟩
     · obtain ⟨hgi, hgx, hgt, -⟩ := (mem_region A).1 hg
       exact (mem_region A).2 ⟨hgi, hgx, hgt⟩
-  · exact Or.inr ⟨hai, hx⟩
+  · exact Or.inr ⟨⟨hai, hx⟩, haG⟩
+
+/-- **The split in `G`**: what `A[X, [t, t'))` reads from outside itself in the gates `G` is at most the part in `G` of
+what `X` carries across `t` plus what crossed `X`'s boundary during `[t, t')`, when wires run forward in time inside
+`X`. -/
+theorem width_into_region_inter_le (X : Finset L) (t t' : ℕ) (G : Finset (Fin A.N)) (h : A.Forward X) :
+    A.width (A.into (A.region X (Set.Ico t t')) ∩ G) ≤ A.stateIn X t G + A.ingress X (Set.Ico t t') := by
+  classical
+  unfold Placed.ingress
+  exact (width_into_region_inter_le_boundary A X t t' G h).trans
+    (Nat.add_le_add_left (width_mono A inter_subset_left) _)
 
 /-- **The split**: what `A[X, [t, t'))` reads from outside itself is at most what `X` carries across `t` plus what
 crossed `X`'s boundary during `[t, t')`, when wires run forward in time inside `X`. -/

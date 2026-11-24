@@ -58,16 +58,16 @@ theorem state_outside {𝒳 : Set (Finset L)} {M : Finset L → ℕ} {T : Set �
   have h2 := state_eq_stateIn_add_compl A X t S
   omega
 
-open Classical in
 /-- **Ingress outside `S`**: if `A[X, [a, b))` reads at least `x` bits of `S` from outside `X`, it reads at most
 `β_X (b − a) − x` bits outside `S` from there. -/
 theorem ingress_outside {E : Type*} [Fintype E] {ends : E → L × L} {β : E → ℕ} {link : Fin A.N → Fin A.N → E}
-    (h : A.Links ends β link) (X : Finset L) (a b : ℕ) (S : Finset (Fin A.N)) {x : ℕ}
+    (h : A.Links ends β link) (X : Finset L) [DecidablePred fun g => A.x g ∉ X] (a b : ℕ) (S : Finset (Fin A.N)) {x : ℕ}
     (hx : x ≤ A.width (((A.into (A.region X (Set.Ico a b))).filter fun g => A.x g ∉ X) ∩ S)) :
     A.width (((A.into (A.region X (Set.Ico a b))).filter fun g => A.x g ∉ X) ∩ Sᶜ) ≤
       linkCapacity ends β X * (b - a) - x := by
   have h1 := ingress_le A h X a b
   unfold Placed.ingress at h1
+  rw [Finset.filter_congr_decidable] at h1
   have h2 := width_inter_add_compl A ((A.into (A.region X (Set.Ico a b))).filter fun g => A.x g ∉ X) S
   omega
 
@@ -86,11 +86,11 @@ theorem state_excludes {𝒳 : Set (Finset L)} {M : Finset L → ℕ} {T : Set �
     ¬ (x ≤ A.stateIn X t S ∧ M X - x < A.stateIn X t Sᶜ) :=
   fun hh => absurd (state_outside A h hX ht S hh.1) (not_le.mpr hh.2)
 
-open Classical in
 /-- **Bandwidth excluded**: no run on links of capacity `β_X` reads both `x` bits of `S` and more than
 `β_X (b − a) − x` bits outside it into `A[X, [a, b))` from outside `X`. -/
 theorem ingress_excludes {E : Type*} [Fintype E] {ends : E → L × L} {β : E → ℕ} {link : Fin A.N → Fin A.N → E}
-    (h : A.Links ends β link) (X : Finset L) (a b : ℕ) (S : Finset (Fin A.N)) (x : ℕ) :
+    (h : A.Links ends β link) (X : Finset L) [DecidablePred fun g => A.x g ∉ X] (a b : ℕ) (S : Finset (Fin A.N))
+    (x : ℕ) :
     ¬ (x ≤ A.width (((A.into (A.region X (Set.Ico a b))).filter fun g => A.x g ∉ X) ∩ S) ∧
       linkCapacity ends β X * (b - a) - x <
         A.width (((A.into (A.region X (Set.Ico a b))).filter fun g => A.x g ∉ X) ∩ Sᶜ)) :=

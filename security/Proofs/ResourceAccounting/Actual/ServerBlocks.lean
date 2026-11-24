@@ -41,6 +41,15 @@ theorem cut_into {S R : Finset (Fin A.N)} (hR : R ⊆ S) : (A.cut S).into R = A.
   · rwa [cut_reads_of_mem A (hR hg)] at h
   · rwa [cut_reads_of_mem A (hR hg)]
 
+/-- In the developer's declaration, what gates of the developer's region read in `G` is what they read in `G` in
+`A`. -/
+theorem readsIn_declaration {Y : Finset L} {t : ℕ} {θ : Finset (Fin A.N)} (hθ : ∀ a ∈ θ, A.isInput a = true)
+    {R : Finset (Fin A.N)} (hR : R ⊆ A.region Y (Set.Iio t)) (G : Finset (Fin A.N)) :
+    readsIn (A.declaration Y t θ hθ) R G = A.width (A.into R ∩ G) := by
+  unfold readsIn
+  change A.width ((A.cut (A.region Y (Set.Iio t))).into R ∩ G) = _
+  rw [cut_into A hR]
+
 theorem cut_isInput_of_mem {S : Finset (Fin A.N)} {g : Fin A.N} (h : g ∈ S) : (A.cut S).isInput g = A.isInput g := by
   simp [Placed.cut, h]
 
@@ -170,9 +179,7 @@ theorem ServerBlocksAt : Guarantees.Actual.ServerBlocksAt := by
     set R := A.region (X i) (Set.Ico (κ.τ j.castSucc) (κ.τ j.succ))
     have hRS : R ⊆ S :=
       region_subset A (subset_biUnion_of_mem X (mem_univ i)) fun s hs => Set.mem_Iio.2 (hs.2.trans_le hτ)
-    unfold readsIn
-    change A.width ((A.cut S).into R ∩ G) ≤ _
-    rw [cut_into A hRS]
+    rw [readsIn_declaration A hθ hRS]
     exact (width_into_region_inter_le A _ _ _ G (forward_of_causal A hC _)).trans
       (Nat.add_le_add_left (ingress_le A hL _ _ _) _)
 
