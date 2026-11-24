@@ -114,14 +114,21 @@ structure Within : Prop where
   link : ∀ c p q, X.C.width (X.sent c p q) ≤ M.link p q
 
 open Classical in
-/-- What node `p`'s copies inside the gates `S` use of its resource `j`, over the `T` cycles. -/
-noncomputable def usedIn (p : ι) (j : Fin (M.node p).m) (S : Finset (Fin X.C.N)) : ℕ :=
-  ∑ c ∈ range T, ∑ x ∈ (X.tiles (c + 1) p).filter fun x => x.2 ⊆ S, (M.node p).use j x.1
+/-- What the copies inside the gates `S` use, over the `T` cycles, of the resources `j p` of the nodes `p ∈ A`. -/
+noncomputable def usedIn (A : Finset ι) (j : (p : ι) → Fin (M.node p).m) (S : Finset (Fin X.C.N)) : ℕ :=
+  ∑ p ∈ A, ∑ c ∈ range T, ∑ x ∈ (X.tiles (c + 1) p).filter fun x => x.2 ⊆ S, (M.node p).use (j p) x.1
 
 open Classical in
-/-- What node `p`'s copies not inside the gates `S` use of its resource `j`, over the `T` cycles. -/
-noncomputable def usedOut (p : ι) (j : Fin (M.node p).m) (S : Finset (Fin X.C.N)) : ℕ :=
-  ∑ c ∈ range T, ∑ x ∈ (X.tiles (c + 1) p).filter fun x => ¬ x.2 ⊆ S, (M.node p).use j x.1
+/-- What the copies not inside the gates `S` use, over the `T` cycles, of the resources `j p` of the nodes `p ∈ A`. -/
+noncomputable def usedOut (A : Finset ι) (j : (p : ι) → Fin (M.node p).m) (S : Finset (Fin X.C.N)) : ℕ :=
+  ∑ p ∈ A, ∑ c ∈ range T, ∑ x ∈ (X.tiles (c + 1) p).filter fun x => ¬ x.2 ⊆ S, (M.node p).use (j p) x.1
+
+/-- The bits of the gates `S` that the links `E` carry over the `T` cycles. -/
+def carried (E : Finset (ι × ι)) (S : Finset (Fin X.C.N)) : ℕ :=
+  ∑ e ∈ E, ∑ c ∈ range T, X.C.width (X.sent c e.1 e.2 ∩ S)
+
+/-- The bits the nodes `A` hold of the gates `S` at the end of cycle `c`. -/
+def held (A : Finset ι) (c : ℕ) (S : Finset (Fin X.C.N)) : ℕ := ∑ p ∈ A, X.C.width (X.hold c p ∩ S)
 
 end Computation
 
@@ -147,32 +154,31 @@ def usesWork (P : Permitted) (x : ℕ) : Set (Computation M T) :=
 def needsWork (P : Permitted) (r : ℕ) : Set (Computation M T) :=
   {X | ∀ S, P X.C S → r < X.C.size (X.C.computed \ S)}
 
-/-- **A resource used** at node `p`: copies inside a permitted part use at least `x` of its resource `j`. -/
-def usesUnits (P : Permitted) (p : ι) (j : Fin (M.node p).m) (x : ℕ) : Set (Computation M T) :=
-  {X | ∃ S, P X.C S ∧ x ≤ X.usedIn p j S}
+/-- **A resource used** at the nodes `A`: copies inside a permitted part use at least `x` of their resources `j`. -/
+def usesUnits (P : Permitted) (A : Finset ι) (j : (p : ι) → Fin (M.node p).m) (x : ℕ) : Set (Computation M T) :=
+  {X | ∃ S, P X.C S ∧ x ≤ X.usedIn A j S}
 
-/-- **A resource prohibited** at node `p`: copies not inside a permitted part use more than `r` of its resource `j`,
-whatever the part. -/
-def needsUnits (P : Permitted) (p : ι) (j : Fin (M.node p).m) (r : ℕ) : Set (Computation M T) :=
-  {X | ∀ S, P X.C S → r < X.usedOut p j S}
+/-- **A resource prohibited** at the nodes `A`: copies not inside a permitted part use more than `r` of their resources
+`j`, whatever the part. -/
+def needsUnits (P : Permitted) (A : Finset ι) (j : (p : ι) → Fin (M.node p).m) (r : ℕ) : Set (Computation M T) :=
+  {X | ∀ S, P X.C S → r < X.usedOut A j S}
 
 /-- **Memory used** at the nodes `A`: at the end of every cycle they hold at least `x` bits of a permitted part. -/
 def usesMemory (P : Permitted) (A : Finset ι) (x : ℕ) : Set (Computation M T) :=
-  {X | ∃ S, P X.C S ∧ ∀ c ≤ T, x ≤ ∑ p ∈ A, X.C.width (X.hold c p ∩ S)}
+  {X | ∃ S, P X.C S ∧ ∀ c ≤ T, x ≤ X.held A c S}
 
 /-- **Memory prohibited** at the nodes `A`: at the end of some cycle they hold more than `r` bits outside any permitted
 part. -/
 def needsMemory (P : Permitted) (A : Finset ι) (r : ℕ) : Set (Computation M T) :=
-  {X | ∀ S, P X.C S → ∃ c ≤ T, r < ∑ p ∈ A, X.C.width (X.hold c p \ S)}
+  {X | ∀ S, P X.C S → ∃ c ≤ T, r < X.held A c Sᶜ}
 
-/-- **Bandwidth used** on the link from `p` to `q`: over the `T` cycles it carries at least `x` bits of a permitted
+/-- **Bandwidth used** on the links `E`: over the `T` cycles they carry at least `x` bits of a permitted part. -/
+def usesBandwidth (P : Permitted) (E : Finset (ι × ι)) (x : ℕ) : Set (Computation M T) :=
+  {X | ∃ S, P X.C S ∧ x ≤ X.carried E S}
+
+/-- **Bandwidth prohibited** on the links `E`: over the `T` cycles they carry more than `r` bits outside any permitted
 part. -/
-def usesBandwidth (P : Permitted) (p q : ι) (x : ℕ) : Set (Computation M T) :=
-  {X | ∃ S, P X.C S ∧ x ≤ ∑ c ∈ range T, X.C.width (X.sent c p q ∩ S)}
-
-/-- **Bandwidth prohibited** on the link from `p` to `q`: over the `T` cycles it carries more than `r` bits outside any
-permitted part. -/
-def needsBandwidth (P : Permitted) (p q : ι) (r : ℕ) : Set (Computation M T) :=
-  {X | ∀ S, P X.C S → r < ∑ c ∈ range T, X.C.width (X.sent c p q \ S)}
+def needsBandwidth (P : Permitted) (E : Finset (ι × ι)) (r : ℕ) : Set (Computation M T) :=
+  {X | ∀ S, P X.C S → r < X.carried E Sᶜ}
 
 end Verity.Hardware
