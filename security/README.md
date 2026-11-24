@@ -466,6 +466,7 @@ None of these is assumed silently; each would restate the conclusion:
 | The floor | not in Lean | Open |
 | Slowdown | not in Lean | Open |
 | The bounds | `Slowdown.Guarantees.SlowdownRemote`, `Slowdown.Guarantees.SlowdownThreaded` | Proved as arithmetic over inline hypotheses, not over the definition above |
+| Feasible, accounted for, not prohibited | `Slowdown.Security.H`, `Slowdown.Security.A`, `Slowdown.Security.B`, `Slowdown.SecurityProofs.secure`, `Slowdown.SecurityProofs.secure_pr` | Proved over the actual circuit, by the fit bound, and not in the lock; that the audits put an accepted run in `A` and that training puts a run in `B` are premises |
 
 ## Three trees
 

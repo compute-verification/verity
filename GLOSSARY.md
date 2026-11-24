@@ -8,7 +8,7 @@ Current terms and notation, one line each, ``- **Term** (area): definition. Code
 - **Accounting layer**: the accounting protocols (`verity/protocols/accounting`), compilation first, then compute, memory and network, each attester inside one; it gives the policy layer verified properties of blocks, and nothing else. Code: `Scheme`.
 - **Actual circuit**: everything the developer's hardware computes in a period, treated as one Boolean circuit, each gate placed at a device and a tick. Code: `ResourceAccounting.Placed`.
 - **Adapter**: what attaches Verity to one serving system (`adapters/`), only what completeness rests on: its compiler, and finding the engine's values for Verity's commitment functions.
-- **Admissible set**: 𝒜 = 𝓕 ∩ ⋂_p 𝒜_p, where an accepted run lies except with probability Σ_p δ_p and the cryptographic terms. Code: `ResourceAccounting.Slowdown.restricted`.
+- **Admissible set**: 𝒜 = 𝓕 ∩ ⋂_p 𝒜_p, where an accepted run lies except with probability Σ_p δ_p and the cryptographic terms. Code: `Slowdown.Security.H`, `Slowdown.Security.A`.
 - **Adversary resource model**: the world's compute, which every result is stated against (`world-inference-2027` in `calibration/census/adversary.json`).
 - **Advice**: the bits of the prover's choices after registration about its declared circuit, requests among them: their length is those choices' number in log space, at most ℓ_a an epoch, committed before the challenges and never interpreted. Code: `Compiler.run`.
 - **After-landing run** (landing): the whole `verity check` (`--kind after-landing`), run beside each candidate and beside `main` each time it moves.
@@ -52,7 +52,7 @@ Current terms and notation, one line each, ``- **Term** (area): definition. Code
 - **Dither** (PoUW): PoUW's no-fold design, beside H1's fold: it commits each segment's noised prefix sums before its challenge and opens sampled output cells after it. Code: `Pouw.Dither`.
 - **Docket** (SPOT): what a run is committed to before any challenge: its circuit's digest, its pieces, the sampling rule and the committed roots. Code: `Spot.Docket`.
 - **Epoch**: one round: the hardware runs, then the run is verified; for network attestation T ticks.
-- **Feasible set**: 𝓕, every circuit with all the properties the accounting layer establishes of the actual circuit. Code: `ResourceAccounting.Slowdown.physClass`.
+- **Feasible set**: 𝓕, every circuit with all the properties the accounting layer establishes of the actual circuit. Code: `ResourceAccounting.Feasible`.
 - **Fixed finder**: a construction from the prover's strategy that outputs a SHA-512 collision, the only thing `ecr/sha-512` applies to.
 - **Fixed operand** (PoUW): B_w, a GEMM operand fixed before the salt and reused by id, such as model weights. Code: `Pouw.Layout.fixedId`.
 - **Fixture registry**: `artifacts.json`, the root index of the tree's replicated data files: each file's path by its `art:` id, its bytes in the evidence store. `research data` registers and fetches one.
@@ -114,6 +114,7 @@ Current terms and notation, one line each, ``- **Term** (area): definition. Code
 - **Preflight** (landing): `research queue ready`'s checks of a head before the ready mark.
 - **Pricing argument**: unregistered-input bits per counted object, which give the yields. Code: `Slowdown.Guarantees.ThreadedReads`.
 - **Program**: the stored form of a declared circuit, or of any circuit a proof claims something about, compressed as circuit templates called from a root body. Code: `verity.circuits.Program`.
+- **Prohibited set** (training): ℬ, the computations that hold a reference training algorithm of more than Y counted multiplications meeting a recipe's premises; no computation is in the admissible set and in ℬ. Code: `Slowdown.Security.B`, `Slowdown.SecurityProofs.secure`.
 - **Proof block**: one part of a partition, proved on its own, a set of gates whose inputs and outputs are bit strings and whose outputs fit its circuit template's public size class (16 to 262,144 bits). Code: `verity.circuits.parts`, `sizeClasses`.
 - **Proof layer**: Flock, with SPOT and recursion on it (`verity/protocols/proof`), what the other protocols call to prove.
 - **Proof system**: the one system behind every protocol: Flock ZK on the workers behind the ZK server, with the auditor's challenger and verifier; a protocol states only its `Spec`. Code: `verity.protocols.proof.spot.verifier.service`.
@@ -177,7 +178,7 @@ Current terms and notation, one line each, ``- **Term** (area): definition. Code
 - **α**: an annotation, the gates α(ℓ) each label ℓ holds; blocks, placements, covers and selections are annotations. Code: `Verity.Annotation`.
 - **C, |C|, C(x)**: a circuit, its number of gates, and the value of its output gates on the unregistered input x. Code: `Verity.Circuit`, `Circuit.size`, `Circuit.eval`.
 - **(c, k), 𝒞_{c,k}**: an inference block's gate and unregistered-input budgets, and the circuits with a partition into such blocks. Code: `Partition.IsCK`.
-- **𝒜_p, δ_p**: protocol p's admissible set and failure bound, Pr[accept ∧ (A, x) ∉ 𝒜_p] ≤ δ_p. Code: `ResourceAccounting.Slowdown.envelope`, `Verity.Sound`.
+- **𝒜_p, δ_p**: protocol p's admissible set and failure bound, Pr[accept ∧ (A, x) ∉ 𝒜_p] ≤ δ_p. Code: `Slowdown.Security.A`, `ResourceAccounting.ExceptWith`, `Verity.Sound`.
 - **A[X, J], Φ_X**: the gates of A placed in location X during ticks J, and X's rate in gates per second, |A[X, J]| ≤ Φ_X·|J|. Code: `ResourceAccounting.Placed.region`, `ResourceAccounting.Placed.ComputeRate`.
 - **α, λ, μ** (training): the slowdown theorem's constants, μ the most MACs an inference block holds on average.
 - **β, β_y, q, ω** (training): the operand words' prices, the price per output, the least product of joined prices, and the largest set of pairwise joined words less one.
