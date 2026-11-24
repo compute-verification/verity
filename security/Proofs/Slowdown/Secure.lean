@@ -3,7 +3,7 @@ module
 public import Definitions.Slowdown.Security
 public import Proofs.Slowdown.FitRate
 public import Proofs.ResourceAccounting.Actual.Outside
-public import Proofs.Flock.Claims.Prob
+public import Definitions.ResourceAccounting.BlockProperties
 
 /-!
 # No computation is feasible, accounted for and prohibited
@@ -24,10 +24,12 @@ is at least the fit bound (`Frame.bound`) and the bits a covered window can read
   those placed in the missed windows, which number at most the work the limits leave there plus those shared with the
   declared circuit (`card_missed_le`).
 
-`secure_pr` is the claim over the audits' coins: where every computation is feasible and the audits are sound with
-error `δ` (`Sound`), they accept a prohibited computation with probability at most `δ`. `single_m`, `single_b` and
-`single_Φ` are the limits of a frame of one server, and `server_m`, `server_b` and `server_Φ` those of a server of
-`n` GPUs with its host and switch.
+Over the audits' runs, with `ExceptWith` the tree's "fails on an accepted run with probability at most `ε`":
+`accounted_of_windows` adds the three audits' errors over the windows (an accepted run is in `A` outside
+`|missed| δ_w + (n J − |missed|) (δ_s + δ_b)`), and `secure_pr` is `secure` there (where every run is feasible and an
+accepted run is in `A` outside `δ`, an accepted run is not in `B` outside `δ`). `single_m`, `single_b` and `single_Φ`
+are the limits of a frame of one server, and `server_m`, `server_b` and `server_Φ` those of a server of `n` GPUs with
+its host and switch.
 -/
 
 @[expose] public section
@@ -159,14 +161,76 @@ theorem secure {L E : Type*} [Fintype E] [DecidableEq L] (F : Frame L E) (x_s x_
     linarith
   exact absurd (h2.trans hY) (not_le.2 hlt)
 
-/-- **The audits accept a prohibited computation with probability at most `δ`**, where every computation the coins
-give is feasible and the audits are sound with error `δ`. -/
-theorem secure_pr {L E : Type*} [Fintype E] [DecidableEq L] (F : Frame L E) (x_s x_b x_w : ℕ) (p : Recipe) (Y : ℝ)
+section Runs
+
+open scoped ENNReal
+
+variable {L E : Type*} [DecidableEq L] {Ω : Type} (pr : (Ω → Prop) → ℝ≥0∞)
+  (mono : ∀ p q : Ω → Prop, (∀ r, p r → q r) → pr p ≤ pr q) (accepts : Ω → Prop) (M : Ω → Computation L E)
+
+include mono
+
+/-- **An accepted run is not prohibited, outside `δ`**: over runs whose computations are all feasible, if an accepted
+run's computation is in `A` outside probability `δ`, it is not in `B` outside `δ`. `pr` is any monotone probability on
+the runs. -/
+theorem secure_pr [Fintype E] (F : Frame L E) (x_s x_b x_w : ℕ) (p : Recipe) (Y : ℝ)
     (hbw : 0 ≤ p.b_w) (hwe : 0 < p.w_e) (hgap : (F.unaccounted x_s x_b p : ℝ) < p.Nstar * p.b_w)
-    (hY : F.bound x_s x_b x_w p ≤ Y) {Ω : Type} [Fintype Ω] (accept : Ω → Prop) (M : Ω → Computation L E) (δ : ℝ)
-    (hH : ∀ ω, M ω ∈ H F) (hA : Sound F x_s x_b x_w accept M δ) :
-    Claims.Pr (fun ω => accept ω ∧ M ω ∈ B F p Y) ≤ δ :=
-  (Claims.Pr_mono fun ω h => ⟨h.1, fun hin => secure F x_s x_b x_w p Y hbw hwe hgap hY (M ω) (hH ω) hin h.2⟩).trans hA
+    (hY : F.bound x_s x_b x_w p ≤ Y) (δ : ℝ≥0∞) (hH : ∀ ω, M ω ∈ H F)
+    (hA : ExceptWith pr accepts (fun ω => M ω ∈ A F x_s x_b x_w) δ) :
+    ExceptWith pr accepts (fun ω => M ω ∉ B F p Y) δ :=
+  (mono _ _ fun ω h => ⟨h.1, fun hin => h.2 (secure F x_s x_b x_w p Y hbw hwe hgap hY (M ω) (hH ω) hin)⟩).trans hA
+
+/-- **The three audits' errors add over the windows.** If at each covered window an accepted run's declared circuit
+holds `x_s` bits at the cut outside probability `δ_s` and reads `x_b` bits from outside its server outside `δ_b`, and
+at each missed window it does `x_w` work outside `δ_w`, then an accepted run's computation is in `A` outside
+`|missed| δ_w + (n J − |missed|) (δ_s + δ_b)`. `pr` is any monotone probability on the runs with the union bound. -/
+theorem accounted_of_windows
+    (union : ∀ {κ : Type} (s : Finset κ) (p : κ → Ω → Prop), pr (fun r => ∃ x ∈ s, p x r) ≤ ∑ x ∈ s, pr (p x))
+    (F : Frame L E) (x_s x_b x_w : ℕ) (δ_s δ_b δ_w : ℝ≥0∞)
+    (hs : ∀ i j, finProdFinEquiv (i, j) ∉ F.missed →
+      ExceptWith pr accepts (fun ω => x_s ≤ (M ω).carries F i j (M ω).declared) δ_s)
+    (hb : ∀ i j, finProdFinEquiv (i, j) ∉ F.missed →
+      ExceptWith pr accepts (fun ω => x_b ≤ (M ω).reads F i j (M ω).declared) δ_b)
+    (hw : ∀ i j, finProdFinEquiv (i, j) ∈ F.missed →
+      ExceptWith pr accepts
+        (fun ω => x_w ≤ (M ω).run.work (M ω).usage.π ((M ω).window F i j ∩ (M ω).declared)) δ_w) :
+    ExceptWith pr accepts (fun ω => M ω ∈ A F x_s x_b x_w)
+      (F.missed.card * δ_w + (F.n * F.cuts.J - F.missed.card : ℕ) * (δ_s + δ_b)) := by
+  classical
+  let bad : Fin (F.n * F.cuts.J) → Ω → Prop := fun u ω => accepts ω ∧
+    ¬ ((u ∉ F.missed → x_s ≤ (M ω).carries F (finProdFinEquiv.symm u).1 (finProdFinEquiv.symm u).2 (M ω).declared ∧
+          x_b ≤ (M ω).reads F (finProdFinEquiv.symm u).1 (finProdFinEquiv.symm u).2 (M ω).declared) ∧
+      (u ∈ F.missed → x_w ≤ (M ω).run.work (M ω).usage.π
+        ((M ω).window F (finProdFinEquiv.symm u).1 (finProdFinEquiv.symm u).2 ∩ (M ω).declared)))
+  have hu : ∀ u : Fin (F.n * F.cuts.J),
+      finProdFinEquiv ((finProdFinEquiv.symm u).1, (finProdFinEquiv.symm u).2) = u :=
+    fun u => finProdFinEquiv.apply_symm_apply u
+  have hbad : ∀ u, pr (bad u) ≤ if u ∈ F.missed then δ_w else δ_s + δ_b := by
+    intro u
+    split_ifs with h
+    · exact (mono _ _ fun ω hω => ⟨hω.1, fun hx => hω.2 ⟨fun hn => absurd h hn, fun _ => hx⟩⟩).trans
+        (hw _ _ (by rw [hu]; exact h))
+    · refine (mono _ (fun ω => ∃ c ∈ (univ : Finset Bool), accepts ω ∧
+          if c then ¬ x_s ≤ (M ω).carries F (finProdFinEquiv.symm u).1 (finProdFinEquiv.symm u).2 (M ω).declared
+          else ¬ x_b ≤ (M ω).reads F (finProdFinEquiv.symm u).1 (finProdFinEquiv.symm u).2 (M ω).declared)
+        fun ω hω => ?_).trans ((union _ _).trans ?_)
+      · by_cases hc : x_s ≤ (M ω).carries F (finProdFinEquiv.symm u).1 (finProdFinEquiv.symm u).2 (M ω).declared
+        · refine ⟨false, mem_univ _, hω.1, fun hx => hω.2 ⟨fun _ => ⟨hc, hx⟩, fun hm => absurd hm h⟩⟩
+        · exact ⟨true, mem_univ _, hω.1, hc⟩
+      · rw [Fintype.sum_bool]
+        exact add_le_add (hs _ _ (by rw [hu]; exact h)) (hb _ _ (by rw [hu]; exact h))
+  have hsum : ∑ u : Fin (F.n * F.cuts.J), (if u ∈ F.missed then δ_w else δ_s + δ_b) =
+      F.missed.card * δ_w + (F.n * F.cuts.J - F.missed.card : ℕ) * (δ_s + δ_b) := by
+    rw [sum_ite, sum_const, sum_const, nsmul_eq_mul, nsmul_eq_mul, filter_mem_eq_inter, univ_inter,
+      filter_not, filter_mem_eq_inter, univ_inter, card_univ_sdiff, Fintype.card_fin]
+  refine (mono _ (fun ω => ∃ u ∈ (univ : Finset (Fin (F.n * F.cuts.J))), bad u ω) fun ω hω => ?_).trans
+    ((union _ _).trans ((sum_le_sum fun u _ => hbad u).trans hsum.le))
+  by_contra hno
+  refine hω.2 fun i j => ?_
+  by_contra hij
+  exact hno ⟨finProdFinEquiv (i, j), mem_univ _, hω.1, by simpa using hij⟩
+
+end Runs
 
 section Single
 
