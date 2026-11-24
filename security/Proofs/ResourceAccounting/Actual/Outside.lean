@@ -17,9 +17,8 @@ physical constraints then leave the rest of the run at most the limit less `x`:
   (`state_outside_of_held`: the same from a run's state, with `S` counted where it is held);
 * `ingress_outside`: under `Links`, `A[X, [a, b))` reads at most `β_X (b − a) − x` bits outside `S` from outside `X`.
 
-So no run within the limits both uses `x` in `S` and more than the rest outside it (`work_excludes`,
-`state_excludes`, `ingress_excludes`). A capacity certificate is in bit-ticks over a window, an average:
-`card_short_ticks_mul_le` bounds the ticks at which the account holds fewer than `x` bits.
+A capacity certificate is in bit-ticks over a window, an average: `card_short_ticks_mul_le` bounds the ticks at which
+the account holds fewer than `x` bits.
 
 `feasible_ofLeaves` is the feasible set at limits per leaf and per link (`Hardware.ofLeaves`), and `server_dies`,
 `server_drams` and `server_store` are a server's limits over its dies, its device memories and their links, and
@@ -143,31 +142,6 @@ theorem card_filter_le_work {α : Type*} (π : Fin A.N → ℕ) (R : Finset (Fin
     _ ≤ ∑ a ∈ R, π a := sum_le_sum_of_subset fun a ha => by
         obtain ⟨g, hg, rfl⟩ := mem_map.1 ha
         exact (mem_filter.1 hg).2
-
-/-- **Work excluded**: no run at compute rate `Φ_X` both does `x` work in `S` and more than `Φ_X (b − a) − x` outside
-it, in `A[X, [a, b))`. -/
-theorem work_excludes {𝒳 : Set (Finset L)} {π : Fin A.N → ℕ} {compute : Finset L → ℕ} (h : A.ComputeRate 𝒳 π compute)
-    {X : Finset L} (hX : X ∈ 𝒳) (a b : ℕ) (S : Finset (Fin A.N)) (x : ℕ) :
-    ¬ (x ≤ A.work π (A.region X (Set.Ico a b) ∩ S) ∧
-      compute X * (b - a) - x < A.work π (A.region X (Set.Ico a b) \ S)) :=
-  fun hh => absurd (work_outside A h hX a b S hh.1) (not_le.mpr hh.2)
-
-/-- **Memory excluded**: no run within memory `M_X` at the tick `t` carries both `x` bits of `S` and more than
-`M_X − x` bits outside it across `t`. -/
-theorem state_excludes {𝒳 : Set (Finset L)} {M : Finset L → ℕ} {T : Set ℕ} (h : A.MemoryAt 𝒳 M T) {X : Finset L}
-    (hX : X ∈ 𝒳) {t : ℕ} (ht : t ∈ T) (S : Finset (Fin A.N)) (x : ℕ) :
-    ¬ (x ≤ A.stateIn X t S ∧ M X - x < A.stateIn X t Sᶜ) :=
-  fun hh => absurd (state_outside A h hX ht S hh.1) (not_le.mpr hh.2)
-
-/-- **Bandwidth excluded**: no run on links of capacity `β_X` reads both `x` bits of `S` and more than
-`β_X (b − a) − x` bits outside it into `A[X, [a, b))` from outside `X`. -/
-theorem ingress_excludes {E : Type*} [Fintype E] {ends : E → L × L} {β : E → ℕ} {link : Fin A.N → Fin A.N → E}
-    (h : A.Links ends β link) (X : Finset L) [DecidablePred fun g => A.x g ∉ X] (a b : ℕ) (S : Finset (Fin A.N))
-    (x : ℕ) :
-    ¬ (x ≤ A.width (((A.into (A.region X (Set.Ico a b))).filter fun g => A.x g ∉ X) ∩ S) ∧
-      linkCapacity ends β X * (b - a) - x <
-        A.width (((A.into (A.region X (Set.Ico a b))).filter fun g => A.x g ∉ X) ∩ Sᶜ)) :=
-  fun hh => absurd (ingress_outside A h X a b S hh.1) (not_le.mpr hh.2)
 
 /-- Compute rate at every leaf is compute rate at every set of leaves, at the sum of its leaves'. -/
 theorem computeRate_of_leaves [DecidableEq L] {π : Fin A.N → ℕ} {c : L → ℕ}
