@@ -42,7 +42,9 @@ the work, memory and bandwidth clauses on a server that carries nothing over a l
 server (`audit`): the compute account does one unit of work (`audit_work`), so the audit is sound at the certificate
 1 with no error (`audit_sound`), and `secure_compute` applies. `secure_bandwidth`'s hold together too
 (`bandwidth_witness`): the same audit's bandwidth account reads the one bit the memory link delivers (`audit_read`),
-so it is sound at the certificate 1 (`audit_bandwidth_sound`).
+so it is sound at the certificate 1 (`audit_bandwidth_sound`). And `secure_capacity`'s (`capacity_witness`): on the
+device whose memory is the server, the capacity account holds the one bit the server holds at the end of the tick
+(`audit_held`).
 -/
 
 @[expose] public section
@@ -647,11 +649,12 @@ def price : Price := fun _ => 1
 theorem width_le (S : Finset (Fin run.N)) : run.width S ≤ 4 :=
   (Finset.sum_le_sum_of_subset (subset_univ S)).trans (by decide)
 
-/-- The compute audit that always accepts, over the one tick, with the schedule `actual` induces on the server. -/
-noncomputable def audit : ResourceAccounting.Run dev Unit Unit Unit Unit where
+/-- The audit that always accepts, over the one tick, with the schedule `actual` induces on the device whose chip is
+`chip` and whose memory is `mem`. -/
+noncomputable def auditOn (chip mem : Finset Bool) : ResourceAccounting.Run dev Unit Unit Unit Unit where
   acct _ := ()
   win _ := ⟨0, 1⟩
-  schedule _ := actual.schedule {true} ∅ (fun _ => some .tc) (fun _ => ()) usage.link ((), true) Empty.elim
+  schedule _ := actual.schedule chip mem (fun _ => some .tc) (fun _ => ()) usage.link ((), true) Empty.elim
   fits _ t := ⟨fun _ => by
       rw [Fintype.sum_unique]
       dsimp only [Actual.Run.schedule, dev]
@@ -666,6 +669,9 @@ noncomputable def audit : ResourceAccounting.Run dev Unit Unit Unit Unit where
       dsimp only [Actual.Run.schedule, dev]
       exact width_le _⟩
   accepts _ _ := True
+
+/-- The audit on the device whose chip is the server. -/
+noncomputable abbrev audit : ResourceAccounting.Run dev Unit Unit Unit Unit := auditOn {true} ∅
 
 /-- The compute account does one unit of work on every run, the server's whole compute over the tick. -/
 theorem audit_work (ω : Unit × Unit × Unit) : audit.work price ω = 1 := by
@@ -741,6 +747,70 @@ theorem bandwidth_witness (ω : Unit × Unit × Unit) :
       rw [hu]
       norm_num [wholeCuts])
   have h1 := Pouw.pr_eq_one (P := fun ω => audit.accepts .bandwidth ω ∧ _) fun x =>
+    (⟨trivial, Subsingleton.elim ω x ▸ hB⟩ : _ ∧ _)
+  rw [h1] at h
+  exact absurd h (by norm_num)
+
+open Classical in
+/-- On the device whose memory is the server, the capacity account holds the one bit the server holds at the end of
+the tick. -/
+theorem audit_held (ω : Unit × Unit × Unit) : 1 ≤ (auditOn ∅ {true}).held ω := by
+  unfold Run.held Schedule.held
+  refine le_trans ?_ (Finset.single_le_sum
+    (f := fun t => ((auditOn ∅ {true}).schedule ω t).mem ((auditOn ∅ {true}).acct .capacity))
+    (fun _ _ => Nat.zero_le _)
+    (show 0 ∈ ((auditOn ∅ {true}).win .capacity).ticks from Finset.mem_Ico.2 ⟨le_rfl, Nat.one_pos⟩))
+  have h0 : (0 : Fin run.N) ∈ actual.state {true} (0 + 1) := by
+    simp only [Actual.Run.state, Finset.mem_filter, Finset.mem_univ, true_and]
+    exact Or.inl ⟨true, mem_singleton_self _, by decide, by decide⟩
+  exact le_trans (by decide : 1 ≤ run.w 0)
+    (width_le_mem actual ∅ {true} (fun _ => some .tc) (fun _ => ()) usage.link ((), true) Empty.elim h0)
+
+/-- The always-accepting capacity audit is sound at the certificate 1 with no error. -/
+theorem audit_capacity_sound : (auditOn ∅ {true}).CapacitySoundPerRun 1 0 := fun _ _ =>
+  (Pouw.pr_eq_zero fun s hs => absurd hs.2 (not_lt.2 (by
+    have h := audit_held ((), (), s)
+    have hl : (((auditOn ∅ {true}).win .capacity).len : ℝ) = 1 := by simp [auditOn]
+    rw [hl]
+    exact_mod_cast h))).le
+
+/-- **`secure_capacity` is not vacuous**: its hypotheses hold together at an audit that accepts every run, at the
+certificate 1, which is all the server holds. The frame is cut at the end of the one tick: the window before the cut
+is charged the server's one unit of work and the fit bound is `1/2`, so the run holds no reference training algorithm
+of more than `3/2` counted multiplications. -/
+theorem capacity_witness (ω : Unit × Unit × Unit) :
+    computation (auditOn ∅ {true}) (fun _ => actual) (fun _ => usage) (fun _ => ∅)
+      (fun _ _ h => absurd h (notMem_empty _)) (fun _ _ => ()) .capacity ω ∉
+        B (cutFrame (hw 1 1 1) ∅ {true} (Set.mem_univ _) 0 1 le_rfl) recipe (3 / 2) := fun hB => by
+  have hm : (cutFrame (hw 1 1 1) ∅ {true} (Set.mem_univ _) 0 1 le_rfl).m = 1 :=
+    (single_m _ _ _ 1 _ _).trans (by simp [Hardware.ofLeaves])
+  have hb : (cutFrame (hw 1 1 1) ∅ {true} (Set.mem_univ _) 0 1 le_rfl).b = 1 :=
+    (single_b _ _ _ 1 _ _).trans (by simp [linkCapacity, boundary, Hardware.ofLeaves])
+  have hΦ : (cutFrame (hw 1 1 1) ∅ {true} (Set.mem_univ _) 0 1 le_rfl).Φ = 1 :=
+    (single_Φ _ _ _ 1 _ _).trans (by simp [Hardware.ofLeaves])
+  have hω : (cutFrame (hw 1 1 1) ∅ {true} (Set.mem_univ _) 0 1 le_rfl).ω = 1 := by
+    change (cutFrame (hw 0 0 0) ∅ {true} (Set.mem_univ _) 0 1 le_rfl).ω = 1
+    decide
+  have hu : (cutFrame (hw 1 1 1) ∅ {true} (Set.mem_univ _) 0 1 le_rfl).unaccounted ⌈(1 : ℝ)⌉₊ 0
+      ((cutFrame (hw 1 1 1) ∅ {true} (Set.mem_univ _) 0 1 le_rfl).b *
+        (cutFrame (hw 1 1 1) ∅ {true} (Set.mem_univ _) 0 1 le_rfl).ω) recipe = 1 := by
+    simp [Frame.unaccounted, hm, hb, hω]
+  have hmiss : ∑ u ∈ (cutFrame (hw 1 1 1) ∅ {true} (Set.mem_univ _) 0 1 le_rfl).missed,
+      ((cutFrame (hw 1 1 1) ∅ {true} (Set.mem_univ _) 0 1 le_rfl).Φ *
+        (cutFrame (hw 1 1 1) ∅ {true} (Set.mem_univ _) 0 1 le_rfl).len (finProdFinEquiv.symm u).2 - 0 +
+          recipe.o_w) = 1 := by
+    rw [hΦ]
+    change ∑ u ∈ (cutFrame (hw 0 0 0) ∅ {true} (Set.mem_univ _) 0 1 le_rfl).missed,
+      (1 * (cutFrame (hw 0 0 0) ∅ {true} (Set.mem_univ _) 0 1 le_rfl).len (finProdFinEquiv.symm u).2 - 0 + 0) = 1
+    decide
+  have h := secure_capacity (hw 1 1 1) ∅ {true} (Set.mem_univ _) 0 1 le_rfl (auditOn ∅ {true}) (fun _ => actual)
+    (fun _ => usage) (fun _ => ∅) (fun _ _ h => absurd h (notMem_empty _)) (fun _ _ => some .tc) (fun _ _ => ())
+    rfl ((), true) Empty.elim (fun _ => rfl) (fun _ => feasible) audit_capacity_sound recipe (3 / 2) (by norm_num)
+    (by norm_num) (by rw [hu]; norm_num) (by
+      unfold Frame.bound
+      rw [hu, hmiss]
+      norm_num [cutAt])
+  have h1 := Pouw.pr_eq_one (P := fun ω => (auditOn ∅ {true}).accepts .capacity ω ∧ _) fun x =>
     (⟨trivial, Subsingleton.elim ω x ▸ hB⟩ : _ ∧ _)
   rw [h1] at h
   exact absurd h (by norm_num)
