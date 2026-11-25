@@ -178,6 +178,8 @@ BRIDGES: dict[str, tuple[str, str]] = {
         ("Probability", f"{P}Flock/SampledGeneric/Defs.lean::FlockSoundness.SampledGeneric.Exp.pr_eq_prob"),
     f"{P}Flock/Soundness/ZK/GK/Rand.lean::FlockSoundness.ZK.GK.Rand.pr":
         ("Probability", f"{P}Flock/Soundness/ZK/GK/Rand.lean::FlockSoundness.ZK.GK.Rand.prob_toGame"),
+    f"{P}Flock/Soundness/Discharge/ZkCoins/Basic.lean::FlockSoundness.Discharge.ZkCoins.TGame.pr":
+        ("Probability", f"{P}Flock/Soundness/Discharge/ZkCoins/Basic.lean::FlockSoundness.Discharge.ZkCoins.TGame.pr_eq_prob"),
     f"{D}Compose/JointPeriod.lean::ResourceAccounting.PeriodRun.Sound":
         ("Sound", f"{P}Compose/JointPeriodDraw.lean::ResourceAccounting.PeriodRun.sound_iff_draw"),
     f"{D}Pouw/Confidence.lean::ResourceAccounting.Sound":
@@ -462,7 +464,7 @@ def slots(s: Scan) -> set[str]:
 
 
 #: The most lines ``KNOWN`` may hold. Raising it, for a new line, needs lean's review; `--prune` lowers it to the count.
-KNOWN_MAX = 149
+KNOWN_MAX = 148
 
 #: Every hit that is not a canonical, a mirror, a reading of the canonical or a protocol's slot, with its reason and owner.
 #: For new code, read the canonical or rename; `--prune` deletes the lines whose declarations went.
@@ -756,8 +758,6 @@ KNOWN: dict[str, str] = {
         "homonym, a witness opens the registered commitment and its proof block is correct: rename (proofs)",
     "security/Proofs/Flock/Soundness/Discharge/Hm/Gadget.lean::FlockSoundness.Discharge.Hm.Sound":
         "homonym, what a builder program's rows imply of its result: rename (proofs)",
-    "security/Proofs/Flock/Soundness/Discharge/ZkCoins/Basic.lean::FlockSoundness.Discharge.ZkCoins.TGame.pr":
-        "duplicate of `Verity.Game.prob`, over a game whose live coins follow committed blocks and salts: becomes a reading of it by a theorem that the game is a `Verity.Game` at each commitment (proofs)",
     "verity/protocols/proof/flock/verifier/Flock/TmplReads.lean::Flock.TmplReads.Sound":
         "homonym, every input a table marks is surely read: rename (proofs)",
 }

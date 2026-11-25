@@ -25,7 +25,8 @@ A committed prover (`CStrat`) sees, before its first message, every round's leaf
 and the paths it receives; at round `i`'s opening it sees the whole block and the salt, more than the `n` coins and
 `T_n`. `probC` is the probability that the verifier's output satisfies `p`, over `ω`. `erase` is the same interaction
 with every committed round sampled live, as a `Game`, and `Distinct` says that no path opens a round twice (the server
-answers each round once).
+answers each round once). At each commitment the interaction is a `Game` on the live coins (`fix`), and `pr` there is
+`Game.prob` (`pr_eq_prob`).
 -/
 
 @[expose] public section
@@ -70,6 +71,32 @@ noncomputable def pr {Salt : Type} (p : α → Prop) : (g : TGame I Blk α) → 
   | .send _ k, s, ω => pr p (k s.1) s.2 ω
   | .coin i k, s, ω => pr p (k (ω i).1) (s (ω i).1 (ω i).2) ω
   | @TGame.fresh _ _ _ C iF _ k, s, ω => @avg C iF fun c => pr p (k c) (s c) ω
+
+/-- **The interaction at a commitment**: with the committed blocks `b` fixed, each committed round `coin i k` continues
+at `b i`, and what is left is a `Game` on the live coins alone. -/
+def fix (b : I → Blk) : TGame I Blk α → Game α
+  | .ret a => .ret a
+  | .send M k => .send M fun m => fix b (k m)
+  | .coin i k => fix b (k (b i))
+  | @TGame.fresh _ _ _ C iF iN k => @Game.coin _ C iF iN fun c => fix b (k c)
+
+/-- A committed prover's strategy at the commitment `ω`: its moves on the opened blocks and salts. -/
+def fixStrat {Salt : Type} (ω : I → Blk × Salt) :
+    (g : TGame I Blk α) → CStrat Salt g → Strategy (g.fix fun i => (ω i).1)
+  | .ret _, _ => PUnit.unit
+  | .send _ k, s => ⟨s.1, fixStrat ω (k s.1) s.2⟩
+  | .coin i k, s => fixStrat ω (k (ω i).1) (s (ω i).1 (ω i).2)
+  | @TGame.fresh _ _ _ _ _ _ k, s => fun c => fixStrat ω (k c) (s c)
+
+/-- **`pr` is the one probability at each commitment**: on the committed blocks and salts `ω`, `pr` is `Game.prob` of
+the interaction at that commitment (`fix`), played by the prover's moves there (`fixStrat`). -/
+theorem pr_eq_prob {Salt : Type} (p : α → Prop) (ω : I → Blk × Salt) :
+    ∀ (g : TGame I Blk α) (s : CStrat Salt g), pr p g s ω = prob p (g.fix fun i => (ω i).1) (fixStrat ω g s)
+  | .ret _, _ => rfl
+  | .send _ k, s => pr_eq_prob p ω (k s.1) s.2
+  | .coin i k, s => pr_eq_prob p ω (k (ω i).1) (s (ω i).1 (ω i).2)
+  | @TGame.fresh _ _ _ _ _ _ k, s =>
+      Finset.sum_congr rfl fun c _ => congrArg _ (pr_eq_prob p ω (k c) (s c))
 
 /-- No path reads committed round `i`. -/
 def NoRead (i : I) : TGame I Blk α → Prop
