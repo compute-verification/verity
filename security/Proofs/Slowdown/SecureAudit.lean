@@ -166,7 +166,7 @@ memory on that run. -/
 theorem secure_compute (hwin : r.win .compute = ⟨0, t⟩) (hbm : E × L) (side : ι → E × L)
     (hsched : ∀ ω, r.schedule ω = (ρ ω).schedule chip mem (cls ω) (acct ω) (usage ω).link hbm side) (pc : Price)
     (hπ : ∀ ω g, (ρ ω).A.x g ∈ chip ∪ mem → (usage ω).π g = (cls ω g).elim 0 pc)
-    (hH : ∀ ω, computation r ρ usage θ hθ acct .compute ω ∈ H (deviceFrame hw chip mem hX t)) {pRead W ε : ℝ}
+    (hH : ∀ ω, computation r ρ usage θ hθ acct .compute ω ∈ H hw) {pRead W ε : ℝ}
     (hsound : r.ComputeSoundPerRunPriced pc pRead W ε)
     (p : Recipe) :
     Pouw.pr (fun ω => r.accepts .compute ω ∧
@@ -199,7 +199,7 @@ theorem secure_w1 {Q O S : Type} [Fintype Q] [DecidableEq Q] [Fintype O] [Fintyp
     (acct : ∀ ω, Fin (ρ ω).A.N → α) (hwin : r.win .compute = ⟨0, t⟩) (hbm : E × L) (side : ι → E × L)
     (hsched : ∀ ω, r.schedule ω = (ρ ω).schedule chip mem (cls ω) (acct ω) (usage ω).link hbm side) (pc : Price)
     (hπ : ∀ ω g, (ρ ω).A.x g ∈ chip ∪ mem → (usage ω).π g = (cls ω g).elim 0 pc)
-    (hH : ∀ ω, computation r ρ usage θ hθ acct .compute ω ∈ H (deviceFrame hw chip mem hX t)) {pRead : ℝ}
+    (hH : ∀ ω, computation r ρ usage θ hθ acct .compute ω ∈ H hw) {pRead : ℝ}
     (hq : d.rate .oracle * (r.win .compute).len ≤ 2 ^ 64)
     (real : RealizesPearlCPriced (Pouw.PearlC.W1.w1Stop dv salt) P U w r pc pRead) (p : Recipe) :
     Pouw.pr (fun ω => r.accepts .compute ω ∧
@@ -238,7 +238,7 @@ theorem secure_bandwidth (hwin : r.win .bandwidth = ⟨0, t⟩) (hbm : E × L) (
     (hsched : ∀ ω, r.schedule ω = (ρ ω).schedule chip mem (cls ω) (acct ω) (usage ω).link hbm side)
     (hchip : hbm.2 ∈ chip)
     (hfar : ∀ y, hw.ends hbm.1 = (y, hbm.2) ∨ hw.ends hbm.1 = (hbm.2, y) → y ∉ chip)
-    (hH : ∀ ω, computation r ρ usage θ hθ acct .bandwidth ω ∈ H (chipFrame hw chip hX t)) {Q ε : ℝ}
+    (hH : ∀ ω, computation r ρ usage θ hθ acct .bandwidth ω ∈ H hw) {Q ε : ℝ}
     (hsound : r.BandwidthSoundPerRun Q ε) (p : Recipe) (Y : ℝ)
     (hbw : 0 ≤ p.b_w) (hwe : 0 < p.w_e)
     (hgap : ((chipFrame hw chip hX t).unaccounted 0 ⌈Q⌉₊
@@ -272,7 +272,7 @@ theorem secure_poub [Fintype ι] {N b h s G : ℕ} (k lam : ℕ) (r : Run d α �
     (hsched : ∀ ω, r.schedule ω = (ρ ω).schedule chip mem (cls ω) (acct ω) (usage ω).link hbm side)
     (hchip : hbm.2 ∈ chip)
     (hfar : ∀ y, hw.ends hbm.1 = (y, hbm.2) ∨ hw.ends hbm.1 = (hbm.2, y) → y ∉ chip)
-    (hH : ∀ ω, computation r ρ usage θ hθ acct .bandwidth ω ∈ H (chipFrame hw chip hX t)) (hN : 0 < N)
+    (hH : ∀ ω, computation r ρ usage θ hθ acct .bandwidth ω ∈ H hw) (hN : 0 < N)
     (real : RealizesBandwidth G r) (p : Recipe) (Y : ℝ)
     (hbw : 0 ≤ p.b_w) (hwe : 0 < p.w_e)
     (hgap : ((chipFrame hw chip hX t).unaccounted 0
@@ -326,7 +326,7 @@ reference training algorithm of more than `Y` counted multiplications is at most
 before the cut the device's whole work. -/
 theorem secure_capacity (hwin : r.win .capacity = ⟨c, 1⟩) (hbm : E × L) (side : ι → E × L)
     (hsched : ∀ ω, r.schedule ω = (ρ ω).schedule chip mem (cls ω) (acct ω) (usage ω).link hbm side)
-    (hH : ∀ ω, computation r ρ usage θ hθ acct .capacity ω ∈ H (cutFrame hw chip mem hX c t hc)) {S ε : ℝ}
+    (hH : ∀ ω, computation r ρ usage θ hθ acct .capacity ω ∈ H hw) {S ε : ℝ}
     (hsound : r.CapacitySoundPerRun S ε) (p : Recipe) (Y : ℝ) (hbw : 0 ≤ p.b_w) (hwe : 0 < p.w_e)
     (hgap : ((cutFrame hw chip mem hX c t hc).unaccounted ⌈S⌉₊ 0
       ((cutFrame hw chip mem hX c t hc).b * (cutFrame hw chip mem hX c t hc).ω) p : ℝ) < p.Nstar * p.b_w)
@@ -365,7 +365,7 @@ theorem secure_pous [Fintype ι] {D K R : ℕ} (hP : Pous.P2.Assumptions.P2RingA
     (hv : ∀ ω, r.accepts .capacity ω → P.Accepts ω ∧ ¬ P.Break ω)
     (hwin : r.win .capacity = ⟨c, 1⟩) (hbm : E × L) (side : ι → E × L)
     (hsched : ∀ ω, r.schedule ω = (ρ ω).schedule chip mem (cls ω) (acct ω) (usage ω).link hbm side)
-    (hH : ∀ ω, computation r ρ usage θ hθ acct .capacity ω ∈ H (cutFrame hw chip mem hX c t hc)) (p : Recipe)
+    (hH : ∀ ω, computation r ρ usage θ hθ acct .capacity ω ∈ H hw) (p : Recipe)
     (Y : ℝ) (hbw : 0 ≤ p.b_w) (hwe : 0 < p.w_e)
     (hgap : ((cutFrame hw chip mem hX c t hc).unaccounted ⌈S⌉₊ 0
       ((cutFrame hw chip mem hX c t hc).b * (cutFrame hw chip mem hX c t hc).ω) p : ℝ) < p.Nstar * p.b_w)
@@ -391,7 +391,7 @@ theorem secure_device [Nonempty ΩS] (hwinW : r.win .compute = ⟨0, c + 1⟩) (
     (hacct : r.acct .compute = r.acct .capacity) (hbm : E × L) (side : ι → E × L)
     (hsched : ∀ ω, r.schedule ω = (ρ ω).schedule chip mem (cls ω) (acct ω) (usage ω).link hbm side) (pc : Price)
     (hπ : ∀ ω g, (ρ ω).A.x g ∈ chip ∪ mem → (usage ω).π g = (cls ω g).elim 0 pc)
-    (hH : ∀ ω, computation r ρ usage θ hθ acct .capacity ω ∈ H (cutFrame hw chip mem hX c t hc))
+    (hH : ∀ ω, computation r ρ usage θ hθ acct .capacity ω ∈ H hw)
     {pRead W S εW εS : ℝ} (hW : r.ComputeSoundPerRunPriced pc pRead W εW) (hS : r.CapacitySoundPerRun S εS)
     (counted : ΩW × ΩQ × ΩS → Prop) (y : ℕ)
     (hy : ∀ ω i j, counted ω → finProdFinEquiv (i, j) ∉ (cutFrame hw chip mem hX c t hc).missed →

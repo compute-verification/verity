@@ -84,7 +84,7 @@ def Bandwidth (M : Computation Bool Unit) : Prop :=
 
 /-- The feasible set at the hardware `hw c m β` is the four clauses. -/
 theorem feasible_iff (M : Computation Bool Unit) :
-    M ∈ H (frame c m β I) ↔ Order M ∧ Work c M ∧ Memory m M ∧ Bandwidth β M := by
+    M ∈ H (hw c m β) ↔ Order M ∧ Work c M ∧ Memory m M ∧ Bandwidth β M := by
   constructor
   · rintro ⟨ho, hw, hm, hl⟩
     refine ⟨ho, fun p a b => ?_, fun X t => hm X (Set.mem_univ _) t, hl⟩
@@ -149,8 +149,8 @@ theorem bandwidth (hβ : 1 ≤ β) : Bandwidth β trained := by
     rw [he]
     simp [Circuit.width]
 
-theorem feasible : trained ∈ H (frame 1 1 1 I) :=
-  (feasible_iff 1 1 1 I trained).2 ⟨order, work 1 le_rfl, memory 1 le_rfl, bandwidth 1 le_rfl⟩
+theorem feasible : trained ∈ H (hw 1 1 1) :=
+  (feasible_iff 1 1 1 trained).2 ⟨order, work 1 le_rfl, memory 1 le_rfl, bandwidth 1 le_rfl⟩
 
 theorem window_eq (i : Fin (frame c m β I).n) (j : Fin (frame c m β I).cuts.J) :
     run.region ((frame c m β I).server i) ((frame c m β I).span j) = {3} := by
@@ -176,8 +176,8 @@ theorem delivered_univ (i : Fin (frame c m β I).n) (j : Fin (frame c m β I).cu
 /-- **A computation that is feasible and accounted for**, at the amounts `1`, `1`, `1` and `1`: the declared
 circuit's gates hold the one bit the server carries, the window reads the one bit its link delivers and no other, and
 they do the one unit of work the server does. -/
-theorem served_mem : served ∈ H (frame 1 1 1 I) ∧ served ∈ A (frame 1 1 1 I) 1 1 1 1 := by
-  refine ⟨feasible I, fun i j => ?_⟩
+theorem served_mem : served ∈ H (hw 1 1 1) ∧ served ∈ A (frame 1 1 1 I) 1 1 1 1 := by
+  refine ⟨feasible, fun i j => ?_⟩
   have hj : j = (0 : Fin 1) := Subsingleton.elim _ _
   subst hj
   refine ⟨fun _ => ⟨?_, (delivered_univ 1 1 1 I i 0).ge, (delivered_univ 1 1 1 I i 0).le⟩, fun _ => ?_⟩
@@ -346,8 +346,8 @@ theorem trained_prohibited {Y : ℝ} (hY : Y < 1) : trained ∈ B (frame c m β 
   prohibited_of c m β I trained (emb c m β I) (trains c m β I) hY
 
 /-- **A computation that is feasible and prohibited**, at the count `0`. -/
-theorem trained_mem : trained ∈ H (frame 1 1 1 I) ∧ trained ∈ B (frame 1 1 1 I) recipe 0 :=
-  ⟨feasible I, trained_prohibited 1 1 1 I (by norm_num)⟩
+theorem trained_mem : trained ∈ H (hw 1 1 1) ∧ trained ∈ B (frame 1 1 1 I) recipe 0 :=
+  ⟨feasible, trained_prohibited 1 1 1 I (by norm_num)⟩
 
 /-- `Secure` at the witness: the run with no gate the declared circuit's is not accounted for. -/
 theorem trained_not_accounted : trained ∉ A (frame 1 1 1 I) 1 1 1 1 := fun hA =>
@@ -642,7 +642,7 @@ theorem compute_witness (p : Recipe) (ω : Unit × Unit × Unit) :
       (fun _ _ => ()) .compute ω ∉ B (deviceFrame (hw 1 1 1) {true} ∅ (Set.mem_univ _) 1) p (p.o_w : ℕ) := fun hB => by
   have h := secure_compute (hw 1 1 1) {true} ∅ (Set.mem_univ _) 1 audit (fun _ => actual) (fun _ => usage) (fun _ => ∅)
     (fun _ _ h => absurd h (notMem_empty _)) (fun _ _ => some .tc) (fun _ _ => ()) rfl ((), true) Empty.elim
-    (fun _ => rfl) price (fun _ _ _ => rfl) (fun _ => feasible ∅) (audit_sound {true} ∅ (union_empty _)) p
+    (fun _ => rfl) price (fun _ _ _ => rfl) (fun _ => feasible) (audit_sound {true} ∅ (union_empty _)) p
   have hY : ∀ x, (hw 1 1 1).compute ({true} ∪ ∅) * 1 - ⌈(1 : ℝ) - 0 * audit.pouwRead x⌉₊ + p.o_w = p.o_w :=
     fun _ => by simp [Hardware.ofLeaves]
   simp only [hY] at h
@@ -688,7 +688,7 @@ theorem bandwidth_witness (ω : Unit × Unit × Unit) :
       rcases hy with hy | hy
       · simp [Hardware.ofLeaves] at hy
         simp [← hy]
-      · simp [Hardware.ofLeaves] at hy) (fun _ => feasible ∅) audit_bandwidth_sound recipe (1 / 4) (by norm_num)
+      · simp [Hardware.ofLeaves] at hy) (fun _ => feasible) audit_bandwidth_sound recipe (1 / 4) (by norm_num)
     (by norm_num) (by rw [hu]; norm_num) (by
       unfold Frame.bound
       rw [hu]
@@ -756,7 +756,7 @@ theorem capacity_witness (ω : Unit × Unit × Unit) :
     decide
   have h := secure_capacity (hw 1 1 1) ∅ {true} (Set.mem_univ _) 0 1 le_rfl (auditOn ∅ {true}) (fun _ => actual)
     (fun _ => usage) (fun _ => ∅) (fun _ _ h => absurd h (notMem_empty _)) (fun _ _ => some .tc) (fun _ _ => ())
-    rfl ((), true) Empty.elim (fun _ => rfl) (fun _ => feasible ∅) audit_capacity_sound recipe (5 / 4) (by norm_num)
+    rfl ((), true) Empty.elim (fun _ => rfl) (fun _ => feasible) audit_capacity_sound recipe (5 / 4) (by norm_num)
     (by norm_num) (by rw [hu]; norm_num) (by
       unfold Frame.bound
       rw [hu, hmiss, hcov]
@@ -810,10 +810,11 @@ theorem device_witness (ω : Unit × Unit × Unit) :
     norm_num
   have h := secure_device (hw 1 1 1) ∅ {true} (Set.mem_univ _) 0 1 le_rfl (auditOn ∅ {true}) (fun _ => actual)
     (fun _ => usage) (fun _ => ∅) (fun _ _ h => absurd h (notMem_empty _)) (fun _ _ => some .tc) (fun _ _ => ())
-    rfl rfl rfl ((), true) Empty.elim (fun _ => rfl) price (fun _ _ _ => rfl) (fun _ => feasible ∅)
+    rfl rfl rfl ((), true) Empty.elim (fun _ => rfl) price (fun _ _ _ => rfl) (fun _ => feasible)
     (audit_sound ∅ {true} (empty_union _)) audit_capacity_sound (fun _ => True) _
     (fun _ i j _ _ =>
-      delivered_le_capacity (cutFrame (hw 1 1 1) ∅ {true} (Set.mem_univ _) 0 1 le_rfl) _ (feasible ∅) i j) recipe (by norm_num) (by norm_num)
+      delivered_le_capacity (cutFrame (hw 1 1 1) ∅ {true} (Set.mem_univ _) 0 1 le_rfl) _ feasible i j)
+    recipe (by norm_num) (by norm_num)
     (by rw [hu]; norm_num)
   refine absurd ((le_of_eq (Pouw.pr_eq_one fun x => ?_).symm).trans h) (by norm_num)
   exact ⟨trivial, trivial, trivial, c, emb, T, start, hT, lt_of_le_of_lt (hY x) hlt⟩
@@ -840,7 +841,7 @@ theorem Secure_nontrivial_accounted : Guarantees.Secure_nontrivial_accounted :=
 
 theorem Secure_nontrivial_bound : Guarantees.Secure_nontrivial_bound :=
   have hB : trained ∈ B (frame 1 1 1 ∅) recipe 0 := trained_prohibited 1 1 1 ∅ (by norm_num)
-  ⟨actual.faithful, actual.holding, Set.mem_univ _, feasible ∅, accounted_covered 1 1 1,
-    fun hb => Secure _ 0 0 0 1 recipe 0 hb trained (feasible ∅) (accounted_covered 1 1 1) hB, fun h => h hB⟩
+  ⟨actual.faithful, actual.holding, Set.mem_univ _, feasible, accounted_covered 1 1 1,
+    fun hb => Secure _ 0 0 0 1 recipe 0 hb trained feasible (accounted_covered 1 1 1) hB, fun h => h hB⟩
 
 end Slowdown.SecurityProofs

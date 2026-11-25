@@ -411,7 +411,7 @@
   },
   "Slowdown.Security.H": {
    "owner": "@compute-research",
-   "digest": "19c39ffb8835bc8d398ea93339e368639beb66d9a10e122c8e19db729279b613",
+   "digest": "e9bb92b6d233bc72f7db1dd8ca5299490025d1c48e6f8834d0173620db19c5ce",
    "why": "The feasible computations, the first of the three sets Secure says share no member; that a machine's computation is in it is the hardware model's claim."
   },
   "Spot.Sampling.Adaptive.Play.Drawn": {
@@ -23165,7 +23165,6 @@
      "ResourceAccounting.Hardware.ends",
      "ResourceAccounting.Hardware.mk",
      "ResourceAccounting.Hardware.β",
-     "ResourceAccounting.Hardware.ℓ",
      "ResourceAccounting.Placed",
      "ResourceAccounting.Placed.Causal",
      "ResourceAccounting.Placed.ComputeRate",
@@ -23189,7 +23188,7 @@
     ]
    },
    "type_hash": "0470ec0c3e54ca1a6340beef1bd40b4011b0c67244e89a0dc5bf54b33d99bc25",
-   "unfolded_hash": "99c3365d5a8eebd53be8a4ceb336e66d0675b2bfd4dc368813f5e694e3eacdc5"
+   "unfolded_hash": "419bea169ad69ded04f963cbc344c4f1e58b1dcbbdcd41505d21a7b670dec027"
   },
   "Slowdown.SecurityProofs.Secure_honest": {
    "owner": "@compute-research",
@@ -23211,7 +23210,6 @@
      "ResourceAccounting.Hardware.mk",
      "ResourceAccounting.Hardware.units",
      "ResourceAccounting.Hardware.β",
-     "ResourceAccounting.Hardware.ℓ",
      "ResourceAccounting.Placed",
      "ResourceAccounting.Placed.Causal",
      "ResourceAccounting.Placed.ComputeRate",
@@ -23234,7 +23232,7 @@
     ]
    },
    "type_hash": "19e7efdf63e7b3ed4d05fd436c4509f21046ab42950c8d786d6ac413ac5c09c9",
-   "unfolded_hash": "9a45abd934a5ee620149528c91a593d8b03d531a8364077492bf96a7e8c19759"
+   "unfolded_hash": "f46caa4de28262a1121642bad737dee653fdd1d5e59adac1ad785b8227899f97"
   },
   "Slowdown.SecurityProofs.Secure_nontrivial": {
    "owner": "@compute-research",
@@ -23256,7 +23254,6 @@
      "ResourceAccounting.Hardware.mk",
      "ResourceAccounting.Hardware.units",
      "ResourceAccounting.Hardware.β",
-     "ResourceAccounting.Hardware.ℓ",
      "ResourceAccounting.Placed",
      "ResourceAccounting.Placed.Causal",
      "ResourceAccounting.Placed.ComputeRate",
@@ -23282,7 +23279,7 @@
     ]
    },
    "type_hash": "3476bcfad63882d21fcc51a09e804a6220bee073345468cf183dddabf0d505f8",
-   "unfolded_hash": "1ec902d310a7fe9eadcce13a6b59d6e95f04aa5686fad89feb4ad6e11c2bfa45"
+   "unfolded_hash": "53d8bfe0c0f4121ee18352cbe130b2be9b25d792e87660d4516ffabb05a06560"
   },
   "Slowdown.SecurityProofs.Secure_nontrivial_accounted": {
    "owner": "@compute-research",
@@ -23304,7 +23301,6 @@
      "ResourceAccounting.Hardware.mk",
      "ResourceAccounting.Hardware.units",
      "ResourceAccounting.Hardware.β",
-     "ResourceAccounting.Hardware.ℓ",
      "ResourceAccounting.Placed",
      "ResourceAccounting.Placed.Causal",
      "ResourceAccounting.Placed.ComputeRate",
@@ -23330,7 +23326,7 @@
     ]
    },
    "type_hash": "fe5186ae070241494ca76ce07585552b2f4ffec72bf2eab01749fbe87c556fd1",
-   "unfolded_hash": "047168682f6fc63ea1e5eab10d590b6f454617bf56fd05f30ae044f6d3da8d8e"
+   "unfolded_hash": "2ce426663d006f0da7fced50e38fb2732c3672d37f50062949df80e7fdff49fb"
   },
   "Slowdown.SecurityProofs.Secure_nontrivial_bound": {
    "owner": "@compute-research",
@@ -23352,7 +23348,6 @@
      "ResourceAccounting.Hardware.mk",
      "ResourceAccounting.Hardware.units",
      "ResourceAccounting.Hardware.β",
-     "ResourceAccounting.Hardware.ℓ",
      "ResourceAccounting.Placed",
      "ResourceAccounting.Placed.Causal",
      "ResourceAccounting.Placed.ComputeRate",
@@ -23378,7 +23373,7 @@
     ]
    },
    "type_hash": "3ed98bd6f14bba4f1fc2052460804f1d723e3cc85b6238241f1bd1a62091efb1",
-   "unfolded_hash": "3a49af77f3c077ca9a041f7935e4f0e7a218d5ec24f19ad82dbc9c431824e5fc"
+   "unfolded_hash": "51c8c877da71e545bc9a78855970ef52dfc05ddbf84f71d3429c8369d31f69af"
   },
   "Slowdown.SecurityProofs.Slowdown": {
    "owner": "@lean",
@@ -38958,7 +38953,7 @@
    }
   },
   "Definitions.Registration.Physical": {
-   "digest": "9b2f8ca913f2fc824b8f95b808635a27e5350b0f3d80373deebae1ebf4adb499",
+   "digest": "6b614e4829143b0c65395b46562652310ad5ff2fd86b9d69d8607b642844a07f",
    "definitions": {
     "ResourceAccounting.Actual.Run.record": "7c09a3913558bb212ac0b15a38c54af6be56b6dfaa8fabe2941527fd8ec2e1a1",
     "ResourceAccounting.CausalStrategy": "19e69404b925ce6b3d6439d8198296a031f9b690b813203173d716a4f53cbb50",
@@ -38970,7 +38965,6 @@
     "ResourceAccounting.Hardware.ends": "52d5466ec6fea2f7068cbef6786e647e6a65823459a1bd641e373ac63f4883fc",
     "ResourceAccounting.Hardware.units": "8ebcf337efe7f169d57953cc12b436b0917d9c4a94ec6857265820f6a74de410",
     "ResourceAccounting.Hardware.β": "7e09d416f203c98b504c9f621c92e71810383fdcf82ce7751eafc43cb3a42dc4",
-    "ResourceAccounting.Hardware.ℓ": "7647294623e8f1e222cca9e9da472ec4a99d327fc80a33203c2593a90475da92",
     "ResourceAccounting.Placed.Causal": "5b09cea2ee749b7b1972c1dd1a895cb0633a219db98e37d8ac8319ee760ea10f",
     "ResourceAccounting.Placed.ComputeRate": "9b39c20e44fb25b5f2e3c337b11446d7cbad6b0728eb726f638e75d80a8e9ca2",
     "ResourceAccounting.Placed.Links": "34e95f809838ff91a0d6ef2930e7ec03492a1fd62eba7b8e09d6ceabed058870",
@@ -39813,13 +39807,13 @@
    }
   },
   "Definitions.Slowdown.Guarantees.Secure": {
-   "digest": "1a70d7b8561063ebb115b69968039f3d3006f3d66de376469e3d89772b757638",
+   "digest": "374ef490f20d43a4e1bda58c7e8e6c49282b5f14f8c5a10137c188aa5deeda57",
    "definitions": {
-    "Slowdown.Guarantees.Secure": "f1a877f55f0fdfa034da6460462bf6bcb2b1b04fc2927313b8730f2ca2e05614",
-    "Slowdown.Guarantees.Secure_honest": "171924f55c9ddcfce010017679689e8a41c6954c0eb06aae8f3928e871b3180c",
-    "Slowdown.Guarantees.Secure_nontrivial": "8ff74d766a930cf6a83ab470ef8fc333cebdf69a211aa3802b72e91840949f61",
-    "Slowdown.Guarantees.Secure_nontrivial_accounted": "2fb14d69c36955f8da74126f72595534b6eba042014bca3ab8888d891bb11d00",
-    "Slowdown.Guarantees.Secure_nontrivial_bound": "e50f491ec0c777ab3806882924108a153a76b8bdde9d19dfd571d3893c6afa57"
+    "Slowdown.Guarantees.Secure": "a8576f50f876afea19ed352b1a1bb600d69ca2fe4bc845731adfd5e57bba3610",
+    "Slowdown.Guarantees.Secure_honest": "8f2b04a2d95fc1b3d8bea9ef2f1cb86d45dd6faf187aaefa21b58ce9b46fd95e",
+    "Slowdown.Guarantees.Secure_nontrivial": "17074856458282e964636ead37491ff01e8e0ff28b33b606e4b8a57d369ca52b",
+    "Slowdown.Guarantees.Secure_nontrivial_accounted": "4add2764c04e15f5f33b729b1d83224583a6bb11965aa5646745a225e536dcc2",
+    "Slowdown.Guarantees.Secure_nontrivial_bound": "e617e2c791409ca81b5a589c3e18f372ddcc0cf4ed34c934d8ad2313c198af9f"
    }
   },
   "Definitions.Slowdown.Guarantees.ServingBlocks": {
@@ -39912,7 +39906,7 @@
    }
   },
   "Definitions.Slowdown.Security": {
-   "digest": "80b1e73967145f5fef5a76eee143ac60c7bed425e54eae88a262d7ace08d456f",
+   "digest": "9f5f22b54c2797d453399bce7f3881dc904faf175a8f29f6b262c1830f3a4d21",
    "definitions": {
     "Slowdown.Security.A": "6227553a35d340ed2b73291625db56a9b4867712be121a1807a0dd4f8c8c4ad8",
     "Slowdown.Security.B": "941bef0b41ae6ddef2ee79832a86eda4e83ff7bd7ec6aff12d57f1175090bdd6",
@@ -39945,7 +39939,7 @@
     "Slowdown.Security.Frame.unaccounted": "ae3c7ec0bd4f3434743e6077e446dfa97769e53dd87819bcec3497f62009e8fe",
     "Slowdown.Security.Frame.Φ": "100a32b99d60210bbf6931879814af8c575b05b201aaacf306b42152fb39970d",
     "Slowdown.Security.Frame.ω": "addc5733fbc60cfb5f4edd4883079638b6d9bb1ef7acabcff869d4860775a9cb",
-    "Slowdown.Security.H": "19c39ffb8835bc8d398ea93339e368639beb66d9a10e122c8e19db729279b613",
+    "Slowdown.Security.H": "e9bb92b6d233bc72f7db1dd8ca5299490025d1c48e6f8834d0173620db19c5ce",
     "Slowdown.Security.Recipe": "83d67626995defcffd4dfdb87e481a0c921891d3b3162502a121e4b43a625faa",
     "Slowdown.Security.Recipe.Nstar": "e33efec7a9e5c8e94e81b007733a79b4fc460ad277848aa623b414039d279b63",
     "Slowdown.Security.Recipe.b_w": "7845624f7b6f2b2a6a8ccf32729e54977ce4fd9a8c8b77021a810b814c3eb36a",

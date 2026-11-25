@@ -8,7 +8,7 @@ public import Definitions.ResourceAccounting.BlockProperties
 /-!
 # No computation is feasible, accounted for and prohibited
 
-`Secure` proves `Guarantees.Secure`: `M ∈ H F → M ∈ A F x_s x_b x_w y_b → M ∉ B F p Y`, the three sets of
+`Secure` proves `Guarantees.Secure`: `M ∈ H F.hw → M ∈ A F x_s x_b x_w y_b → M ∉ B F p Y`, the three sets of
 `Definitions.Slowdown.Security`, when `Y` is at least the fit bound (`Frame.bound`) and the bits a covered window can
 read of a reference training algorithm (`Frame.unaccounted`) are fewer than `N* b_w` (`Frame.BoundAtMost`). Its steps:
 
@@ -137,7 +137,7 @@ theorem Secure : Guarantees.Secure := by
         (min_le_min_right _ (Nat.mul_le_mul (hb i) (hω j))) _))
     exact Nat.cast_le.2 (window_reads_le M.run.A hC (subset_biUnion_of_mem F.server (mem_univ i)) M.registered_input
       hτ M.declared _ hrs hrb (hT.shared_carried i j hu) (hT.shared_read i j hu))
-  have hk := fitRate_of_reads_but M.run.A F.hw.ℓ F.hw.ends F.hw.β M.usage.link F.n F.server M.registered
+  have hk := fitRate_of_reads_but M.run.A (fun _ _ => 0) F.hw.ends F.hw.β M.usage.link F.n F.server M.registered
     M.registered_input F.t F.cuts ((F.unaccounted x_s x_b y_b p : ℕ) : ℝ) c emb T start F.missed p.Nstar p.b_w p.w_e
     F.disjoint hC hL hbw hwe.le (Nat.cast_nonneg _) hS hgap fun Q hQ => ⟨hT.reach Q hQ, hT.fits Q hQ⟩
   have hcount : _ ≤ ∑ u ∈ F.missed, (F.Φ * F.len (finProdFinEquiv.symm u).2 - x_w + p.o_w) :=
@@ -159,14 +159,15 @@ theorem Secure : Guarantees.Secure := by
   exact absurd (h2.trans hY) (not_le.2 hlt)
 
 /-- **A computation the tree's feasible set holds is in `H`**, where its memory limit holds of what the run holds:
-`H` asks less of the circuit than `ResourceAccounting.Feasible` (no sequential speed) and more of memory. -/
-theorem mem_H_of_feasible {L E : Type*} (F : Frame L E) (M : Computation L E)
-    (hF : Feasible F.hw M.run.A M.usage) (hM : M.run.Memory F.hw.units F.hw.M) : M ∈ H F :=
-  ⟨hF.1, hF.2.1, hM, hF.2.2.2.2⟩
+`H` asks less of the circuit than `ResourceAccounting.Feasible` (no latency, no sequential speed) and more of
+memory. -/
+theorem mem_H_of_feasible {L E : Type*} (hw : Hardware L E) (M : Computation L E)
+    (hF : Feasible hw M.run.A M.usage) (hM : M.run.Memory hw.units hw.M) : M ∈ H hw :=
+  ⟨fun g a ha => (Nat.le_add_right _ _).trans (hF.1 g a ha), hF.2.1, hM, hF.2.2.2.2⟩
 
 /-- The links of a feasible computation deliver to a window's server at most `b ω` bits. -/
 theorem delivered_le_capacity {L E : Type*} [Fintype E] [DecidableEq L] (F : Frame L E) (M : Computation L E)
-    (hM : M ∈ H F) (i : Fin F.n) (j : Fin F.cuts.J) : M.delivered F i j univ ≤ F.b * F.ω := by
+    (hM : M ∈ H F.hw) (i : Fin F.n) (j : Fin F.cuts.J) : M.delivered F i j univ ≤ F.b * F.ω := by
   unfold Computation.delivered
   simp only [inter_univ]
   refine (le_of_eq (sum_congr rfl fun τ _ => ?_)).trans ((delivered_le M.run.A hM.2.2.2 (F.server i) _ _).trans
@@ -183,15 +184,15 @@ theorem secure_work {L E : Type*} [Fintype E] [DecidableEq L] (F : Frame L E) (h
     (x_s x_b x_w y_b : ℕ) (p : Recipe) (Y : ℝ)
     (hY : ((∑ u : Fin (F.n * F.cuts.J), (F.Φ * F.len (finProdFinEquiv.symm u).2 - x_w + p.o_w) : ℕ) : ℝ) ≤ Y)
     (M : Computation L E) :
-    M ∈ H F → M ∈ A F x_s x_b x_w y_b → M ∉ B F p Y := by
+    M ∈ H F.hw → M ∈ A F x_s x_b x_w y_b → M ∉ B F p Y := by
   classical
   rintro ⟨hC, hW, -, hL⟩ hA ⟨c, emb, T, start, hT, hlt⟩
   have hΦ : ∀ i, F.hw.compute (F.server i) ≤ F.Φ := fun i =>
     le_sup (f := fun i => F.hw.compute (F.server i)) (mem_univ i)
   have hin : ∀ i j, finProdFinEquiv (i, j) ∈ F.missed := fun i j => hF ▸ mem_univ _
-  obtain ⟨P, hP⟩ := ResourceAccounting.SecurityProofs.Actual.ServerBlocksAt M.run.A F.hw.ℓ (fun _ => M.run.A.N) F.hw.ends
-    F.hw.β M.usage.link F.n F.server M.registered M.registered_input F.t F.cuts ∅ F.disjoint hC
-    (computeRate_N M.run.A _) hL
+  obtain ⟨P, hP⟩ := ResourceAccounting.SecurityProofs.Actual.ServerBlocksAt M.run.A (fun _ _ => 0)
+    (fun _ => M.run.A.N) F.hw.ends F.hw.β M.usage.link F.n F.server M.registered M.registered_input F.t F.cuts ∅
+    F.disjoint hC (computeRate_N M.run.A _) hL
   have hcount : _ ≤ ∑ u ∈ F.missed, (F.Φ * F.len (finProdFinEquiv.symm u).2 - x_w + p.o_w) :=
     card_missed_le M.run.A F.n F.server M.registered M.registered_input F.t F.cuts F.hw.compute
       M.usage.π F.Φ x_w p.o_w M.declared c emb T F.missed hW F.unit hΦ hT.load (fun i j hu => (hA i j).2 hu)
@@ -221,7 +222,7 @@ run's computation is in `A` outside probability `δ`, it is not in `B` outside `
 the runs. -/
 theorem secure_pr [Fintype E] (F : Frame L E) (x_s x_b x_w y_b : ℕ) (p : Recipe) (Y : ℝ)
     (hbw : 0 ≤ p.b_w) (hwe : 0 < p.w_e) (hgap : (F.unaccounted x_s x_b y_b p : ℝ) < p.Nstar * p.b_w)
-    (hY : F.bound x_s x_b x_w y_b p ≤ Y) (δ : ℝ≥0∞) (hH : ∀ ω, M ω ∈ H F)
+    (hY : F.bound x_s x_b x_w y_b p ≤ Y) (δ : ℝ≥0∞) (hH : ∀ ω, M ω ∈ H F.hw)
     (hA : ExceptWith pr accepts (fun ω => M ω ∈ A F x_s x_b x_w y_b) δ) :
     ExceptWith pr accepts (fun ω => M ω ∉ B F p Y) δ :=
   (mono _ _ fun ω h =>

@@ -16,7 +16,7 @@ prohibited. Each set is a predicate on a computation `M` alone, at public parame
   actual circuit, its gates' values and what each leaf holds at each tick) with what each gate uses of its location's
   compute and the link each wire runs on, the registered inputs, and the gates of the declared circuit (`declared`),
   which the audits' amounts are about.
-* **`H F`**, the feasible computations, four clauses of the frame's hardware: a gate reads no gate placed after it,
+* **`H hw`**, the feasible computations, four clauses of the hardware alone: a gate reads no gate placed after it,
   the compute rate, memory on what the run holds, and the links.
 * **`A F x_s x_b x_w y_b`**, what the audits account for: at each window they cover, the window's server holds at
   least `x_s` bits of the declared circuit's gates at the cut that opens it, and during the window the links deliver
@@ -135,15 +135,16 @@ end Computation
 
 variable {L E : Type*}
 
-/-- **`𝓗`, the feasible computations** on the frame's hardware, four clauses: a gate reads only gates placed no
-later than the latency between their leaves allows (`Placed.Causal`); the gates at a location over an interval of
-ticks use at most the location's compute a tick (`Placed.ComputeRate`); each location's state, what its leaves hold
-and what is in flight between them, is within the location's memory at every tick (`Actual.Run.Memory`); and each
-link delivers at most its capacity a tick (`Placed.Links`). These are `ResourceAccounting.Feasible`'s clauses less
-its sequential speed, with memory on what is held, not on the bits read later alone. -/
-def H (F : Frame L E) : Set (Computation L E) :=
-  {M | M.run.A.Causal F.hw.ℓ ∧ M.run.A.ComputeRate F.hw.units M.usage.π F.hw.compute ∧
-    M.run.Memory F.hw.units F.hw.M ∧ M.run.A.Links F.hw.ends F.hw.β M.usage.link}
+/-- **`𝓗`, the feasible computations** on the hardware `hw`, four clauses: a gate reads only gates placed no later
+than itself (`Placed.Causal` at no latency); the gates at a location over an interval of ticks use at most the
+location's compute a tick (`Placed.ComputeRate`); each location's state, what its leaves hold and what is in flight
+between them, is within the location's memory at every tick (`Actual.Run.Memory`); and each link delivers at most its
+capacity a tick (`Placed.Links`). These are `ResourceAccounting.Feasible`'s clauses less its latencies and its
+sequential speed, with memory on what is held, not on the bits read later alone. It reads the hardware's locations,
+their compute and memory, and its links with their capacities, and nothing of the audits' frame. -/
+def H (hw : Hardware L E) : Set (Computation L E) :=
+  {M | M.run.A.Causal (fun _ _ => 0) ∧ M.run.A.ComputeRate hw.units M.usage.π hw.compute ∧
+    M.run.Memory hw.units hw.M ∧ M.run.A.Links hw.ends hw.β M.usage.link}
 
 /-- **`𝒜`, the computations consistent with what the audits account for**, at the amounts `x_s`, `x_b`, `x_w` and
 `y_b`. At each window the memory and bandwidth audits cover, the window's server holds at least `x_s` bits of the
@@ -187,8 +188,8 @@ open Classical in
 * `load`: each counted multiplication uses at least one unit of its location's compute;
 * `reach` (F3, the loss premise, `Assumptions.Reach` counted in the covered windows): each thread started in a covered
   window that works there uses at least `p.Nstar` distinct weights inside the covered windows;
-* `fits` (F1 and F4, `Assumptions.Fits` at the covered windows): each covered window reads at least `p.b_w` fresh input
-  bits for each weight it uses and `p.w_e` for each thread it works on but didn't start;
+* `fits` (F1 and F4, `Assumptions.Fits` at the covered windows): each covered window reads at least `p.b_w`
+  unregistered input bits for each weight it uses and `p.w_e` for each thread it works on but didn't start;
 * `shared_carried`, `shared_read`, `shared_work`: of `c`'s novel gates, those outside its registered inputs, the
   declared circuit's gates hold at most `p.o_s` bits carried into a covered window and `p.o_b` bits it reads from
   outside its server, and at most `p.o_w` of `c`'s counted multiplications in a missed window are the declared
