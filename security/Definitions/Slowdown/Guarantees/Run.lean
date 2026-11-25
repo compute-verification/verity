@@ -35,22 +35,26 @@ open scoped ENNReal
 
 /-- **An accepted run is not prohibited, outside the audits' errors.** `g` is the run's interaction, `world a` the
 computation behind its outcome `a`, every one of them feasible on the frame's hardware, and the verifier accepts
-where each of the four audits does. Where memory's audit is sound for `HeldAtLeast` at `x_s`, bandwidth's for
-`DeliveredAtLeast` at `x_b` and the count for `DeliveredAtMost` at `y_b` at each covered window, and work's for
-`WorkAtLeast` at `x_w` at each missed one, with errors `δ_s`, `δ_b`, `δ_y` and `δ_w`, the run is sound for "the
-computation is not in `B F p Y`", for every `Y` at least the fit bound (`F.BoundAtMost`), with error
+where each of the four audits does. The amounts `x_s a`, `x_b a`, `y_b a` and `x_w a` are what the audits certify at
+the outcome `a`. Where memory's audit is sound for `HeldAtLeast` at `x_s`, bandwidth's for `DeliveredAtLeast` at `x_b`
+and the count for `DeliveredAtMost` at `y_b` at each covered window, and work's for `WorkAtLeast` at `x_w` at each
+missed one, with errors `δ_s`, `δ_b`, `δ_y` and `δ_w`, the run is sound for "the computation is not in `B F p (Y a)`",
+for every `Y a` at least the fit bound at the outcome's amounts (`F.BoundAtMost`), with error
 `|missed| δ_w + (n J − |missed|) (δ_s + δ_b + δ_y)`. -/
 def RunSecure : Prop :=
   ∀ {L E : Type*} [Fintype E] [DecidableEq L] {α : Type} (g : Game α) (world : α → Computation L E)
-    (F : Frame L E) (x_s x_b x_w y_b : ℕ) (p : Recipe) (Y : ℝ) (acc_s acc_b acc_y acc_w : α → Prop)
+    (F : Frame L E) (x_s x_b x_w y_b : α → ℕ) (p : Recipe) (Y : α → ℝ) (acc_s acc_b acc_y acc_w : α → Prop)
     (δ_s δ_b δ_y δ_w : ℝ≥0∞),
-    F.BoundAtMost x_s x_b x_w y_b p Y → (∀ a, H F.hw (world a)) →
-    (∀ i j, finProdFinEquiv (i, j) ∉ F.missed → Sound g acc_s (fun a => world a ∈ HeldAtLeast F i j x_s) δ_s) →
+    (∀ a, F.BoundAtMost (x_s a) (x_b a) (x_w a) (y_b a) p (Y a)) → (∀ a, H F.hw (world a)) →
     (∀ i j, finProdFinEquiv (i, j) ∉ F.missed →
-      Sound g acc_b (fun a => world a ∈ DeliveredAtLeast F i j x_b) δ_b) →
-    (∀ i j, finProdFinEquiv (i, j) ∉ F.missed → Sound g acc_y (fun a => world a ∈ DeliveredAtMost F i j y_b) δ_y) →
-    (∀ i j, finProdFinEquiv (i, j) ∈ F.missed → Sound g acc_w (fun a => world a ∈ WorkAtLeast F i j x_w) δ_w) →
-    Sound g (fun a => acc_s a ∧ acc_b a ∧ acc_y a ∧ acc_w a) (fun a => ¬ B F p Y (world a))
+      Sound g acc_s (fun a => world a ∈ HeldAtLeast F i j (x_s a)) δ_s) →
+    (∀ i j, finProdFinEquiv (i, j) ∉ F.missed →
+      Sound g acc_b (fun a => world a ∈ DeliveredAtLeast F i j (x_b a)) δ_b) →
+    (∀ i j, finProdFinEquiv (i, j) ∉ F.missed →
+      Sound g acc_y (fun a => world a ∈ DeliveredAtMost F i j (y_b a)) δ_y) →
+    (∀ i j, finProdFinEquiv (i, j) ∈ F.missed →
+      Sound g acc_w (fun a => world a ∈ WorkAtLeast F i j (x_w a)) δ_w) →
+    Sound g (fun a => acc_s a ∧ acc_b a ∧ acc_y a ∧ acc_w a) (fun a => ¬ B F p (Y a) (world a))
       (F.missed.card * δ_w + (F.n * F.cuts.J - F.missed.card : ℕ) * (δ_s + δ_b + δ_y))
 
 /-- The run with no message and no coin: one outcome. -/
@@ -62,7 +66,7 @@ accepting: the run is a run (`Faithful`, `Holding`), its server a location of th
 the computation is feasible, and each covered window's three clauses hold with no error. -/
 def RunSecure_honest : Prop :=
   run.Faithful actual.val ∧ run.Holding actual.held ∧ ({true} : Finset Bool) ∈ (hw 1 1 1).units ∧
-    (frame 1 1 1 ∅).BoundAtMost 1 1 1 1 recipe 0 ∧ (∀ _ : Unit, H (hw 1 1 1) served) ∧
+    (∀ _ : Unit, (frame 1 1 1 ∅).BoundAtMost 1 1 1 1 recipe 0) ∧ (∀ _ : Unit, H (hw 1 1 1) served) ∧
     (∀ i j, finProdFinEquiv (i, j) ∉ (frame 1 1 1 ∅).missed →
       Sound still (fun _ => True) (fun _ => served ∈ HeldAtLeast (frame 1 1 1 ∅) i j 1) 0) ∧
     (∀ i j, finProdFinEquiv (i, j) ∉ (frame 1 1 1 ∅).missed →
@@ -75,7 +79,7 @@ bound `0` of audits that account for everything, memory's audit is not sound for
 and the verifier accepts a prohibited computation with probability 1. -/
 def RunSecure_nontrivial : Prop :=
   run.Faithful actual.val ∧ run.Holding actual.held ∧ ({true} : Finset Bool) ∈ (hw 1 1 1).units ∧
-    (frame 1 1 1 ∅).BoundAtMost 1 1 1 1 recipe 0 ∧ (∀ _ : Unit, H (hw 1 1 1) trained) ∧
+    (∀ _ : Unit, (frame 1 1 1 ∅).BoundAtMost 1 1 1 1 recipe 0) ∧ (∀ _ : Unit, H (hw 1 1 1) trained) ∧
     (∀ δ : ℝ≥0∞, δ < 1 → ∀ i j,
       ¬ Sound still (fun _ => True) (fun _ => trained ∈ HeldAtLeast (frame 1 1 1 ∅) i j 1) δ) ∧
     ∀ δ : ℝ≥0∞, δ < 1 → ¬ Sound still (fun _ => True) (fun _ => ¬ B (frame 1 1 1 ∅) recipe 0 trained) δ

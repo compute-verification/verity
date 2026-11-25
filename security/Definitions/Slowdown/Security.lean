@@ -265,10 +265,13 @@ noncomputable def bound (x_s x_b x_w y_b : ℕ) (p : Recipe) : ℝ :=
       (4 * p.w_e * (p.Nstar * p.b_w - (F.unaccounted x_s x_b y_b p : ℝ))) +
     (∑ u ∈ F.missed, (F.Φ * F.len (finProdFinEquiv.symm u).2 - x_w + p.o_w) : ℕ)
 
-/-- **The fit bound is defined and at most `Y`**: the recipe's `b_w` is at least 0 and its `w_e` above 0, a covered
-window can read fewer than `N* b_w` bits of a reference training algorithm, and the fit bound is at most `Y`. -/
+/-- **The fit bound is defined and at most `Y`**: where the memory and bandwidth audits cover a window, the recipe's
+`b_w` is at least 0 and its `w_e` above 0, and a covered window can read fewer than `N* b_w` bits of a reference
+training algorithm; and the fit bound is at most `Y`. Where they miss every window the fit bound is the missed
+windows' sum alone, and nothing is asked of the recipe. -/
 def BoundAtMost (x_s x_b x_w y_b : ℕ) (p : Recipe) (Y : ℝ) : Prop :=
-  0 ≤ p.b_w ∧ 0 < p.w_e ∧ (F.unaccounted x_s x_b y_b p : ℝ) < p.Nstar * p.b_w ∧ F.bound x_s x_b x_w y_b p ≤ Y
+  (F.missed ≠ univ → 0 ≤ p.b_w ∧ 0 < p.w_e ∧ (F.unaccounted x_s x_b y_b p : ℝ) < p.Nstar * p.b_w) ∧
+    F.bound x_s x_b x_w y_b p ≤ Y
 
 end Frame
 

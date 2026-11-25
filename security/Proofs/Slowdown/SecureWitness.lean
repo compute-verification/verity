@@ -216,7 +216,7 @@ the count `Y = 0`: the audits account for all the server's memory, all its link 
 window can read no bit of a reference training algorithm, a missed one has no work left for it, and the fit bound is
 `0`. -/
 theorem params : (frame 1 1 1 I).BoundAtMost 1 1 1 1 recipe 0 := by
-  refine ⟨by norm_num, by norm_num, ?_, ?_⟩
+  refine ⟨fun _ => ⟨by norm_num, by norm_num, ?_⟩, ?_⟩
   · rw [unaccounted_eq]
     norm_num
   · unfold Frame.bound
@@ -373,7 +373,8 @@ theorem accounted_missed : trained ∈ A (frame c m β univ) 1 1 0 1 := fun _ _ 
 theorem escapes_covered (h : m + min β 1 = 1) : Escapes trained (frame c m β ∅) 0 0 0 1 (1 / 4) := by
   have hu : (frame c m β ∅).unaccounted 0 0 1 recipe = 1 := by
     simpa [Frame.unaccounted, m_eq, b_eq, ω_eq] using h
-  refine ⟨⟨by norm_num, by norm_num, ?_, ?_⟩, accounted_covered c m β, trained_prohibited c m β ∅ (by norm_num)⟩
+  refine ⟨⟨fun _ => ⟨by norm_num, by norm_num, ?_⟩, ?_⟩, accounted_covered c m β,
+    trained_prohibited c m β ∅ (by norm_num)⟩
   · rw [hu]
     norm_num
   · unfold Frame.bound
@@ -399,13 +400,11 @@ theorem work_needed :
     Order trained ∧ Memory 1 trained ∧ Bandwidth 1 trained ∧ Escapes trained (frame 0 1 1 univ) 1 1 0 1 0 := by
   have hu : (frame 0 1 1 univ).unaccounted 1 1 1 recipe = 0 := by
     simp [Frame.unaccounted, m_eq, b_eq, ω_eq]
-  refine ⟨order, memory 1 le_rfl, bandwidth 1 le_rfl, ⟨by norm_num, by norm_num, ?_, ?_⟩, accounted_missed 0 1 1,
+  refine ⟨order, memory 1 le_rfl, bandwidth 1 le_rfl, ⟨fun h => absurd rfl h, ?_⟩, accounted_missed 0 1 1,
     trained_prohibited 0 1 1 univ (by norm_num)⟩
-  · rw [hu]
-    norm_num
-  · unfold Frame.bound
-    rw [hu, Φ_eq]
-    simp
+  unfold Frame.bound
+  rw [hu, Φ_eq]
+  simp
 
 /-- The circuit of a run out of order: three computed gates that read nothing, and gate `3` reading `0` and `2`. -/
 abbrev lateCircuit : Circuit where
@@ -565,7 +564,7 @@ theorem order_needed :
     Work 1 late ∧ Memory 0 late ∧ Bandwidth 0 late ∧ Escapes late (frame 1 0 0 ∅) 0 0 0 0 0 := by
   have hu : (frame 1 0 0 ∅).unaccounted 0 0 0 recipe = 0 := by
     simp [Frame.unaccounted, m_eq, b_eq, ω_eq]
-  refine ⟨late_work, late_memory, late_bandwidth, ⟨by norm_num, by norm_num, ?_, ?_⟩,
+  refine ⟨late_work, late_memory, late_bandwidth, ⟨fun _ => ⟨by norm_num, by norm_num, ?_⟩, ?_⟩,
     fun i j => ⟨fun _ => ⟨Nat.zero_le _, Nat.zero_le _, ?_⟩, fun h => absurd h (notMem_empty _)⟩,
     prohibited_of 1 0 0 ∅ late _ (late_trains 1 0 0 ∅) (by norm_num)⟩
   · rw [hu]

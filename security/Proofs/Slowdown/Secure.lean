@@ -1,9 +1,11 @@
 module
 
 public import Definitions.Slowdown.Guarantees.Secure
+public import Definitions.Slowdown.Guarantees.Run
+public import Proofs.Core.Game.Union
+public import Proofs.Core.Game.Prob
 public import Proofs.Slowdown.FitRate
 public import Proofs.ResourceAccounting.Actual.Outside
-public import Definitions.ResourceAccounting.BlockProperties
 
 /-!
 # No computation is feasible, accounted for and prohibited
@@ -24,15 +26,17 @@ read of a reference training algorithm (`Frame.unaccounted`) are fewer than `N* 
   those placed in the missed windows, which number at most the work the limits leave there plus those shared with the
   declared circuit (`card_missed_le`).
 
-`secure_work` is the claim from work alone: at a frame whose every window the memory and bandwidth audits miss, `Y` at
-least the sum over the windows of `Φ len − x_w + o_w`, with no premise on the recipe's other parameters.
+Where the memory and bandwidth audits miss every window the fit bound is the missed windows' sum, and the claim is
+from work alone, with no premise on the recipe's other parameters (`secure_missed`).
 
-Over the audits' runs, with `ExceptWith` the tree's "fails on an accepted run with probability at most `ε`":
-`accounted_of_windows` adds the audits' errors over the windows (an accepted run is in `A` outside
-`|missed| δ_w + (n J − |missed|) (δ_s + δ_b + δ_y)`), and `secure_pr` is `Secure` there (where every run is feasible
-and an accepted run is in `A` outside `δ`, an accepted run is not in `B` outside `δ`). `single_m`, `single_b` and
-`single_Φ` are the limits of a frame of one server, and `server_m`, `server_b` and `server_Φ` those of a server of `n`
-GPUs with its host and switch.
+`RunSecure` proves `Guarantees.RunSecure` from `Secure`: with the probability of an event the run's value against an
+optimal developer (`Game.value`), which is monotone and has the union bound, each audit's soundness at its own
+acceptance is soundness at the verifier's, the errors add over the windows, and at an outcome where every window's
+clauses hold the computation is in `A`, so `Secure` takes it out of `B`. `RunComplete` is the union bound for an
+honest strategy.
+
+`single_m`, `single_b` and `single_Φ` are the limits of a frame of one server, and `server_m`, `server_b` and
+`server_Φ` those of a server of `n` GPUs with its host and switch.
 -/
 
 @[expose] public section
@@ -108,8 +112,52 @@ theorem card_missed_le {L : Type*} [DecidableEq L] (A : Placed L) (n : ℕ) (X :
   exact (card_le_card hsub).trans (card_biUnion_le.trans (sum_le_sum fun u hu =>
     hwin _ _ (by rwa [Prod.mk.eta, Equiv.apply_symm_apply])))
 
+/-- **`Secure` where every window is missed.** At a frame whose every window the memory and bandwidth audits miss, a
+feasible computation in `A` holds no reference training algorithm of more than `Y` counted multiplications, for every
+`Y` at least the sum over the windows of `Φ len − x_w + o_w`: what the compute rate leaves over each window's ticks
+beside the `x_w` work the declared circuit does in it. No premise on the recipe's other parameters. -/
+theorem secure_missed {L E : Type*} [Fintype E] [DecidableEq L] (F : Frame L E) (hF : F.missed = univ)
+    (x_s x_b x_w y_b : ℕ) (p : Recipe) (Y : ℝ)
+    (hY : ((∑ u : Fin (F.n * F.cuts.J), (F.Φ * F.len (finProdFinEquiv.symm u).2 - x_w + p.o_w) : ℕ) : ℝ) ≤ Y)
+    (M : Computation L E) :
+    M ∈ H F.hw → M ∈ A F x_s x_b x_w y_b → M ∉ B F p Y := by
+  classical
+  rintro ⟨hC, hW, -, hL⟩ hA ⟨c, emb, T, start, hT, hlt⟩
+  have hΦ : ∀ i, F.hw.compute (F.server i) ≤ F.Φ := fun i =>
+    le_sup (f := fun i => F.hw.compute (F.server i)) (mem_univ i)
+  have hin : ∀ i j, finProdFinEquiv (i, j) ∈ F.missed := fun i j => hF ▸ mem_univ _
+  obtain ⟨P, hP⟩ := ResourceAccounting.SecurityProofs.Actual.ServerBlocksAt M.run.A F.hw.ℓ
+    (fun _ => M.run.A.N) F.hw.ends F.hw.β M.usage.link F.n F.server M.registered M.registered_input F.t F.cuts ∅
+    F.disjoint hC (computeRate_N M.run.A _) hL
+  have hcount : _ ≤ ∑ u ∈ F.missed, (F.Φ * F.len (finProdFinEquiv.symm u).2 - x_w + p.o_w) :=
+    card_missed_le M.run.A F.n F.server M.registered M.registered_input F.t F.cuts F.hw.compute
+      M.usage.π F.Φ x_w p.o_w M.declared c emb T F.missed hW F.unit hΦ hT.load (fun i j hu => (hA i j).2 hu)
+      hT.shared_work
+  have hall : T.M.card ≤ ∑ u ∈ F.missed, (F.Φ * F.len (finProdFinEquiv.symm u).2 - x_w + p.o_w) := by
+    refine (card_le_card fun g hg => mem_filter.2 ⟨hg, ?_⟩).trans hcount
+    have hne : (pull emb P).unit g ≠ none := fun h =>
+      absurd (((pull emb P).input_iff g).1 h) (by simp [(mem_filter.1 (T.M_computed hg)).2])
+    obtain ⟨u, hu⟩ := Option.ne_none_iff_exists'.1 hne
+    obtain ⟨⟨i, j⟩, rfl⟩ := finProdFinEquiv.surjective u
+    have h2 := mem_pull_gates.1 ((Partition.mem_gates _).2 hu)
+    exact ⟨i, j, hin i j, (Iff.of_eq (congrArg (fun s => emb.emb g ∈ s) (hP i j).1)).1 h2⟩
+  rw [hF] at hall
+  exact absurd ((Nat.cast_le.2 hall).trans hY) (not_le.2 hlt)
+
+/-- Where the memory and bandwidth audits miss every window, the fit bound is the missed windows' sum. -/
+theorem bound_of_missed {L E : Type*} [Fintype E] (F : Frame L E) (hF : F.missed = univ) (x_s x_b x_w y_b : ℕ)
+    (p : Recipe) :
+    F.bound x_s x_b x_w y_b p =
+      ((∑ u : Fin (F.n * F.cuts.J), (F.Φ * F.len (finProdFinEquiv.symm u).2 - x_w + p.o_w) : ℕ) : ℝ) := by
+  unfold Frame.bound
+  rw [hF, card_univ, Fintype.card_fin, Nat.sub_self]
+  simp
+
 theorem Secure : Guarantees.Secure := by
-  intro L E _ _ F x_s x_b x_w y_b p Y ⟨hbw, hwe, hgap, hY⟩ M
+  intro L E _ _ F x_s x_b x_w y_b p Y ⟨hrec, hY⟩ M
+  by_cases hF : F.missed = univ
+  · exact secure_missed F hF x_s x_b x_w y_b p Y ((bound_of_missed F hF x_s x_b x_w y_b p).ge.trans hY) M
+  obtain ⟨hbw, hwe, hgap⟩ := hrec hF
   rintro ⟨hC, hW, hMem, hL⟩ hA ⟨c, emb, T, start, hT, hlt⟩
   have hω : ∀ j : Fin F.cuts.J, F.cuts.τ j.succ - F.cuts.τ j.castSucc ≤ F.ω := fun j =>
     le_sup (f := F.len) (mem_univ j)
@@ -176,120 +224,78 @@ theorem delivered_le_capacity {L E : Type*} [Fintype E] [DecidableEq L] (F : Fra
       (le_sup (f := F.len) (mem_univ j))))
   congr
 
-/-- **Work alone.** At a frame whose every window the memory and bandwidth audits miss, a feasible computation in
-`A` holds no reference training algorithm of more than `Y` counted multiplications, for every `Y` at least
-the sum over the windows of `Φ len − x_w + o_w`: what the compute rate leaves over each window's ticks beside the
-`x_w` work the declared circuit does in it.
-No premise on the recipe's other parameters. -/
-theorem secure_work {L E : Type*} [Fintype E] [DecidableEq L] (F : Frame L E) (hF : F.missed = univ)
-    (x_s x_b x_w y_b : ℕ) (p : Recipe) (Y : ℝ)
-    (hY : ((∑ u : Fin (F.n * F.cuts.J), (F.Φ * F.len (finProdFinEquiv.symm u).2 - x_w + p.o_w) : ℕ) : ℝ) ≤ Y)
-    (M : Computation L E) :
-    M ∈ H F.hw → M ∈ A F x_s x_b x_w y_b → M ∉ B F p Y := by
-  classical
-  rintro ⟨hC, hW, -, hL⟩ hA ⟨c, emb, T, start, hT, hlt⟩
-  have hΦ : ∀ i, F.hw.compute (F.server i) ≤ F.Φ := fun i =>
-    le_sup (f := fun i => F.hw.compute (F.server i)) (mem_univ i)
-  have hin : ∀ i j, finProdFinEquiv (i, j) ∈ F.missed := fun i j => hF ▸ mem_univ _
-  obtain ⟨P, hP⟩ := ResourceAccounting.SecurityProofs.Actual.ServerBlocksAt M.run.A F.hw.ℓ
-    (fun _ => M.run.A.N) F.hw.ends F.hw.β M.usage.link F.n F.server M.registered M.registered_input F.t F.cuts ∅
-    F.disjoint hC (computeRate_N M.run.A _) hL
-  have hcount : _ ≤ ∑ u ∈ F.missed, (F.Φ * F.len (finProdFinEquiv.symm u).2 - x_w + p.o_w) :=
-    card_missed_le M.run.A F.n F.server M.registered M.registered_input F.t F.cuts F.hw.compute
-      M.usage.π F.Φ x_w p.o_w M.declared c emb T F.missed hW F.unit hΦ hT.load (fun i j hu => (hA i j).2 hu)
-      hT.shared_work
-  have hall : T.M.card ≤ ∑ u ∈ F.missed, (F.Φ * F.len (finProdFinEquiv.symm u).2 - x_w + p.o_w) := by
-    refine (card_le_card fun g hg => mem_filter.2 ⟨hg, ?_⟩).trans hcount
-    have hne : (pull emb P).unit g ≠ none := fun h =>
-      absurd (((pull emb P).input_iff g).1 h) (by simp [(mem_filter.1 (T.M_computed hg)).2])
-    obtain ⟨u, hu⟩ := Option.ne_none_iff_exists'.1 hne
-    obtain ⟨⟨i, j⟩, rfl⟩ := finProdFinEquiv.surjective u
-    have h2 := mem_pull_gates.1 ((Partition.mem_gates _).2 hu)
-    exact ⟨i, j, hin i j, (Iff.of_eq (congrArg (fun s => emb.emb g ∈ s) (hP i j).1)).1 h2⟩
-  rw [hF] at hall
-  exact absurd ((Nat.cast_le.2 hall).trans hY) (not_le.2 hlt)
-
-section Runs
+section Run
 
 open scoped ENNReal
 
-variable {L E : Type*} [DecidableEq L] {Ω : Type} (pr : (Ω → Prop) → ℝ≥0∞)
-  (mono : ∀ p q : Ω → Prop, (∀ r, p r → q r) → pr p ≤ pr q) (accepts : Ω → Prop) (M : Ω → Computation L E)
-
-include mono
-
-/-- **An accepted run is not prohibited, outside `δ`**: over runs whose computations are all feasible, if an accepted
-run's computation is in `A` outside probability `δ`, it is not in `B` outside `δ`. `pr` is any monotone probability on
-the runs. -/
-theorem secure_pr [Fintype E] (F : Frame L E) (x_s x_b x_w y_b : ℕ) (p : Recipe) (Y : ℝ)
-    (hbw : 0 ≤ p.b_w) (hwe : 0 < p.w_e) (hgap : (F.unaccounted x_s x_b y_b p : ℝ) < p.Nstar * p.b_w)
-    (hY : F.bound x_s x_b x_w y_b p ≤ Y) (δ : ℝ≥0∞) (hH : ∀ ω, M ω ∈ H F.hw)
-    (hA : ExceptWith pr accepts (fun ω => M ω ∈ A F x_s x_b x_w y_b) δ) :
-    ExceptWith pr accepts (fun ω => M ω ∉ B F p Y) δ :=
-  (mono _ _ fun ω h =>
-    ⟨h.1, fun hin => h.2 (Secure F x_s x_b x_w y_b p Y ⟨hbw, hwe, hgap, hY⟩ (M ω) (hH ω) hin)⟩).trans hA
-
-/-- **The audits' errors add over the windows.** If at each covered window an accepted run's declared circuit holds
-`x_s` bits at the cut outside probability `δ_s` and the links deliver `x_b` bits of it to the window's server outside
-`δ_b` and at most `y_b` bits in all outside `δ_y`, and at each missed window the declared circuit does `x_w`
-work outside `δ_w`, then an accepted run's computation is in `A` outside
-`|missed| δ_w + (n J − |missed|) (δ_s + δ_b + δ_y)`. `pr` is any monotone probability on the runs with the union
-bound. -/
-theorem accounted_of_windows
-    (union : ∀ {κ : Type} (s : Finset κ) (p : κ → Ω → Prop), pr (fun r => ∃ x ∈ s, p x r) ≤ ∑ x ∈ s, pr (p x))
-    (F : Frame L E) (x_s x_b x_w y_b : ℕ) (δ_s δ_b δ_w δ_y : ℝ≥0∞)
-    (hs : ∀ i j, finProdFinEquiv (i, j) ∉ F.missed →
-      ExceptWith pr accepts (fun ω => x_s ≤ (M ω).holds F i j (M ω).declared) δ_s)
-    (hb : ∀ i j, finProdFinEquiv (i, j) ∉ F.missed →
-      ExceptWith pr accepts (fun ω => x_b ≤ (M ω).delivered F i j (M ω).declared) δ_b)
-    (hy : ∀ i j, finProdFinEquiv (i, j) ∉ F.missed →
-      ExceptWith pr accepts (fun ω => (M ω).delivered F i j univ ≤ y_b) δ_y)
-    (hw : ∀ i j, finProdFinEquiv (i, j) ∈ F.missed →
-      ExceptWith pr accepts
-        (fun ω => x_w ≤ (M ω).run.A.work (M ω).usage.π ((M ω).window F i j ∩ (M ω).declared)) δ_w) :
-    ExceptWith pr accepts (fun ω => M ω ∈ A F x_s x_b x_w y_b)
-      (F.missed.card * δ_w + (F.n * F.cuts.J - F.missed.card : ℕ) * (δ_s + δ_b + δ_y)) := by
+theorem RunSecure : Guarantees.RunSecure := by
   classical
-  let good : Option Bool → Fin F.n → Fin F.cuts.J → Ω → Prop := fun k i j ω =>
+  intro L E _ _ α g world F x_s x_b x_w y_b p Y acc_s acc_b acc_y acc_w δ_s δ_b δ_y δ_w hY hH hs hb hy hw
+  let acc : α → Prop := fun a => acc_s a ∧ acc_b a ∧ acc_y a ∧ acc_w a
+  let good : Option Bool → Fin F.n → Fin F.cuts.J → α → Prop := fun k i j a =>
     match k with
-    | none => x_s ≤ (M ω).holds F i j (M ω).declared
-    | some true => x_b ≤ (M ω).delivered F i j (M ω).declared
-    | some false => (M ω).delivered F i j univ ≤ y_b
-  let bad : Fin (F.n * F.cuts.J) → Ω → Prop := fun u ω => accepts ω ∧
-    ¬ ((u ∉ F.missed → ∀ k, good k (finProdFinEquiv.symm u).1 (finProdFinEquiv.symm u).2 ω) ∧
-      (u ∈ F.missed → x_w ≤ (M ω).run.A.work (M ω).usage.π
-        ((M ω).window F (finProdFinEquiv.symm u).1 (finProdFinEquiv.symm u).2 ∩ (M ω).declared)))
+    | none => world a ∈ HeldAtLeast F i j (x_s a)
+    | some true => world a ∈ DeliveredAtLeast F i j (x_b a)
+    | some false => world a ∈ DeliveredAtMost F i j (y_b a)
+  let bad : Fin (F.n * F.cuts.J) → α → Prop := fun u a => acc a ∧
+    ¬ ((u ∉ F.missed → ∀ k, good k (finProdFinEquiv.symm u).1 (finProdFinEquiv.symm u).2 a) ∧
+      (u ∈ F.missed → world a ∈ WorkAtLeast F (finProdFinEquiv.symm u).1 (finProdFinEquiv.symm u).2 (x_w a)))
   have hu : ∀ u : Fin (F.n * F.cuts.J),
       finProdFinEquiv ((finProdFinEquiv.symm u).1, (finProdFinEquiv.symm u).2) = u :=
     fun u => finProdFinEquiv.apply_symm_apply u
-  have hbad : ∀ u, pr (bad u) ≤ if u ∈ F.missed then δ_w else δ_s + δ_b + δ_y := by
+  have hbad : ∀ u, Game.value (bad u) g ≤ if u ∈ F.missed then δ_w else δ_s + δ_b + δ_y := by
     intro u
     split_ifs with h
-    · exact (mono _ _ fun ω hω => ⟨hω.1, fun hx => hω.2 ⟨fun hn => absurd h hn, fun _ => hx⟩⟩).trans
+    · exact (Game.value_mono (fun a ha => ⟨ha.1.2.2.2, fun hx => ha.2 ⟨fun hn => absurd h hn, fun _ => hx⟩⟩) g).trans
         (hw _ _ (by rw [hu]; exact h))
-    · refine (mono _ (fun ω => ∃ k ∈ (univ : Finset (Option Bool)), accepts ω ∧
-          ¬ good k (finProdFinEquiv.symm u).1 (finProdFinEquiv.symm u).2 ω) fun ω hω => ?_).trans
-        ((union _ _).trans ?_)
+    · refine (Game.value_mono (q := fun a => ∃ k ∈ (univ : Finset (Option Bool)), acc a ∧
+          ¬ good k (finProdFinEquiv.symm u).1 (finProdFinEquiv.symm u).2 a) (fun a ha => ?_) g).trans
+        ((Game.value_exists_finset_le _ _ g).trans ?_)
       · by_contra hno
-        exact hω.2 ⟨fun _ k => not_not.1 fun hk => hno ⟨k, mem_univ _, hω.1, hk⟩, fun hm => absurd hm h⟩
+        exact ha.2 ⟨fun _ k => not_not.1 fun hk => hno ⟨k, mem_univ _, ha.1, hk⟩, fun hm => absurd hm h⟩
       · rw [Fintype.sum_option, Fintype.sum_bool, add_assoc]
-        exact add_le_add (hs _ _ (by rw [hu]; exact h))
-          (add_le_add (hb _ _ (by rw [hu]; exact h)) (hy _ _ (by rw [hu]; exact h)))
+        exact add_le_add
+          ((Game.value_mono (fun a ha => ⟨ha.1.1, ha.2⟩) g).trans (hs _ _ (by rw [hu]; exact h)))
+          (add_le_add ((Game.value_mono (fun a ha => ⟨ha.1.2.1, ha.2⟩) g).trans (hb _ _ (by rw [hu]; exact h)))
+            ((Game.value_mono (fun a ha => ⟨ha.1.2.2.1, ha.2⟩) g).trans (hy _ _ (by rw [hu]; exact h))))
   have hsum : ∑ u : Fin (F.n * F.cuts.J), (if u ∈ F.missed then δ_w else δ_s + δ_b + δ_y) =
       F.missed.card * δ_w + (F.n * F.cuts.J - F.missed.card : ℕ) * (δ_s + δ_b + δ_y) := by
     rw [sum_ite, sum_const, sum_const, nsmul_eq_mul, nsmul_eq_mul, filter_mem_eq_inter, univ_inter,
       filter_not, filter_mem_eq_inter, univ_inter, card_univ_sdiff, Fintype.card_fin]
-  refine (mono _ (fun ω => ∃ u ∈ (univ : Finset (Fin (F.n * F.cuts.J))), bad u ω) fun ω hω => ?_).trans
-    ((union _ _).trans ((sum_le_sum fun u _ => hbad u).trans hsum.le))
+  refine (Game.value_mono (q := fun a => ∃ u ∈ (univ : Finset (Fin (F.n * F.cuts.J))), bad u a)
+    (fun a ha => ?_) g).trans
+    ((Game.value_exists_finset_le _ _ g).trans ((sum_le_sum fun u _ => hbad u).trans hsum.le))
   by_contra hno
-  refine hω.2 fun i j => ?_
+  refine ha.2 (Secure F _ _ _ _ p (Y a) (hY a) (world a) (hH a) fun i j => ?_)
   by_contra hij
-  refine hno ⟨finProdFinEquiv (i, j), mem_univ _, hω.1, fun hg => hij ⟨fun hn => ?_, by simpa [WorkAtLeast] using hg.2⟩⟩
-  have h3 := hg.1 hn
-  simp only [Equiv.symm_apply_apply] at h3
-  exact ⟨h3 none, h3 (some true), h3 (some false)⟩
+  refine hno ⟨finProdFinEquiv (i, j), mem_univ _, ha.1, fun hg => hij ⟨fun hn => ?_, fun hm => ?_⟩⟩
+  · have h3 := hg.1 hn
+    simp only [Equiv.symm_apply_apply] at h3
+    exact ⟨h3 none, h3 (some true), h3 (some false)⟩
+  · have h4 := hg.2 hm
+    simp only [Equiv.symm_apply_apply] at h4
+    exact h4
 
-end Runs
+/-- **An honest developer's run is accepted, outside the audits' errors**: where the verifier accepts whenever each
+of the four audits does, a strategy `honest` that memory's audit rejects with probability at most `η_s`, bandwidth's
+`η_b`, the count `η_y` and work's `η_w` is rejected with probability at most their sum. -/
+theorem RunComplete {α : Type} (g : Game α) (honest : g.Strategy) (accept acc_s acc_b acc_y acc_w : α → Prop)
+    (η_s η_b η_y η_w : ℝ≥0∞) (hacc : ∀ a, acc_s a → acc_b a → acc_y a → acc_w a → accept a)
+    (hs : Game.prob (fun a => ¬ acc_s a) g honest ≤ η_s) (hb : Game.prob (fun a => ¬ acc_b a) g honest ≤ η_b)
+    (hy : Game.prob (fun a => ¬ acc_y a) g honest ≤ η_y) (hw : Game.prob (fun a => ¬ acc_w a) g honest ≤ η_w) :
+    Game.prob (fun a => ¬ accept a) g honest ≤ η_s + η_b + η_y + η_w := by
+  have h1 : Game.prob (fun a => ¬ accept a) g honest ≤
+      Game.prob (fun a => ((¬ acc_s a ∨ ¬ acc_b a) ∨ ¬ acc_y a) ∨ ¬ acc_w a) g honest :=
+    Game.prob_mono (fun a ha => by
+      by_contra hno
+      obtain ⟨h123, h4⟩ := not_or.1 hno
+      obtain ⟨h12, h3⟩ := not_or.1 h123
+      obtain ⟨h1, h2⟩ := not_or.1 h12
+      exact ha (hacc a (not_not.1 h1) (not_not.1 h2) (not_not.1 h3) (not_not.1 h4))) g honest
+  exact h1.trans ((Game.prob_or_le _ _ g honest).trans (add_le_add ((Game.prob_or_le _ _ g honest).trans
+    (add_le_add ((Game.prob_or_le _ _ g honest).trans (add_le_add hs hb)) hy)) hw))
+
+end Run
 
 section Single
 

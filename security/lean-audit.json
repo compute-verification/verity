@@ -406,7 +406,7 @@
   },
   "Slowdown.Security.Frame.BoundAtMost": {
    "owner": "@compute-research",
-   "digest": "4cac74c1e713e1bde6796a3dd50105f8a55c2b9c9369b516167b82678d7f9ae7",
+   "digest": "d84d3dbe3bdc34cd359acbe7cca994a57a351ace1984bb16ef9af942b62e2498",
    "why": "The count Y the statement is at: at least the fit bound, at amounts and a recipe where that bound is defined."
   },
   "Slowdown.Security.H": {
@@ -23194,7 +23194,7 @@
     ]
    },
    "type_hash": "a82e07e26df4fe234de962152fc2ed32a13828dfeeed442ed38464ccec4ec0eb",
-   "unfolded_hash": "78ea5818e36aab585f7beab3c6e0c3771d0ba05ef8fbdd70f956bda58644a049"
+   "unfolded_hash": "1be805464a6e7c92758ca098ad9218ce95860059dd8c7735766ef7f366586530"
   },
   "Slowdown.SecurityProofs.RunSecure_honest": {
    "owner": "@compute-research",
@@ -23239,7 +23239,7 @@
     ]
    },
    "type_hash": "57ee70cf16d9821caed74980e94903c823011b3e08de1e53365a4eb1ee25f75d",
-   "unfolded_hash": "d064da0887879967f651562bb3df2847d9cbe2d33793f4d4c10157f85adc1f1e"
+   "unfolded_hash": "90cc29d28e207f0fb9d2efac0ae5ae1d05118aff411ef0fff44a839e7bea15af"
   },
   "Slowdown.SecurityProofs.RunSecure_nontrivial": {
    "owner": "@compute-research",
@@ -23287,7 +23287,7 @@
     ]
    },
    "type_hash": "73ba1dc112bb3f5fec58aef0bc00b832fc3cdd1ed73be5c83426c36439f154e2",
-   "unfolded_hash": "e1eed7633970839920108796483a226ee9dfb44a98d18c0449094331c468e8eb"
+   "unfolded_hash": "08cc18e93138cbc5bd4bf13a3b760f488a26eed77880b92fa3e2231d64801090"
   },
   "Slowdown.SecurityProofs.Secure": {
    "owner": "@compute-research",
@@ -39962,11 +39962,11 @@
    }
   },
   "Definitions.Slowdown.Guarantees.Run": {
-   "digest": "62e302f0b811de30cae3d47d0d34e7c8c29a0d8dc4c3b6d6022dfd399c0c0cc2",
+   "digest": "f3904d1e07d4dcf0b89e8f042bea7e644151ce6799febe6f108eb54455f450dc",
    "definitions": {
-    "Slowdown.Guarantees.RunSecure": "e83d66772c7a6aa7d95c7c2b44c92734115151eeed18af1cfdf752ab388114bc",
-    "Slowdown.Guarantees.RunSecure_honest": "1057b09b75ade35ebb59cd489d6f7c3a97a5b8b3ec1b5b2baa677578e2f2b205",
-    "Slowdown.Guarantees.RunSecure_nontrivial": "cfe9d4c7640a1e2533adae3a832d9f001a910747390b66aa6a09d7e3afad5340",
+    "Slowdown.Guarantees.RunSecure": "cb35f5439da3fc1451e2dd440184be918c5823824cbfe3c3b2b7f526727fd1bf",
+    "Slowdown.Guarantees.RunSecure_honest": "14c93f2a02fd1b8a0ca495f5da743d64b84bf1de2b4471795b691f5e5b2f3147",
+    "Slowdown.Guarantees.RunSecure_nontrivial": "04fc71da0c314e84dddbbf83fc448e969ae48f00064982c6ab75960a90fbdc95",
     "Slowdown.Guarantees.still": "ef65aa2627ae4547e45920cce111ea8f286a4d4f4d44fa91ade3941866d47127"
    }
   },
@@ -40070,7 +40070,7 @@
    }
   },
   "Definitions.Slowdown.Security": {
-   "digest": "09c40045f06b00d74abe732c8fe31e831e9f1db4044d8ad4b90e12f4602b3109",
+   "digest": "a979163f732c56f466be31bd681d388c070d60f0e66d0fa3e9875baee1a1ec21",
    "definitions": {
     "Slowdown.Security.A": "cf2d431bce1cbd29ce5238da013cbf5fa0be4def3b8dffb5a4b8ae6a611f96e7",
     "Slowdown.Security.B": "941bef0b41ae6ddef2ee79832a86eda4e83ff7bd7ec6aff12d57f1175090bdd6",
@@ -40089,7 +40089,7 @@
     "Slowdown.Security.DeliveredAtMost": "227bb382f880449df741f5542850b73fc93f9afd4c67a94e3658c3d84ecc25dd",
     "Slowdown.Security.Divides": "a112745460cc66320c8434a466f69365f15533438f7c2f512163fd73e740c678",
     "Slowdown.Security.Frame": "8e222d81c73f702ec3c0dbe716590b46f2b0613554d2a2ef4c422e6546bf9341",
-    "Slowdown.Security.Frame.BoundAtMost": "4cac74c1e713e1bde6796a3dd50105f8a55c2b9c9369b516167b82678d7f9ae7",
+    "Slowdown.Security.Frame.BoundAtMost": "d84d3dbe3bdc34cd359acbe7cca994a57a351ace1984bb16ef9af942b62e2498",
     "Slowdown.Security.Frame.b": "68615d65205cb4ca7c481a9b10261a824c5ba3132b28b605d55b5fb7710bbd65",
     "Slowdown.Security.Frame.bound": "9df4dcde71e413acf2e1197915ae1a3202359899ebd6171b13c10942fa67f812",
     "Slowdown.Security.Frame.cuts": "c4e48abcdcd27184bb535cc4b74eeec8438723ab226816e4747805a1f06559b8",
