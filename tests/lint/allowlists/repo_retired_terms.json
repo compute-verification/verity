@@ -1973,7 +1973,7 @@
     {"file": "tests/test_doc_paths.py", "count": 2},
     {"file": "tests/test_gate_paths.py", "count": 3},
     {"file": "tests/test_lean_packages.py", "count": 67},
-    {"file": "tests/test_lean_vocabulary.py", "count": 54},
+    {"file": "tests/test_lean_vocabulary.py", "count": 57},
     {"file": "tests/test_provider_names.py", "count": 2},
     {"file": "tests/test_repository.py", "count": 59},
     {"file": "tests/test_verifier_cost.py", "count": 1},

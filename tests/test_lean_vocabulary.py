@@ -3,7 +3,8 @@ canonical object, and every other declaration of it is listed, with its reason a
 
 What counts is a type-forming declaration whose whole name, or last component, is the concept: a Python `class`, or a Lean
 `structure`, `inductive`, `class`, `abbrev`, `opaque`, or `def` whose type ends in `Type` or `Sort` (or `Prop`, for
-``PROPOSITIONS``). `python tests/test_lean_vocabulary.py` lists every hit and what the guard makes of it.
+``PROPOSITIONS``); for a concept that is a number (``NUMBERS``), a Lean `def` or `abbrev` under one of its names whose type
+ends in a real. `python tests/test_lean_vocabulary.py` lists every hit and what the guard makes of it.
 
 Each hit is one of:
 
@@ -24,7 +25,8 @@ Each hit is one of:
 
 An unlisted hit fails, and so does a canonical that is no longer a hit. A ``KNOWN`` line or ``MIRRORS`` entry that no
 longer matches a hit (its declaration went, or became a canonical, a mirror or exempt) is stale, and doesn't fail, so a
-change that removes a duplicate needn't touch this file. `python tests/test_lean_vocabulary.py` lists the stale entries
+change that removes a duplicate needn't touch this file. An unlisted hit of a concept in ``REFUSED`` fails outside the
+bookkeeping too (`test_no_new_probability_or_soundness`). `python tests/test_lean_vocabulary.py` lists the stale entries
 under "stale (delete with --prune)", and `python tests/test_lean_vocabulary.py --prune` rewrites ``KNOWN`` without its
 stale lines and sets ``KNOWN_MAX`` to the new count, so no later line takes a freed slot unreviewed (a stale ``MIRRORS``
 entry is deleted by hand). Only lean prunes, so two prunes don't race on ``KNOWN_MAX``. ``KNOWN`` only shrinks, by count:
@@ -67,7 +69,10 @@ CONCEPTS = ("Circuit", "Prog", "Program", "Gate", "Op", "PrivateCircuit", "Parti
             "Window", "Session", "Block", "Verdict", "Outcome", "Answer", "Record", "Ledger", "Opening", "Challenger",
             "Certificate", "Store", "Placement", "Game", "Strategy", "Protocol", "Trace")
 #: The concepts that are propositions, so a `def … : Prop` of their name defines them too.
-PROPOSITIONS = ("Collision",)
+PROPOSITIONS = ("Collision", "Sound")
+#: The concepts that are numbers, declared under any of these names by a `def` or `abbrev` whose type ends in `ℝ`, `ℝ≥0`
+#: or `ℝ≥0∞`.
+NUMBERS = {"pr": "Probability", "prob": "Probability", "Pr": "Probability", "Prob": "Probability"}
 SLOT_FIELDS = ("Params", "Commitment", "Evidence", "Public")
 
 D, CORE, FLOCK = "security/Definitions/", "security/Definitions/Core/", "verity/protocols/proof/flock/verifier/Flock/"
@@ -141,10 +146,18 @@ CANONICAL: dict[str, tuple[str, ...]] = {
 CANONICAL["Record"] = ("verity/protocols/interface/CoreProtocol/Record.lean::Core.Record", "verity/channel.py::Record")
 #: The slots a knowledge-soundness or zero-knowledge statement quantifies over: the claims core's counted programs.
 CONCEPTS += ("Extractor", "Simulator")
+#: What a guarantee over a run's coins is stated in: the probability of an event of the run, and soundness at an error.
+CONCEPTS += ("Probability", "Sound")
+CANONICAL["Probability"] = (f"{CORE}Game.lean::Verity.Game.prob",)
+CANONICAL["Sound"] = (f"{CORE}Game.lean::Verity.Sound",)
 CANONICAL["Extractor"] = (f"{CORE}Interaction.lean::Claims.Extractor",)
 CANONICAL["Simulator"] = (f"{CORE}Interaction.lean::Claims.Simulator",)
 #: What a second declaration of a concept loses, said in its failure.
-WHY = {"Extractor": "an extractor is a rerun program whose work `RP.eval` counts; a function or a structure of free fields "
+WHY = {"Probability": "a guarantee over a run's coins is a `Verity.Sound`, whose probability is `Verity.Game.value`, "
+                      "`Verity.Game.prob` at the best strategy; a bound in another probability composes with no other",
+       "Sound": "every protocol's guarantee has the one form `Verity.Sound g accept E δ`, which `SoundMono` and `SoundAnd` "
+                "compose",
+       "Extractor": "an extractor is a rerun program whose work `RP.eval` counts; a function or a structure of free fields "
                     "can open a hiding commitment to any trace, so it meets any contract",
        "Simulator": "a simulator is a program whose calls `SP.eval` counts, fixed before the witness"}
 
@@ -196,7 +209,7 @@ class Hit:
 #: Each canonical's concept, by key; and the names canonicals are declared under that are no concept's, read only there.
 CONCEPT_OF = {k: c for c, keys in CANONICAL.items() for k in keys}
 OTHER_NAMES = tuple(sorted({k.partition("::")[2].rpartition(".")[2] for k in CONCEPT_OF} - set(CONCEPTS)))
-_ALT = "|".join(sorted(CONCEPTS + OTHER_NAMES, key=len, reverse=True))
+_ALT = "|".join(sorted({*CONCEPTS, *OTHER_NAMES, *NUMBERS}, key=len, reverse=True))
 _NAME = rf"((?:[^\s(\[{{:]*\.)?(?:{_ALT}))(?![\w'.!?])"
 _KEYWORD = r"(structure|class\s+inductive|class|inductive|abbrev|opaque|def)"
 _MODS = r"(?:(?:private|protected|public|noncomputable|partial|unsafe|nonrec|meta)\s+)*"
@@ -214,6 +227,7 @@ _TOP = re.compile(r"^\S", re.M)
 _HEADER_TOKEN = re.compile(r":=|\bwhere\b|\||:|[(\[{⦃⟨)\]}⦄⟩]")
 _SORT = re.compile(r"(?:^|→|->)\s*(?:Type|Sort)\b(?![\s\S]*(?:→|->))")
 _SORT_OR_PROP = re.compile(r"(?:^|→|->)\s*(?:Type|Sort|Prop)\b(?![\s\S]*(?:→|->))")
+_REAL = re.compile(r"(?:^|→|->)\s*ℝ(?:≥0∞?)?\s*$")
 _CODE_TOKEN = re.compile(r'/-|--[^\n]*|(?<!\')"(?:[^"\\]|\\.)*"', re.S)
 _COMMENT_TOKEN = re.compile(r"/-|-/")
 
@@ -292,9 +306,10 @@ def lean_definitions(text: str) -> tuple[list[tuple[str, Hit]], list[tuple[str, 
                 fields.append((f.group(1), f.group(2), here, opens))
             continue
         keyword, name = m.group(1), m.group(2)
-        concept = name.rpartition(".")[2]
-        sort = _SORT_OR_PROP if concept in PROPOSITIONS else _SORT
-        if keyword in ("def", "opaque") and not returns_type(text, m.end(), sort):
+        last = name.rpartition(".")[2]
+        concept = NUMBERS.get(last, last)
+        sort = _REAL if last in NUMBERS else _SORT_OR_PROP if concept in PROPOSITIONS else _SORT
+        if (keyword in ("def", "opaque") or last in NUMBERS) and not returns_type(text, m.end(), sort):
             continue
         qualified = name.removeprefix("_root_.") if name.startswith("_root_.") else ".".join(here + (name,))
         body = _body(text, m.end()) if keyword == "abbrev" else ""
@@ -422,7 +437,7 @@ def slots(s: Scan) -> set[str]:
 
 
 #: The most lines ``KNOWN`` may hold. Raising it, for a new line, needs lean's review; `--prune` lowers it to the count.
-KNOWN_MAX = 423
+KNOWN_MAX = 442
 
 #: Every hit that is not a canonical, a mirror, a reading of the canonical or a protocol's slot, with its reason and owner.
 #: For new code, read the canonical or rename; `--prune` deletes the lines whose declarations went.
@@ -952,6 +967,45 @@ KNOWN: dict[str, str] = {
         "duplicate of the execution block (no canonical yet): becomes the builder's output for it (proofs)",
     # verity/
     "tools/config/verity_config/verity_settings.py::Registry": "homonym, one distribution's settings from the environment: rename (proofs)",
+    # the probability of an event of a run, and soundness at an error
+    "security/Definitions/Core/Interaction.lean::Claims.Finder.Pr":
+        "duplicate of `Verity.Game.prob`, over a finder's uniform coins and real-valued: becomes a reading of it (proofs)",
+    "security/Definitions/Core/Uniform.lean::Claims.Pr":
+        "duplicate of `Verity.Game.prob`, at one uniform coin and real-valued: becomes a reading of it (proofs)",
+    "security/Definitions/Hash/Assumptions.lean::Hash.Assumptions.LmsForger.Pr":
+        "duplicate of `Verity.Game.prob`, over a forger's uniform coins and real-valued: becomes a reading of it (proofs)",
+    "security/Definitions/Pous/Game/Prob.lean::Pous.pr":
+        "duplicate of `Verity.Game.prob`, at one uniform coin (`Verity.Game.prCoin`): becomes a reading of it (memory-accounting)",
+    "security/Definitions/Pouw/Basic/Prob.lean::Pouw.pr":
+        "duplicate of `Verity.Game.prob`, at one uniform coin and real-valued (`Claims.Pr`): becomes a reading of it (compute-accounting)",
+    "security/Definitions/Pouw/RelativeSecurity.lean::Pouw.RelativeSecurity.prob":
+        "duplicate of `Verity.Game.prob`, at one uniform coin and real-valued (`Claims.prUniform`): becomes a reading of it (compute-accounting)",
+    "security/Definitions/Spot/Exfiltration.lean::Population.Exfil.prob":
+        "duplicate of `Verity.Game.prob`, over windows' coins from a distribution and real-valued: becomes a reading of it (proofs)",
+    "security/Definitions/Spot/Necessity.lean::Population.Iop.prob":
+        "duplicate of `Verity.Game.prob`, over samples from a distribution and real-valued: becomes a reading of it (proofs)",
+    "security/Definitions/Compose/JointLive.lean::ResourceAccounting.PeriodLive.Sound":
+        "duplicate of `Verity.Sound`, at each strategy with an error that reads it: becomes a reading of it (lean)",
+    "security/Definitions/Compose/JointPeriod.lean::ResourceAccounting.PeriodRun.Sound":
+        "duplicate of `Verity.Sound`, over an audit's own coins in `Pouw.pr`: becomes a reading of it (lean)",
+    "security/Definitions/Pouw/Confidence.lean::ResourceAccounting.Sound":
+        "duplicate of `Verity.Sound`, over uniform coins against the causal strategies of feasible runs: becomes a reading of it (compute-research)",
+    "security/Definitions/Spot/Sampling/Layer.lean::Spot.Sampling.Sound":
+        "homonym, the sampling layer's theorem as a statement: rename (proofs)",
+    "security/Proofs/Flock/SampledGeneric/Defs.lean::FlockSoundness.SampledGeneric.Exp.pr":
+        "duplicate of `Verity.Game.prob`, at an experiment's game and strategy: becomes it (deleted) (proofs)",
+    "security/Proofs/Flock/SampledGeneric/Defs.lean::FlockSoundness.SampledGeneric.JointExtractor.Sound":
+        "homonym, a witness opens the registered commitment and its proof block is correct: rename (proofs)",
+    "security/Proofs/Flock/Soundness/Discharge/Hm/Gadget.lean::FlockSoundness.Discharge.Hm.Sound":
+        "homonym, what a builder program's rows imply of its result: rename (proofs)",
+    "security/Proofs/Flock/Soundness/Discharge/ZkCoins/Basic.lean::FlockSoundness.Discharge.ZkCoins.TGame.pr":
+        "duplicate of `Verity.Game.prob`, over a game whose coins read committed blocks and salts: becomes a reading of it (proofs)",
+    "security/Proofs/Flock/Soundness/ZK/GK/Rand.lean::FlockSoundness.ZK.GK.Rand.pr":
+        "duplicate of `Verity.Game.prob`, over a randomized value and real-valued: becomes a reading of it (proofs)",
+    "security/Proofs/Pous/Chain/Flat.lean::LazyPerm.prob":
+        "duplicate of `Verity.Game.prob`, at one uniform coin (the body of `Pous.pr`): becomes a reading of it (memory-accounting)",
+    "verity/protocols/proof/flock/verifier/Flock/TmplReads.lean::Flock.TmplReads.Sound":
+        "homonym, every input a table marks is surely read: rename (proofs)",
 }
 
 _REASON = re.compile(r"^(?:duplicate of .+?: becomes .+|homonym, .+?: rename.*) \(([\w-]+)\)$")
@@ -1012,6 +1066,18 @@ def test_every_hit_is_canonical_or_listed():
                 for k, (concept, h, status) in sorted(found.items()) if status == "unlisted"]
     assert not unlisted, (f"declarations of a concept that are not its canonical object ({FIX}):\n  "
                           + "\n  ".join(unlisted))
+
+
+#: The concepts a new declaration of fails on, where the others' are bookkeeping: a bound stated in a second probability,
+#: or a guarantee in a second form of soundness, composes with nothing.
+REFUSED = ("Probability", "Sound")
+
+
+def test_no_new_probability_or_soundness():
+    found = classify(_scanned())
+    new = [f"{k} (line {h.line}) declares {concept} again ({WHY[concept]}): state it in {_read(concept)}"
+           for k, (concept, h, status) in sorted(found.items()) if concept in REFUSED and status == "unlisted"]
+    assert not new, "a second probability or soundness (" + FIX + "):\n  " + "\n  ".join(new)
 
 
 def test_known_shrinks_by_count():
@@ -1240,6 +1306,21 @@ def test_a_second_extractor_is_refused():
     assert {k: (c, status) for k, (c, _, status) in found.items()} == {
         f"{core}::Claims.Extractor": ("Extractor", "canonical"), f"{core}::Claims.Simulator": ("Simulator", "canonical"),
         f"{sampled}::Sampled.Extractor": ("Extractor", "unlisted")}
+
+
+def test_a_second_probability_or_soundness_is_a_hit():
+    """A `def` or `abbrev` named `pr`, `prob` or `Pr` whose type ends in a real declares the probability again, and a
+    `def Sound … : Prop` soundness; a `prob` of another type declares neither."""
+    core, other = f"{CORE}Game.lean", "security/Definitions/Slowdown/Other.lean"
+    found = classify(scan({
+        core: "namespace Verity\nnamespace Game\nnoncomputable def prob (p : α → Prop) : (g : Game α) → Strategy g → ℝ≥0∞\n"
+              "  | _, _ => 0\nend Game\ndef Sound (g : Game α) (accept E : α → Prop) (δ : ℝ≥0∞) : Prop :=\n  True\nend Verity\n",
+        other: "namespace Other\nnoncomputable abbrev pr {α : Type} [Fintype α] (P : α → Prop) : ℝ :=\n  0\n"
+               "def Run.Pr (r : Run) : ℝ≥0 := 0\ndef prob (n : Nat) : Nat := n\ndef Sound (δ : ℝ) : Prop := True\nend Other\n"}))
+    assert {k: (c, status) for k, (c, _, status) in found.items()} == {
+        f"{core}::Verity.Game.prob": ("Probability", "canonical"), f"{core}::Verity.Sound": ("Sound", "canonical"),
+        f"{other}::Other.pr": ("Probability", "unlisted"), f"{other}::Other.Run.Pr": ("Probability", "unlisted"),
+        f"{other}::Other.Sound": ("Sound", "unlisted")}
 
 
 def test_prune_deletes_stale_lines():
