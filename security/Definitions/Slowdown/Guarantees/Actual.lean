@@ -15,10 +15,8 @@ declaration the inference-only policy's statements are about.
 * `ServerBlocksAt` (the capacity form at any cuts): for any cuts `τ` of `[0, t)` and any set `G` of gates, the windows
   `A[X i, [τ j, τ (j + 1))]` divide that declaration's computed gates into `n J` inference blocks, each of at most
   `Φ_X (τ (j + 1) − τ j)` gates and reading at most `stateIn_X(τ j, G) + β_X (τ (j + 1) − τ j)` bits in `G`, baseline
-  included (`InferenceOnly.readsIn`). It takes no memory constraint: the state at each cut is in the bound.
-* `ServerBlocks` (the capacity form): the windows `A[X i, [kω, (k + 1)ω)]`, cut at `t`, divide that declaration's computed
-  gates into `n ⌈t/ω⌉` inference blocks, each of at most `Φ_X ω` gates (work priced at one per gate) and reading at most
-  `M_X + β_X ω` fresh input bits. It takes the four physical constraints it uses (`Causal`, `ComputeRate`, `Memory`, `Links`).
+  included (`InferenceOnly.readsIn`). It takes no memory constraint: the state at each cut is in the bound. At the
+  cuts `kω` and every gate, a location whose state is within its memory `M_X` reads at most `M_X + β_X ω` a window.
 
 The proofs are in `security/Proofs/ResourceAccounting/Actual/`.
 -/
@@ -47,23 +45,5 @@ def ServerBlocksAt : Prop :=
         Φ (X i) * (κ.τ j.succ - κ.τ j.castSucc) ∧
       readsIn (A.declaration (univ.biUnion X) t θ hθ) (P.gates (finProdFinEquiv (i, j))) G ≤
         A.stateIn (X i) (κ.τ j.castSucc) G + linkCapacity ends β (X i) * (κ.τ j.succ - κ.τ j.castSucc)
-
-/-- **The windows divide the developer's region into small inference blocks that read little** (capacity form). For every actual
-circuit `A` meeting causality, unit-priced compute rate, memory and links at the developer's pairwise disjoint locations
-`X i`, and every window `ω > 0` and `t`: some division `P` of the developer's declaration over `[0, t)` into
-`n ⌈t/ω⌉` units has as its unit `(i, k)` the window `A[X i, [kω, (k + 1)ω) ∩ [0, t)]`, of at most `Φ_{X i} ω` gates,
-which reads at most `M_{X i} + β_{X i} ω` fresh input bits. -/
-def ServerBlocks : Prop :=
-  ∀ {L E : Type*} [Fintype E] [DecidableEq L] (A : Placed L) (ℓ : L → L → ℕ) (Φ M : Finset L → ℕ)
-    (ends : E → L × L) (β : E → ℕ) (link : Fin A.N → Fin A.N → E) (n : ℕ) (X : Fin n → Finset L)
-    (θ : Finset (Fin A.N)) (hθ : ∀ a ∈ θ, A.isInput a = true) (t ω : ℕ),
-    0 < ω → (∀ i j, i ≠ j → Disjoint (X i) (X j)) →
-    A.Causal ℓ → A.ComputeRate (Set.range X) (fun _ => 1) Φ → A.Memory (Set.range X) M → A.Links ends β link →
-    ∃ P : Partition (A.declaration (univ.biUnion X) t θ hθ).D (n * ((t + ω - 1) / ω)),
-      ∀ (i : Fin n) (k : Fin ((t + ω - 1) / ω)),
-        P.gates (finProdFinEquiv (i, k)) = A.region (X i) (Set.Ico (k * ω) ((k + 1) * ω) ∩ Set.Iio t) ∧
-        (A.declaration (univ.biUnion X) t θ hθ).D.size (P.gates (finProdFinEquiv (i, k))) ≤ Φ (X i) * ω ∧
-        freshInput (A.declaration (univ.biUnion X) t θ hθ) (P.gates (finProdFinEquiv (i, k))) ≤
-          M (X i) + linkCapacity ends β (X i) * ω
 
 end ResourceAccounting.Guarantees.Actual

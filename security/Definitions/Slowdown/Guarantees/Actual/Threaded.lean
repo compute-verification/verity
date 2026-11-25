@@ -9,11 +9,11 @@ public import Definitions.Slowdown.Dark
 
 Tier 3's bound on the monitored servers (`benchmarks/nci/tiers.py`, "Memory cap on the residual"): a server's window
 reads its starting state plus what enters during it, `K = R + r ω`, and holds at most `K Λ(K) / b_a` counted
-multiplications of a threaded reference training algorithm `c`, where `Λ = Threading.bound` is the inference-only policy's Theorem 1 over threads
-(`Slowdown.Guarantees.ThreadedReads`). Every gate placed on the servers counts, declared or not: the windows divide the
-actual circuit's region, and `c` need only be contained in it.
+multiplications of a threaded reference training algorithm `c`, where `Λ = Threading.bound` is the inference-only
+policy's Theorem 1 over threads (`Slowdown.Guarantees.ThreadedReadsSlots`). Every gate placed on the servers counts,
+declared or not: the windows divide the actual circuit's region, and `c` need only be contained in it.
 
-The windows are `ServerBlocks`' `A[X i, [kω, (k + 1)ω) ∩ [0, t)]`, with its memory constraint replaced by a bound `R` on the
+The windows are `ServerBlocksAt`'s at the cuts `kω`, `A[X i, [kω, (k + 1)ω) ∩ [0, t)]`, with a bound `R` on the
 state at each window's start, so that what a wipe or exhaustion leaves plugs in; `r` bounds each location's link
 capacity `β_X`, and `Γ ≥ Φ_X ω` its gates a window.
 

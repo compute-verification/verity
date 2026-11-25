@@ -15,9 +15,8 @@ which names its unit `(i, j)`. Compute rate bounds a window's gates by `Φ_{X i}
 cut is what it reads in `A`, and the split in `G` (`width_into_region_inter_le`) and links bound its reads in `G` by
 `stateIn_{X i}(τ j, G) + β_{X i} (τ (j + 1) − τ j)`. No memory constraint is used.
 
-`ServerBlocks` is `ServerBlocksAt` at the cuts `min(kω, t)` (`uniformCuts`) and `G = univ`: a window of them is
-`A[X i, [kω, (k + 1)ω) ∩ [0, t)]`, at most `ω` long, its fresh input bits are at most its reads
-(`InferenceOnly.SecurityProofs.freshInput_le_readsIn`), and memory bounds the state at its start by `M_{X i}`.
+`uniformCuts` is the cuts `min(kω, t)`: a window of them is `A[X i, [kω, (k + 1)ω) ∩ [0, t)]`, at most `ω` long
+(`serverBlock_le`).
 -/
 
 @[expose] public section
@@ -197,33 +196,5 @@ def uniformCuts (t ω : ℕ) (hω : 0 < ω) : Cuts t where
     have := Nat.lt_div_mul_add (a := t + ω - 1) hω
     change t ≤ (t + ω - 1) / ω * ω
     omega
-
-theorem uniformCuts_castSucc {t ω : ℕ} (hω : 0 < ω) (k : Fin (uniformCuts t ω hω).J) :
-    (uniformCuts t ω hω).τ k.castSucc = k * ω :=
-  min_eq_left (mul_lt_of_lt_ceil hω k.2).le
-
-theorem uniformCuts_succ {t ω : ℕ} (hω : 0 < ω) (k : Fin (uniformCuts t ω hω).J) :
-    (uniformCuts t ω hω).τ k.succ = min ((k + 1) * ω) t :=
-  rfl
-
-theorem ServerBlocks : Guarantees.Actual.ServerBlocks := by
-  intro L E _ _ A ℓ Φ M ends β link n X θ hθ t ω hω hX hC hΦ hM hL
-  obtain ⟨P, hP⟩ := ServerBlocksAt A ℓ Φ ends β link n X θ hθ t (uniformCuts t ω hω) univ hX hC hΦ hL
-  refine ⟨P, fun i k => ?_⟩
-  obtain ⟨hgates, hsize, hreads⟩ := hP i k
-  have e : min ((k : ℕ) * ω) t = k * ω := min_eq_left (mul_lt_of_lt_ceil hω k.2).le
-  have hst : A.stateIn (X i) (k * ω) univ ≤ M (X i) :=
-    stateIn_le_of_memoryAt A (memoryAt_of_memory A hM Set.univ) ⟨i, rfl⟩ (Set.mem_univ _) _
-  refine ⟨hgates.trans ?_, hsize.trans ?_, (InferenceOnly.SecurityProofs.freshInput_le_readsIn _ _).trans (hreads.trans ?_)⟩
-  · show A.region (X i) (Set.Ico (min ((k : ℕ) * ω) t) (min (((k : ℕ) + 1) * ω) t)) = _
-    rw [e]
-    exact (congrArg (A.region (X i)) Set.Ico_inter_Iio).symm
-  · show Φ (X i) * (min (((k : ℕ) + 1) * ω) t - min ((k : ℕ) * ω) t) ≤ _
-    rw [e]
-    exact Nat.mul_le_mul_left _ serverBlock_le
-  · show A.stateIn (X i) (min ((k : ℕ) * ω) t) univ +
-        linkCapacity ends β (X i) * (min (((k : ℕ) + 1) * ω) t - min ((k : ℕ) * ω) t) ≤ _
-    rw [e]
-    exact Nat.add_le_add hst (Nat.mul_le_mul_left _ serverBlock_le)
 
 end ResourceAccounting.SecurityProofs.Actual

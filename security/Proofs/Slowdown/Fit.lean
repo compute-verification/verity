@@ -15,7 +15,7 @@ multiplications in a window number at most `reuse` per slot it uses there (`card
 * Window side (`executionPhase_ineq`): `Σ_t B_t ≤ Σ_j p_j e_j`, with `p_j` the slots window `j` uses and `e_j` the threads it
   entered, and `FitsSlots` gives `b_w p_j + w_e e_j ≤ S`, so `4 b_w w_e p_j e_j ≤ S²` by AM–GM.
 
-`FitBound` is the case of one slot per weight gate (`idSlots`): for a slot map one-to-one on the weight gates,
+`fitBound_idSlots` is the case of one slot per weight gate (`idSlots`): for a slot map one-to-one on the weight gates,
 `FitsSlots` is `Fits` and `ReachSlots` is `Reach` (`fitsSlots_iff`, `reachSlots_iff`).
 -/
 
@@ -355,14 +355,14 @@ theorem FitBoundSlots : Guarantees.FitBoundSlots := by
   exact fitBoundSlots_start σ P start Nstar S b_w w_e hgap hS
     (fun t h => hR t (h.mono (threadMults_mono T (subset_univ _) t))) hF
 
-/-- **The old form follows**: `FitBound` is `FitBoundSlots` at one slot per weight gate (`idSlots`), where `ReachSlots`
-is `Reach` and `FitsSlots` is `Fits`. -/
-theorem fitBound_of_slots (h : Guarantees.FitBoundSlots) : Guarantees.FitBound := by
-  intro c T k P start Nstar S b_w w_e hgap hS hR hF
-  exact h c T (idSlots T) k P start Nstar S b_w w_e hgap hS ((reachSlots_iff _ (idSlots_injOn T) Nstar).2 hR)
+/-- **The fit bound at one slot per weight gate** (`idSlots`), where `ReachSlots` is `Reach` and `FitsSlots` is
+`Fits`. -/
+theorem fitBound_idSlots (c : RegisteredCircuit) (T : Threading c) (k : ℕ) (P : Partition c.D k)
+    (start : Fin T.m → Fin k) (Nstar : ℕ) (S b_w w_e : ℝ) (hgap : S < Nstar * b_w)
+    (hS : ∀ j, (freshInput c (P.gates j) : ℝ) ≤ S) (hR : Assumptions.Reach c T Nstar)
+    (hF : Assumptions.Fits c T P start b_w w_e) :
+    4 * w_e * (Nstar * b_w - S) * T.M.card ≤ k * T.reuse * Nstar * S ^ 2 :=
+  FitBoundSlots c T (idSlots T) k P start Nstar S b_w w_e hgap hS ((reachSlots_iff _ (idSlots_injOn T) Nstar).2 hR)
     ((fitsSlots_iff _ (idSlots_injOn T) P start b_w w_e).2 hF)
-
-/-- **The fit bound**, as `FitBoundSlots` at one slot per weight gate. -/
-theorem FitBound : Guarantees.FitBound := fitBound_of_slots FitBoundSlots
 
 end Slowdown.SecurityProofs

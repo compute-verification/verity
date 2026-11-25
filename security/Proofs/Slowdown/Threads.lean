@@ -201,9 +201,6 @@ theorem threaded_reads (c : RegisteredCircuit) (T : Threading c) (Γ : ℕ) (S b
     b_a * (T.mults R).card ≤ freshInput c R * T.bound S b_w d e :=
   threaded_count T R hbw hba hd (hT R hR) (hW R hR) hR.2.2
 
-/-- **Theorem 1** (the thread draft, Appendix A). -/
-theorem ThreadedReads : Guarantees.ThreadedReads := threaded_reads
-
 /-- **Theorem 1 per parameter slot** (the thread draft, Appendix A, with the weights charged per slot). -/
 theorem threaded_reads_slots (c : RegisteredCircuit) (T : Threading c) (σ : T.Slots) (Γ : ℕ) (S b_w b_a : ℝ) (d e : ℕ)
     (hbw : 0 < b_w) (hba : 0 < b_a) (hd : 0 < d) (hT : T.Threaded Γ S d e)

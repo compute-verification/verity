@@ -133,7 +133,7 @@ theorem crossing_split {L : Type*} (R : Actual.Run L) {X Y : Finset L} (h : Disj
 /-- Memory per run on the state bounds the circuit's `state`: its gates are in the run's state (in flight between
 `X`'s leaves, or held). -/
 theorem memory_of_mem {L : Type*} {R : Actual.Run L} {𝒳 : Set (Finset L)} {M : Finset L → ℕ} (h : R.Memory 𝒳 M) :
-    R.A.Memory 𝒳 M := by
+    ∀ X ∈ 𝒳, ∀ t, R.A.state X t ≤ M X := by
   classical
   intro X hX t
   refine le_trans ?_ (h X hX t)

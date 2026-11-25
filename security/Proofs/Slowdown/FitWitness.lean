@@ -5,14 +5,15 @@ public import Proofs.Slowdown.Fit
 /-!
 # The fit bound's hypotheses hold together
 
-A five-gate reference training algorithm where `FitBound`'s hypotheses all hold with counted multiplications to count, so its
-premises are not contradictory. Gates 0 and 1 are two-bit weights, gate 2 a one-bit activation of the one thread, and
-gates 3 and 4 the thread's counted multiplications, of weight 0 and weight 1 by the activation. The baseline is empty.
+A five-gate reference training algorithm where `fitBound_idSlots`' hypotheses all hold with counted multiplications to
+count, so its premises are not contradictory. Gates 0 and 1 are two-bit weights, gate 2 a one-bit activation of the one
+thread, and gates 3 and 4 the thread's counted multiplications, of weight 0 and weight 1 by the activation. The baseline
+is empty.
 Window 0 holds gate 3 and starts the thread; window 1 holds gate 4 and enters it.
 
 Each window reads 3 bits (a weight and the activation), so `S = 3 < N* b_w = 2 · 2`. The thread uses both weights
 (`Reach` at `N* = 2`). Window 0 uses one weight (`2 ≤ 3`) and window 1 one weight and one entered thread
-(`2 + 1 ≤ 3`, `Fits` at `b_w = 2`, `w_e = 1`, tight). `FitBound` then gives `4 · 1 · (4 − 3) · 2 ≤ 2 · 1 · 2 · 9`.
+(`2 + 1 ≤ 3`, `Fits` at `b_w = 2`, `w_e = 1`, tight). The bound then gives `4 · 1 · (4 − 3) · 2 ≤ 2 · 1 · 2 · 9`.
 -/
 
 @[expose] public section
@@ -79,8 +80,8 @@ theorem fits : Assumptions.Fits decl threading serverBlocks start 2 1 := by
       freshInput decl (serverBlocks.gates j) := by decide +kernel
   exact fun j => by exact_mod_cast h j
 
-/-- `FitBound` at the witness. -/
+/-- The fit bound at the witness. -/
 theorem bound : 4 * (1 : ℝ) * ((2 : ℕ) * 2 - 3) * threading.M.card ≤ (2 : ℕ) * threading.reuse * (2 : ℕ) * (3 : ℝ) ^ 2 :=
-  FitBound decl threading 2 serverBlocks start 2 3 2 1 gap reads_le reach fits
+  fitBound_idSlots decl threading 2 serverBlocks start 2 3 2 1 gap reads_le reach fits
 
 end Slowdown.SecurityProofs.FitWitness

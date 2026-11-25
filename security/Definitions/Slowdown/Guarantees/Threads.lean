@@ -31,18 +31,6 @@ namespace Slowdown.Guarantees
 
 open Verity
 
-/-- **Theorem 1 (training's fresh-input floor)** (the thread draft, Appendix A): if the reference training algorithm `r` is
-`(d, e)`-threaded at `(c, k)` and its weights are incompressible at `b_w` bits per weight and `b_a` per activation,
-every small subcircuit `R` of `r` (at most `c` gates, at most `k` fresh input bits) computes at most
-`Λ = max(e, reuse · k / (4 d b_w))` counted multiplications per `b_a` fresh input bits it reads. Counting 2 flops per
-counted multiplication, it reads at least `b_a / (2Λ) = (b_a/2) · min(1/e, 4 d b_w/(reuse · k))` fresh input bits per
-flop, the draft's statement at `b_w = b_a = b`, written multiplied out so that a subcircuit that reads nothing needs no
-division. -/
-def ThreadedReads : Prop :=
-  ∀ (r : RegisteredCircuit) (T : Threading r) (c : ℕ) (k b_w b_a : ℝ) (d e : ℕ),
-    0 < b_w → 0 < b_a → 0 < d → T.Threaded c k d e → Assumptions.WeightsIncompressible r T c k b_w b_a →
-    ∀ R, Small r c k R → b_a * (T.mults R).card ≤ freshInput r R * T.bound k b_w d e
-
 /-- **Theorem 2 (a high fresh-input rate means padding)** (the thread draft, Appendix B), for the reference training algorithms of
 Theorem 1: a declaration `d` that contains `r` (`M`) and complies at `(Γ, α)`, with no fresh input of `r` in its
 registered information (`ThetaRegistered`), has at least `b_a / (α Λ)` gates per counted multiplication of `r`, where
@@ -98,9 +86,15 @@ def ThreadedTrainingOn : Prop :=
       κ * b_a * r.D.size r.D.computed ≤
         2 * b_a * M.dark.card + 2 * α * T.bound (α * Γ) b_w dd e * d.D.size d.D.computed
 
-/-- **Theorem 1 per parameter slot**: `ThreadedReads` with the weights charged per parameter slot of a slot map `σ`
-(`WeightsIncompressibleSlots`) rather than per weight gate. Its bound is the same, `Λ = max(e, reuse · k / (4 d b_w))`,
-since a thread's counted multiplications on the versions of one slot number at most `reuse` (`σ.reuse_le`). -/
+/-- **Theorem 1 (training's fresh-input floor), per parameter slot** (the thread draft, Appendix A): if the reference
+training algorithm `r` is `(d, e)`-threaded at `(c, k)` and its weights are incompressible at `b_w` bits per parameter
+slot of a slot map `σ` (`WeightsIncompressibleSlots`) and `b_a` per activation, every small subcircuit `R` of `r` (at
+most `c` gates, at most `k` fresh input bits) computes at most `Λ = max(e, reuse · k / (4 d b_w))` counted
+multiplications per `b_a` fresh input bits it reads, since a thread's counted multiplications on the versions of one
+slot number at most `reuse` (`σ.reuse_le`). Counting 2 flops per counted multiplication, it reads at least
+`b_a / (2Λ) = (b_a/2) · min(1/e, 4 d b_w/(reuse · k))` fresh input bits per flop, the draft's statement at
+`b_w = b_a = b`, written multiplied out so that a subcircuit that reads nothing needs no division. With one slot per
+weight gate the weights are charged per weight gate (`WeightsIncompressible`). -/
 def ThreadedReadsSlots : Prop :=
   ∀ (r : RegisteredCircuit) (T : Threading r) (σ : T.Slots) (c : ℕ) (k b_w b_a : ℝ) (d e : ℕ),
     0 < b_w → 0 < b_a → 0 < d → T.Threaded c k d e → Assumptions.WeightsIncompressibleSlots r T σ c k b_w b_a →

@@ -8,8 +8,8 @@ public import Definitions.Pous.Model.StreamedWipe
 What the per-server statements of the streamed-label wipe read
 (`security/Definitions/Pous/Guarantees/StreamedWipeServer.lean`). In the physical model
 (`security/Definitions/Registration/Physical.lean`) a server `s` is a location whose state is at most its *assumed memory
-capacity* `M_s` bits at every tick (`Placed.Memory`), a public parameter over every memory tier it has: each GPU's HBM,
-the host's RAM, its disks. The memory challenger fills `n` labels of 512 bits (64 bytes) into it, and
+capacity* `M_s` bits at every tick (`Actual.Run.Memory`), a public parameter over every memory tier it has: each GPU's
+HBM, the host's RAM, its disks. The memory challenger fills `n` labels of 512 bits (64 bytes) into it, and
 `R = M_s − 512·n` is every bit of `M_s` the fill doesn't reach, on any tier: the boot disk, the GPU contexts, a
 driver's reserve, the host OS. At ratio `r` the fill's share of what the server keeps through the wipe is about
 `(n/r)·(512 + log₂(e·r))` bits (`fillShare`); `R` and the egress count in full.
