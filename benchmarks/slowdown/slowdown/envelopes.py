@@ -566,13 +566,14 @@ class Onsite(Remote):
 
     wipe: Wipe = Wipe()
     certifier: Certifier = Certifier()
-    #: `certified` (`k_S = k_wipe + (r_in + r_side) Δ_wipe`) or `links` (`Windows`: the location's memory plus its
-    #: line rate)
+    #: `certified` (`k_S = k_wipe + (r_in + r_side) Δ_wipe`) or `links` (the location's memory plus its line
+    #: rate)
     form: str = "certified"
 
-    #: `Windows` as proved: memory and line rate, on the physical annotation's four constraints
-    LINKS = ("ResourceAccounting.Guarantees.Actual.ServerBlocks", "ResourceAccounting.Placed.Causal", "ResourceAccounting.Placed.ComputeRate",
-             "ResourceAccounting.Placed.Memory", "ResourceAccounting.Placed.Links")
+    #: `ServerBlocksAt` at the cuts `kω` and every gate, each window's starting state within the location's memory
+    #: (the feasible set's memory clause): memory and line rate
+    LINKS = ("ResourceAccounting.Guarantees.Actual.ServerBlocksAt", "ResourceAccounting.Placed.Causal",
+             "ResourceAccounting.Placed.ComputeRate", "ResourceAccounting.Placed.Links", "Slowdown.Security.H")
     #: `ServerBlocksAt` at the wipes, its state term from the wipe and its binding error from the network attester's ingress, which
     #: bounds information where `ServerBlocksAt` reads width at line rate: the information form is a draft
     SERVING = ("ResourceAccounting.Guarantees.Actual.ServerBlocksAt", "ResourceAccounting.Placed.Causal", "ResourceAccounting.Placed.ComputeRate",

@@ -14,7 +14,7 @@ Current terms and notation, one line each, ``- **Term** (area): definition. Code
 - **After-landing run** (landing): the whole `verity check` (`--kind after-landing`), run beside each candidate and beside `main` each time it moves.
 - **Application**: a configuration that sets every parameter of a run, one file in `applications/`; `verity run NAME` runs `applications/NAME.toml`. Remote and onsite are applications.
 - **Approach**: a line of work with a hypothesis, an owner and a status (live, parked, killed, superseded, merged).
-- **Assumed memory capacity**: M_s, server s's memory over every tier, a public parameter. Code: `ResourceAccounting.Placed.Memory`.
+- **Assumed memory capacity**: M_s, server s's memory over every tier, a public parameter. Code: `ResourceAccounting.Actual.Run.Memory`.
 - **Assumption**: a named `Prop` that guarantees take as a hypothesis and nothing proves, stated in its area's `Assumptions` and listed in its package's lock, with its claim id (`cr/sha-512`) where it has one.
 - **Attempt** (jobs): the evidence store's record of one run, completed or failed, with its outputs; `research run` makes one.
 - **Attestation period** (network attestation): m consecutive epochs on one link under one signed root, which a verdict covers. Code: `NetworkVerifier.Period`.
@@ -112,7 +112,7 @@ Current terms and notation, one line each, ``- **Term** (area): definition. Code
 - **Port** (circuits): a named array of fixed-width elements on a circuit template's boundary; a proof block may commit part of an element.
 - **Prefix sums** (Dither): T_s, Dither's committed running sums along a segment, stored as 16-bit elements.
 - **Preflight** (landing): `research queue ready`'s checks of a head before the ready mark.
-- **Pricing argument**: unregistered-input bits per counted object, which give the yields. Code: `Slowdown.Guarantees.ThreadedReads`.
+- **Pricing argument**: unregistered-input bits per counted object, which give the yields. Code: `Slowdown.Guarantees.ThreadedReadsSlots`.
 - **Program**: the stored form of a declared circuit, or of any circuit a proof claims something about, compressed as circuit templates called from a root body. Code: `verity.circuits.Program`.
 - **Prohibited set** (training): ℬ, the computations that hold a reference training algorithm of more than Y counted multiplications meeting a training bound's premises; no computation is in the admissible set and in ℬ. Code: `Slowdown.Security.B`, `Slowdown.Guarantees.Secure`.
 - **Proof block**: one part of a partition, proved on its own, a set of gates whose inputs and outputs are bit strings and whose outputs fit its circuit template's public size class (16 to 262,144 bits). Code: `verity.circuits.parts`, `sizeClasses`.

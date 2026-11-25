@@ -98,7 +98,8 @@ host_residual_bits = { value = 2.92e11, unit = "bit/host", low = 0, high = 1.2e1
 base = "onsite-per-device"
 residual_bits = { value = 4e10, unit = "bit/device", low = 2e10, high = 8e10, source = "ruled: 5 GB per device target; high: today's 10 GB", status = "ruled" }
 
-# What Lean proves today: Windows, every server's whole memory M_s and the location's line rate over the window.
+# What Lean proves today: ServerBlocksAt, with every server's whole memory M_s and the location's line rate over the
+# window.
 [regime.onsite-links]
 base = "onsite"
 form = "links"

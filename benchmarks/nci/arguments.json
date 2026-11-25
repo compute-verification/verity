@@ -127,7 +127,7 @@
    "statement": "Under threading, weight incompressibility and containment, slowdown >= kappa b_a / (2 alpha Lambda).",
    "refs": {
     "lean": [
-     "Slowdown.SecurityProofs.ThreadedReads",
+     "Slowdown.SecurityProofs.ThreadedReadsSlots",
      "Slowdown.SecurityProofs.ThreadedTraining"
     ]
    }
@@ -154,7 +154,7 @@
    "statement": "The reference training algorithm's circuit is (d, e)-threaded with d the entry fee and e the fan-out. Lean derives only (1, 0)-threading from structure; with a committed corpus layer 1 needs no thread reads, and the unembedding needs e >= vocabulary.",
    "refs": {
     "lean": [
-     "Slowdown.SecurityProofs.ThreadedReads"
+     "Slowdown.SecurityProofs.ThreadedReadsSlots"
     ]
    }
   },
