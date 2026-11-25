@@ -4,6 +4,7 @@ public import Proofs.Slowdown.Secure
 public import Proofs.ResourceAccounting.Actual.Device
 public import Proofs.Pouw.PerRunStop
 public import Proofs.Poub.BandwidthAudit
+public import Proofs.Pous.Period
 import Proofs.Pouw.PerRunJoint
 import Proofs.Pouw.PerRunPriced
 import Proofs.Pouw.Prob
@@ -33,6 +34,17 @@ what it carries. The memory link ends at a leaf of the chip and its other end is
   and error `ε`, the probability that it accepts a run holding a reference training algorithm of more counted
   multiplications than the fit bound at `S' = (m + o_s) + (b t − ⌈Q⌉ + o_b)` is at most `ε`.
 * `secure_poub`: the same at PoUB's audit, from `BandwidthOfAuditPerRun`.
+
+Memory. The server is the device `chip ∪ mem` and the capacity audit's window is one tick, `c`. The frame is cut at
+the end of that tick: the window before the cut is missed and charged the device's whole work over its ticks, the
+window after it is covered.
+
+* `secure_capacity`: where every run is feasible and the capacity audit has its per-run guarantee at certificate `S`
+  and error `ε`, the probability that it accepts a run holding a reference training algorithm of more counted
+  multiplications than the fit bound at `S' = (m − ⌈S⌉ + o_s) + (b ω + o_b)` plus `Φ (c + 1) + o_w` is at most `ε`.
+  The schedule charges the capacity account what the device holds at the end of the tick (`mem_le_state`), which is
+  `A`'s memory clause at the cut.
+* `secure_pous`: the same at PoUS's period, from `periodCapacity`.
 -/
 
 @[expose] public section
@@ -242,5 +254,100 @@ theorem secure_poub [Fintype ι] {N b h s G : ℕ} (k lam : ℕ) (r : Run d α �
     (ResourceAccounting.SecurityProofs.BandwidthOfAuditPerRun N b h s G k lam ι α ΩW ΩS d r hN real) p Y hbw hwe hgap hY
 
 end Bandwidth
+
+section Capacity
+
+variable {L : Type*} {E : Type} [DecidableEq L] [Fintype E] (hw : Hardware L E) (chip mem : Finset L)
+  (hX : chip ∪ mem ∈ hw.units) (c t : ℕ) (hc : c + 1 ≤ t)
+
+/-- Two windows: the ticks `[0, c + 1)` and `[c + 1, t)`. -/
+def cutAt : Cuts t where
+  J := 2
+  τ := ![0, c + 1, t]
+  mono := Fin.monotone_iff_le_succ.2 fun i => by
+    fin_cases i
+    · exact Nat.zero_le _
+    · exact hc
+  zero := rfl
+  last := rfl
+
+/-- The frame of the device `chip ∪ mem` cut at the end of tick `c`: the memory and bandwidth audits miss the window
+before the cut and cover the one after. -/
+abbrev cutFrame : Frame L E :=
+  Frame.single hw (chip ∪ mem) hX t (cutAt c t hc) (univ.filter fun u => ((finProdFinEquiv.symm u).2 : ℕ) = 0)
+
+variable {ι α ΩW ΩQ ΩS : Type} [Fintype α] [DecidableEq α] [Fintype ΩW] [Fintype ΩQ] [Fintype ΩS] [Nonempty ΩW]
+  [Nonempty ΩQ] {d : Device ι} (r : Run d α ΩW ΩQ ΩS) (ρ : ΩW × ΩQ × ΩS → Actual.Run L)
+  (usage : ∀ ω, Usage (ρ ω).A E) (θ : ∀ ω, Finset (Fin (ρ ω).A.N))
+  (hθ : ∀ ω, ∀ a ∈ θ ω, (ρ ω).A.isInput a = true)
+  (cls : ∀ ω, Fin (ρ ω).A.N → Option OpClass) (acct : ∀ ω, Fin (ρ ω).A.N → α)
+
+/-- **An accepted capacity audit's run is not prohibited, outside the audit's error.** The capacity audit's window is
+the one tick `c`, the joint audit's schedule at each coin is the one the run induces on the device `chip ∪ mem`, every
+run is feasible, and the capacity audit has its per-run guarantee at certificate `S` and error `ε`. Then, with the
+declared circuit's gates those charged to the capacity account and `Y` at least the fit bound of the device's frame
+cut at the end of tick `c`, at `x_s = ⌈S⌉` and no other amount, the probability that the audit accepts a run holding a
+reference training algorithm of more than `Y` counted multiplications is at most `ε`. The bound charges the ticks
+before the cut the device's whole work. -/
+theorem secure_capacity (hwin : r.win .capacity = ⟨c, 1⟩) (hbm : E × L) (side : ι → E × L)
+    (hsched : ∀ ω, r.schedule ω = (ρ ω).schedule chip mem (cls ω) (acct ω) (usage ω).link hbm side)
+    (hH : ∀ ω, Feasible hw (ρ ω).A (usage ω) ∧ (ρ ω).Memory hw.units hw.M) {S ε : ℝ}
+    (hsound : r.CapacitySoundPerRun S ε) (p : Recipe) (Y : ℝ) (hbw : 0 ≤ p.b_w) (hwe : 0 < p.w_e)
+    (hgap : ((cutFrame hw chip mem hX c t hc).unaccounted ⌈S⌉₊ 0
+      ((cutFrame hw chip mem hX c t hc).b * (cutFrame hw chip mem hX c t hc).ω) p : ℝ) < p.Nstar * p.b_w)
+    (hY : (cutFrame hw chip mem hX c t hc).bound ⌈S⌉₊ 0 0
+      ((cutFrame hw chip mem hX c t hc).b * (cutFrame hw chip mem hX c t hc).ω) p ≤ Y) :
+    Pouw.pr (fun ω => r.accepts .capacity ω ∧
+      computation r ρ usage θ hθ acct .capacity ω ∈ B (cutFrame hw chip mem hX c t hc) p Y) ≤ ε := by
+  refine (Pouw.pr_mono fun ω hω => ⟨hω.1, lt_of_not_ge fun hge => ?_⟩).trans (r.pr_capacityLt_le hsound)
+  have hx : ⌈S⌉₊ ≤ r.held ω := Nat.ceil_le.2 (by
+    rw [hwin] at hge
+    simpa using hge)
+  refine secure (cutFrame hw chip mem hX c t hc) ⌈S⌉₊ 0 0 _ p Y hbw hwe hgap hY _ (hH ω)
+    (fun i j => ⟨fun hj => ⟨hx.trans ?_, Nat.zero_le _, delivered_le_capacity _ _ (hH ω) i j⟩,
+      fun _ => Nat.zero_le _⟩) hω.2
+  have hj1 : j = (1 : Fin 2) := by
+    have h0 : (j : ℕ) ≠ 0 := fun h => hj (mem_filter.2 ⟨mem_univ _, by simpa using h⟩)
+    have h2 : (j : ℕ) < 2 := j.isLt
+    exact Fin.ext (by simp only [Fin.val_one]; omega)
+  subst hj1
+  unfold Computation.holds
+  rw [Run.held, hsched, hwin, Schedule.held]
+  change ∑ τ ∈ Finset.Ico c (c + 1), _ ≤ (ρ ω).A.width ((ρ ω).state (chip ∪ mem) (c + 1) ∩ _)
+  rw [Nat.Ico_succ_singleton, sum_singleton]
+  convert mem_le_state (ρ ω) chip mem (cls ω) (acct ω) (usage ω).link hbm side c (r.acct .capacity)
+
+open Pous Pous.EndToEnd PousVerifier PousVerifier.Properties Pous.Period in
+set_option exponentiation.threshold 20000 in
+/-- **An accepted PoUS period's run is not prohibited, outside PoUS's error**: `secure_capacity` at PoUS's per-period
+guarantee (`Pous.Period.SecurityProofs.periodCapacity`), under P2's security in the ring model at `(D, K, R)`, for a
+prover strategy under the device model whose session is the tick `c`, a capacity verdict that is the verifier's whole
+decision outside a break, any certificate `S` with `S + S_chip + ∑ cap_i · round ≤ S₀`, and the error `δ + ε_max`. -/
+theorem secure_pous [Fintype ι] {D K R : ℕ} (hP : Pous.P2.Assumptions.P2RingAuditSecure D K R)
+    (r : Run d α ΩW ΩQ ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
+    (ρ : ΩW × ΩQ × ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams) → Actual.Run L)
+    (usage : ∀ ω, Usage (ρ ω).A E) (θ : ∀ ω, Finset (Fin (ρ ω).A.N))
+    (hθ : ∀ ω, ∀ a ∈ θ ω, (ρ ω).A.isInput a = true) (cls : ∀ ω, Fin (ρ ω).A.N → Option OpClass)
+    (acct : ∀ ω, Fin (ρ ω).A.N → α) (P : Audits ΩW ΩQ) (τ : Strategy ΩW ΩQ) (round : ℕ) (S : ℝ)
+    (hdev : DeviceModel r P τ D K R round) (hinst : Instantiates P τ)
+    (hS : S + d.chip + ((∑ i, d.cap i * round : ℕ) : ℝ) ≤ Pous.EndToEnd.S)
+    (hv : ∀ ω, r.accepts .capacity ω → P.Accepts ω ∧ ¬ P.Break ω)
+    (hwin : r.win .capacity = ⟨c, 1⟩) (hbm : E × L) (side : ι → E × L)
+    (hsched : ∀ ω, r.schedule ω = (ρ ω).schedule chip mem (cls ω) (acct ω) (usage ω).link hbm side)
+    (hH : ∀ ω, Feasible hw (ρ ω).A (usage ω) ∧ (ρ ω).Memory hw.units hw.M) (p : Recipe) (Y : ℝ)
+    (hbw : 0 ≤ p.b_w) (hwe : 0 < p.w_e)
+    (hgap : ((cutFrame hw chip mem hX c t hc).unaccounted ⌈S⌉₊ 0
+      ((cutFrame hw chip mem hX c t hc).b * (cutFrame hw chip mem hX c t hc).ω) p : ℝ) < p.Nstar * p.b_w)
+    (hY : (cutFrame hw chip mem hX c t hc).bound ⌈S⌉₊ 0 0
+      ((cutFrame hw chip mem hX c t hc).b * (cutFrame hw chip mem hX c t hc).ω) p ≤ Y) :
+    Pouw.pr (fun ω => r.accepts .capacity ω ∧
+      computation r ρ usage θ hθ acct .capacity ω ∈ B (cutFrame hw chip mem hX c t hc) p Y) ≤
+      (Params.δ : ℝ) + Params.εMax.toReal :=
+  secure_capacity hw chip mem hX c t hc r ρ usage θ hθ cls acct hwin hbm side hsched hH
+    (Pous.Period.SecurityProofs.periodCapacity D K R hP ι α ΩW ΩQ d r P τ round S hdev hinst (by
+      rw [hwin]
+      simpa using hS) hv).1 p Y hbw hwe hgap hY
+
+end Capacity
 
 end Slowdown.SecurityProofs

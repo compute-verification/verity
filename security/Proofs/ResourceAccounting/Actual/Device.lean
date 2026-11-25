@@ -21,8 +21,9 @@ The converse, that the schedule charges everything an account's gates use: `cove
 account's gates at a tick is at most that account's `read` and `side` charges (a union bound); `covers_work`, when the
 work's pricing is `p` on each op class and nothing on gates of none, an account's work over a window is the schedule's
 `work p` (the window's gates split by tick, `sum_fiberwise_of_maps_to`); `read_le_delivered`, an account's `read`
-charge at a tick is at most the bits of its gates the chip reads at that tick from outside it. State needs nothing more: the device is
-`chip ∪ mem`, whose states the schedule charges.
+charge at a tick is at most the bits of its gates the chip reads at that tick from outside it; `mem_le_state`, an
+account's `mem` charge at a tick is at most the bits of its gates in the device's state at the end of the tick (a
+location's state is in the state of any location that contains it, `state_subset`).
 -/
 
 @[expose] public section
@@ -195,5 +196,40 @@ theorem covers_work {ι α E : Type} (R : Actual.Run L) (chip mem : Finset L) (c
     have : R.A.t g = u := by omega
     subst this
     exact ⟨⟨⟨⟨hc, hx, hu⟩, ha⟩, rfl⟩, ho⟩
+
+/-- The state of a location is in the state of every location that contains it. -/
+theorem state_subset (R : Actual.Run L) {X Y : Finset L} (h : X ⊆ Y) (t : ℕ) : R.state X t ⊆ R.state Y t := by
+  classical
+  intro a ha
+  simp only [Actual.Run.state, Finset.mem_filter, Finset.mem_univ, true_and] at ha ⊢
+  rcases ha with ⟨y, hy, ha⟩ | ⟨ha, hx⟩
+  · exact Or.inl ⟨y, h hy, ha⟩
+  · obtain ⟨hna, g, hg, hr⟩ := (mem_into R.A).1 ha
+    obtain ⟨hgi, hgx, hgt⟩ := (mem_region R.A).1 hg
+    refine Or.inr ⟨(mem_into R.A).2 ⟨fun hin => hna ?_, g, (mem_region R.A).2 ⟨hgi, h hgx, hgt⟩, hr⟩, h hx⟩
+    obtain ⟨hai, -, hat⟩ := (mem_region R.A).1 hin
+    exact (mem_region R.A).2 ⟨hai, hx, hat⟩
+
+open Classical in
+/-- A gate in the memory's state at the end of tick `t` is in its account's `mem` charge at `t`. -/
+theorem width_le_mem {ι α E : Type} (R : Actual.Run L) (chip mem : Finset L) (cls : Fin R.A.N → Option OpClass)
+    (acct : Fin R.A.N → α) (link : Fin R.A.N → Fin R.A.N → E) (hbm : E × L) (side : ι → E × L) {t : ℕ}
+    {s : Fin R.A.N} (hs : s ∈ R.state mem (t + 1)) :
+    R.A.w s ≤ (R.schedule chip mem cls acct link hbm side t).mem (acct s) := by
+  simp only [Actual.Run.schedule]
+  exact Finset.single_le_sum (f := R.A.w) (fun _ _ => Nat.zero_le _) (Finset.mem_filter.2 ⟨hs, rfl⟩)
+
+open Classical in
+/-- **The schedule's memory charge is held on the device**: account `a`'s `mem` charge at `t` is at most the bits of
+`a`'s gates in the state of `chip ∪ mem` at the start of tick `t + 1`. -/
+theorem mem_le_state {ι α E : Type} (R : Actual.Run L) (chip mem : Finset L) (cls : Fin R.A.N → Option OpClass)
+    (acct : Fin R.A.N → α) (link : Fin R.A.N → Fin R.A.N → E) (hbm : E × L) (side : ι → E × L) (t : ℕ) (a : α) :
+    (R.schedule chip mem cls acct link hbm side t).mem a ≤
+      R.A.width (R.state (chip ∪ mem) (t + 1) ∩ Finset.univ.filter fun s => acct s = a) := by
+  simp only [Actual.Run.schedule]
+  refine width_mono R.A fun s hs => ?_
+  obtain ⟨hs, ha⟩ := Finset.mem_filter.1 hs
+  exact Finset.mem_inter.2 ⟨state_subset R Finset.subset_union_right _ hs,
+    Finset.mem_filter.2 ⟨Finset.mem_univ _, ha⟩⟩
 
 end ResourceAccounting.SecurityProofs.Actual
