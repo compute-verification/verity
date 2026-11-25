@@ -279,12 +279,14 @@ theorem reachSlots_iff {c : RegisteredCircuit} {T : Threading c} (σ : T.Slots) 
 
 /-- **The fit bound from what each window's slots and entries cost**: every window's `b_w · #slots + w_e · #entered` at
 most `S ≥ 0`, with `ReachSlots` asked only of the threads that have counted multiplications in their start window
-(`token_bound`). `S ≥ 0` and the gap give `b_w > 0`, and at `w_e ≤ 0` the left side is not positive. -/
+(`token_bound`). The windows of `I` use no slot, and the bound counts the others only. `S ≥ 0` and the gap give
+`b_w > 0`, and at `w_e ≤ 0` the left side is not positive. -/
 theorem fitBoundSlots_core {c : RegisteredCircuit} {T : Threading c} (σ : T.Slots) {k : ℕ} (P : Partition c.D k)
-    (start : Fin T.m → Fin k) (Nstar : ℕ) (S b_w w_e : ℝ) (hgap : S < Nstar * b_w) (hS0 : 0 ≤ S)
+    (I : Finset (Fin k)) (start : Fin T.m → Fin k) (Nstar : ℕ) (S b_w w_e : ℝ) (hgap : S < Nstar * b_w) (hS0 : 0 ≤ S)
+    (hI : ∀ j ∈ I, σ.slotsUsed (P.gates j) = ∅)
     (hR : ∀ t, (T.threadMults (P.gates (start t)) t).Nonempty → Nstar ≤ (σ.threadSlots univ t).card)
     (hF : ∀ j, b_w * (σ.slotsUsed (P.gates j)).card + w_e * (T.entered P start j).card ≤ S) :
-    4 * w_e * (Nstar * b_w - S) * T.M.card ≤ k * T.reuse * Nstar * S ^ 2 := by
+    4 * w_e * (Nstar * b_w - S) * T.M.card ≤ (k - I.card : ℕ) * T.reuse * Nstar * S ^ 2 := by
   have hN0 : (0 : ℝ) ≤ Nstar := Nat.cast_nonneg _
   have hr0 : (0 : ℝ) ≤ T.reuse := Nat.cast_nonneg _
   have hbw : 0 < b_w := by
@@ -313,12 +315,16 @@ theorem fitBoundSlots_core {c : RegisteredCircuit} {T : Threading c} (σ : T.Slo
           sum_le_sum fun t _ => Nat.cast_le.2 (card_le_card (threadSlots_subset σ _ t))
       _ = _ := by rw [sum_const, nsmul_eq_mul]; ring
   have hwin : 4 * (b_w * w_e) * ∑ j, ((σ.slotsUsed (P.gates j)).card : ℝ) * (T.entered P start j).card ≤
-      k * S ^ 2 := by
+      (k - I.card : ℕ) * S ^ 2 := by
     rw [mul_sum]
     calc ∑ j, 4 * (b_w * w_e) * (((σ.slotsUsed (P.gates j)).card : ℝ) * (T.entered P start j).card)
-        ≤ ∑ _j : Fin k, S ^ 2 := sum_le_sum fun j _ =>
-          executionPhase_ineq hbw.le hwe.le (Nat.cast_nonneg _) (Nat.cast_nonneg _) (hF j)
-      _ = k * S ^ 2 := by rw [sum_const, card_univ, Fintype.card_fin, nsmul_eq_mul]
+        ≤ ∑ j : Fin k, (if j ∈ I then 0 else S ^ 2) := sum_le_sum fun j _ => by
+          split_ifs with h
+          · rw [hI j h, card_empty, Nat.cast_zero, zero_mul, mul_zero]
+          · exact executionPhase_ineq hbw.le hwe.le (Nat.cast_nonneg _) (Nat.cast_nonneg _) (hF j)
+      _ = (k - I.card : ℕ) * S ^ 2 := by
+          rw [sum_ite, sum_const_zero, zero_add, sum_const, nsmul_eq_mul, filter_not, filter_mem_eq_inter,
+            univ_inter, card_univ_sdiff, Fintype.card_fin]
   exact fit_ineq hwe.le hbw.le hN0 hr0 hgap0 hMr htok hB hwin
 
 /-- **The fit bound over parameter slots**, with `ReachSlots` asked only of the threads that have counted
@@ -334,8 +340,8 @@ theorem fitBoundSlots_start {c : RegisteredCircuit} {T : Threading c} (σ : T.Sl
   · rw [hM, card_empty, Nat.cast_zero, mul_zero]
     positivity
   obtain ⟨j₀, -⟩ := exists_gates P (T.M_computed hg)
-  exact fitBoundSlots_core σ P start Nstar S b_w w_e hgap ((Nat.cast_nonneg _).trans (hS j₀)) hR
-    fun j => (hF j).trans (hS j)
+  simpa using fitBoundSlots_core σ P ∅ start Nstar S b_w w_e hgap ((Nat.cast_nonneg _).trans (hS j₀))
+    (fun j hj => absurd hj (notMem_empty j)) hR fun j => (hF j).trans (hS j)
 
 end Slowdown.SecurityProofs.Fit
 

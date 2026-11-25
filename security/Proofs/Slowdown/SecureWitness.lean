@@ -779,12 +779,12 @@ theorem audit_capacity_sound : (auditOn ∅ {true}).CapacitySoundPerRun 1 0 := f
 
 /-- **`secure_capacity` is not vacuous**: its hypotheses hold together at an audit that accepts every run, at the
 certificate 1, which is all the server holds. The frame is cut at the end of the one tick: the window before the cut
-is charged the server's one unit of work and the fit bound is `1/2`, so the run holds no reference training algorithm
-of more than `3/2` counted multiplications. -/
+is charged the server's one unit of work and the window after it the fit bound's `1/4`, so the run holds no reference
+training algorithm of more than `5/4` counted multiplications. -/
 theorem capacity_witness (ω : Unit × Unit × Unit) :
     computation (auditOn ∅ {true}) (fun _ => actual) (fun _ => usage) (fun _ => ∅)
       (fun _ _ h => absurd h (notMem_empty _)) (fun _ _ => ()) .capacity ω ∉
-        B (cutFrame (hw 1 1 1) ∅ {true} (Set.mem_univ _) 0 1 le_rfl) recipe (3 / 2) := fun hB => by
+        B (cutFrame (hw 1 1 1) ∅ {true} (Set.mem_univ _) 0 1 le_rfl) recipe (5 / 4) := fun hB => by
   have hm : (cutFrame (hw 1 1 1) ∅ {true} (Set.mem_univ _) 0 1 le_rfl).m = 1 :=
     (single_m _ _ _ 1 _ _).trans (by simp [Hardware.ofLeaves])
   have hb : (cutFrame (hw 1 1 1) ∅ {true} (Set.mem_univ _) 0 1 le_rfl).b = 1 :=
@@ -806,13 +806,17 @@ theorem capacity_witness (ω : Unit × Unit × Unit) :
     change ∑ u ∈ (cutFrame (hw 0 0 0) ∅ {true} (Set.mem_univ _) 0 1 le_rfl).missed,
       (1 * (cutFrame (hw 0 0 0) ∅ {true} (Set.mem_univ _) 0 1 le_rfl).len (finProdFinEquiv.symm u).2 - 0 + 0) = 1
     decide
+  have hcov : (cutFrame (hw 1 1 1) ∅ {true} (Set.mem_univ _) 0 1 le_rfl).n *
+      (cutFrame (hw 1 1 1) ∅ {true} (Set.mem_univ _) 0 1 le_rfl).cuts.J -
+        (cutFrame (hw 1 1 1) ∅ {true} (Set.mem_univ _) 0 1 le_rfl).missed.card = 1 := by
+    decide
   have h := secure_capacity (hw 1 1 1) ∅ {true} (Set.mem_univ _) 0 1 le_rfl (auditOn ∅ {true}) (fun _ => actual)
     (fun _ => usage) (fun _ => ∅) (fun _ _ h => absurd h (notMem_empty _)) (fun _ _ => some .tc) (fun _ _ => ())
-    rfl ((), true) Empty.elim (fun _ => rfl) (fun _ => feasible ∅) audit_capacity_sound recipe (3 / 2) (by norm_num)
+    rfl ((), true) Empty.elim (fun _ => rfl) (fun _ => feasible ∅) audit_capacity_sound recipe (5 / 4) (by norm_num)
     (by norm_num) (by rw [hu]; norm_num) (by
       unfold Frame.bound
-      rw [hu, hmiss]
-      norm_num [cutAt])
+      rw [hu, hmiss, hcov]
+      norm_num)
   have h1 := Pouw.pr_eq_one (P := fun ω => (auditOn ∅ {true}).accepts .capacity ω ∧ _) fun x =>
     (⟨trivial, Subsingleton.elim ω x ▸ hB⟩ : _ ∧ _)
   rw [h1] at h
@@ -821,11 +825,11 @@ theorem capacity_witness (ω : Unit × Unit × Unit) :
 /-- **`secure_device`'s hypotheses hold together**, at the audit of `capacity_witness` with its compute audit over
 the same tick, both at the certificate 1, and no count of ingress. The compute certificate is the server's whole
 work before the cut, so nothing is charged there, and the run holds no reference training algorithm of more than the
-fit bound's `1/2` counted multiplications. -/
+fit bound's `1/4` counted multiplications. -/
 theorem device_witness (ω : Unit × Unit × Unit) :
     computation (auditOn ∅ {true}) (fun _ => actual) (fun _ => usage) (fun _ => ∅)
       (fun _ _ h => absurd h (notMem_empty _)) (fun _ _ => ()) .capacity ω ∉
-        B (cutFrame (hw 1 1 1) ∅ {true} (Set.mem_univ _) 0 1 le_rfl) recipe (1 / 2) := by
+        B (cutFrame (hw 1 1 1) ∅ {true} (Set.mem_univ _) 0 1 le_rfl) recipe (1 / 4) := by
   rintro ⟨c, emb, T, start, hT, hlt⟩
   have hm : (cutFrame (hw 1 1 1) ∅ {true} (Set.mem_univ _) 0 1 le_rfl).m = 1 :=
     (single_m _ _ _ 1 _ _).trans (by simp [Hardware.ofLeaves])
@@ -848,14 +852,18 @@ theorem device_witness (ω : Unit × Unit × Unit) :
     change ∑ u ∈ (cutFrame (hw 0 0 0) ∅ {true} (Set.mem_univ _) 0 1 le_rfl).missed,
       (1 * (cutFrame (hw 0 0 0) ∅ {true} (Set.mem_univ _) 0 1 le_rfl).len (finProdFinEquiv.symm u).2 - 1 + 0) = 0
     decide
+  have hcov : (cutFrame (hw 1 1 1) ∅ {true} (Set.mem_univ _) 0 1 le_rfl).n *
+      (cutFrame (hw 1 1 1) ∅ {true} (Set.mem_univ _) 0 1 le_rfl).cuts.J -
+        (cutFrame (hw 1 1 1) ∅ {true} (Set.mem_univ _) 0 1 le_rfl).missed.card = 1 := by
+    decide
   have hY : ∀ x : Unit × Unit × Unit, (cutFrame (hw 1 1 1) ∅ {true} (Set.mem_univ _) 0 1 le_rfl).bound ⌈(1 : ℝ)⌉₊ 0
       ⌈(1 : ℝ) - 0 * (auditOn ∅ {true}).pouwRead x⌉₊
       ((cutFrame (hw 1 1 1) ∅ {true} (Set.mem_univ _) 0 1 le_rfl).b *
-        (cutFrame (hw 1 1 1) ∅ {true} (Set.mem_univ _) 0 1 le_rfl).ω) recipe ≤ 1 / 2 := fun x => by
+        (cutFrame (hw 1 1 1) ∅ {true} (Set.mem_univ _) 0 1 le_rfl).ω) recipe ≤ 1 / 4 := fun x => by
     have hx : ⌈(1 : ℝ) - 0 * (auditOn ∅ {true}).pouwRead x⌉₊ = 1 := by simp
     unfold Frame.bound
-    rw [hu, hx, hmiss]
-    norm_num [cutAt]
+    rw [hu, hx, hmiss, hcov]
+    norm_num
   have h := secure_device (hw 1 1 1) ∅ {true} (Set.mem_univ _) 0 1 le_rfl (auditOn ∅ {true}) (fun _ => actual)
     (fun _ => usage) (fun _ => ∅) (fun _ _ h => absurd h (notMem_empty _)) (fun _ _ => some .tc) (fun _ _ => ())
     rfl rfl rfl ((), true) Empty.elim (fun _ => rfl) price (fun _ _ _ => rfl) (fun _ => feasible ∅)

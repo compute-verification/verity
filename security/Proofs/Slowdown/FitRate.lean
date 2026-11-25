@@ -77,8 +77,8 @@ open Classical in
 /-- **The fit bound from the windows' reads, with windows left out**: `FitRate`'s count when a bound `S ≥ 0` on a
 window's reads in the image of `c`'s novel gates, whatever bounds them, and the window half of `Fits`, hold at the
 windows outside `I` only, and each thread started outside `I` that works in its start window uses at least `Nstar`
-weights outside `I`'s windows. The counted multiplications placed in `I`'s windows are added to the bound
-(`Fit.fitBoundSlots_but`). -/
+weights outside `I`'s windows. The bound counts the windows outside `I`, and the counted multiplications placed in
+`I`'s windows are added to it (`Fit.fitBoundSlots_but`). -/
 theorem fitRate_of_reads_but {L E : Type*} [Fintype E] [DecidableEq L] (A : Placed L) (ℓ : L → L → ℕ)
     (ends : E → L × L) (β : E → ℕ) (link : Fin A.N → Fin A.N → E) (n : ℕ) (X : Fin n → Finset L)
     (θ : Finset (Fin A.N)) (hθ : ∀ a ∈ θ, A.isInput a = true) (t : ℕ) (κ : Cuts t) (S : ℝ)
@@ -96,7 +96,7 @@ theorem fitRate_of_reads_but {L E : Type*} [Fintype E] [DecidableEq L] (A : Plac
         Nstar ≤ (T.threadWeights (Fit.outside Q I) u).card) ∧
       ∀ j ∉ I, b_w * (T.weightsUsed (Q.gates j)).card + w_e * (T.entered Q start j).card ≤
         freshInput c (Q.gates j)) :
-    4 * w_e * (Nstar * b_w - S) * T.M.card ≤ (n * κ.J : ℕ) * T.reuse * Nstar * S ^ 2 +
+    4 * w_e * (Nstar * b_w - S) * T.M.card ≤ (n * κ.J - I.card : ℕ) * T.reuse * Nstar * S ^ 2 +
       4 * w_e * (Nstar * b_w - S) * (T.M.filter fun g => ∃ i j, finProdFinEquiv (i, j) ∈ I ∧
         M.emb g ∈ A.region (X i) (Set.Ico (κ.τ j.castSucc) (κ.τ j.succ))).card := by
   obtain ⟨P, hP⟩ := ResourceAccounting.SecurityProofs.Actual.ServerBlocksAt A ℓ (fun _ => A.N) ends β link n X θ hθ t κ

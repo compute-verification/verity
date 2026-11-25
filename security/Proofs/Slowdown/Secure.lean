@@ -154,8 +154,9 @@ theorem secure {L E : Type*} [Fintype E] [DecidableEq L] (F : Frame L E) (x_s x_
       hT.shared_work
   have hc : 0 < 4 * p.w_e * (p.Nstar * p.b_w - ((F.unaccounted x_s x_b y_b p : ℕ) : ℝ)) :=
     mul_pos (mul_pos (by norm_num) hwe) (sub_pos.2 hgap)
-  have hreuse : ((F.n * F.cuts.J : ℕ) : ℝ) * T.reuse * p.Nstar * ((F.unaccounted x_s x_b y_b p : ℕ) : ℝ) ^ 2 ≤
-      ((F.n * F.cuts.J : ℕ) : ℝ) * p.reuse * p.Nstar * ((F.unaccounted x_s x_b y_b p : ℕ) : ℝ) ^ 2 :=
+  have hreuse : ((F.n * F.cuts.J - F.missed.card : ℕ) : ℝ) * T.reuse * p.Nstar *
+        ((F.unaccounted x_s x_b y_b p : ℕ) : ℝ) ^ 2 ≤
+      ((F.n * F.cuts.J - F.missed.card : ℕ) : ℝ) * p.reuse * p.Nstar * ((F.unaccounted x_s x_b y_b p : ℕ) : ℝ) ^ 2 :=
     mul_le_mul_of_nonneg_right (mul_le_mul_of_nonneg_right
       (mul_le_mul_of_nonneg_left (Nat.cast_le.2 hT.reuse) (Nat.cast_nonneg _)) (Nat.cast_nonneg _)) (sq_nonneg _)
   have h1 := hk.trans (add_le_add hreuse (mul_le_mul_of_nonneg_left (Nat.cast_le.2 hcount) hc.le))

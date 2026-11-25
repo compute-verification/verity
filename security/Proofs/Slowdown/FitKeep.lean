@@ -119,7 +119,8 @@ theorem keep_outside_mults {T : Threading c} {k : ℕ} (P : Partition c.D k) {I 
 
 /-- **The fit bound with windows left out and nothing asked of them**: at every window outside `I`, `FitsSlots` and
 at most `S ≥ 0` bits of fresh input; outside `I`, `ReachSlots` for the threads started outside `I` that do counted work
-in their start window. `T`'s counted multiplications are bounded by `FitBoundSlots`'s bound plus those inside `I`. -/
+in their start window. `T`'s counted multiplications are bounded by `FitBoundSlots`'s bound over the windows outside
+`I` plus those inside `I`. -/
 theorem fitBoundSlots_but (T : Threading c) (σ : T.Slots) {k : ℕ} (P : Partition c.D k) (I : Finset (Fin k))
     (start : Fin T.m → Fin k) (Nstar : ℕ) (S b_w w_e : ℝ) (hbw : 0 ≤ b_w) (hwe : 0 ≤ w_e) (hgap : S < Nstar * b_w)
     (hS0 : 0 ≤ S) (hS : ∀ j ∉ I, (freshInput c (P.gates j) : ℝ) ≤ S)
@@ -128,8 +129,10 @@ theorem fitBoundSlots_but (T : Threading c) (σ : T.Slots) {k : ℕ} (P : Partit
     (hF : ∀ j ∉ I, b_w * (σ.slotsUsed (P.gates j)).card + w_e * (T.entered P start j).card ≤
       freshInput c (P.gates j)) :
     4 * w_e * (Nstar * b_w - S) * T.M.card ≤
-      k * T.reuse * Nstar * S ^ 2 +
+      (k - I.card : ℕ) * T.reuse * Nstar * S ^ 2 +
         4 * w_e * (Nstar * b_w - S) * (T.M.filter fun g => ∃ j ∈ I, g ∈ P.gates j).card := by
+  have hs : ∀ j ∈ I, (keepSlots σ (outside P I)).slotsUsed (P.gates j) = ∅ := fun j hI => by
+    rw [Threading.Slots.slotsUsed, Threading.weightsUsed, keep_outside_mults (T := T) P hI, image_empty, image_empty]
   have hR' : ∀ t, ((keep T (outside P I)).threadMults (P.gates (start t)) t).Nonempty →
       Nstar ≤ ((keepSlots σ (outside P I)).threadSlots univ t).card := by
     intro t ⟨g, hg⟩
@@ -143,8 +146,6 @@ theorem fitBoundSlots_but (T : Threading c) (σ : T.Slots) {k : ℕ} (P : Partit
     intro j
     by_cases hI : j ∈ I
     · have hm := keep_outside_mults (T := T) P hI
-      have hs : (keepSlots σ (outside P I)).slotsUsed (P.gates j) = ∅ := by
-        rw [Threading.Slots.slotsUsed, Threading.weightsUsed, hm, image_empty, image_empty]
       have he : (keep T (outside P I)).entered P start j = ∅ := by
         refine eq_empty_of_forall_notMem fun t ht => ?_
         simp only [Threading.entered, Threading.visits, mem_filter, mem_univ, true_and] at ht
@@ -152,7 +153,7 @@ theorem fitBoundSlots_but (T : Threading c) (σ : T.Slots) {k : ℕ} (P : Partit
         have hg' : g ∈ (keep T (outside P I)).mults (P.gates j) := (mem_filter.1 hg).1
         rw [hm] at hg'
         exact notMem_empty g hg'
-      rw [hs, he, card_empty, card_empty, Nat.cast_zero, mul_zero, mul_zero, add_zero]
+      rw [hs j hI, he, card_empty, card_empty, Nat.cast_zero, mul_zero, mul_zero, add_zero]
       exact hS0
     · have hp : ((keepSlots σ (outside P I)).slotsUsed (P.gates j)).card ≤ (σ.slotsUsed (P.gates j)).card :=
         card_le_card (keepSlots_slotsUsed_subset σ _ _)
@@ -164,7 +165,7 @@ theorem fitBoundSlots_but (T : Threading c) (σ : T.Slots) {k : ℕ} (P : Partit
       have h4 := hS j hI
       linarith
   have hk := add_left_out T (outside P I)
-    (fitBoundSlots_core (keepSlots σ (outside P I)) P start Nstar S b_w w_e hgap hS0 hR' hF')
+    (fitBoundSlots_core (keepSlots σ (outside P I)) P I start Nstar S b_w w_e hgap hS0 hs hR' hF')
   have hout : T.M.filter (· ∉ outside P I) = T.M.filter fun g => ∃ j ∈ I, g ∈ P.gates j := by
     refine filter_congr fun g _ => ?_
     simp only [outside, mem_filter, mem_univ, true_and, not_forall, not_not, exists_prop]
@@ -188,8 +189,10 @@ theorem fitBoundSlots_init (T : Threading c) (σ : T.Slots) {k : ℕ} (P : Parti
   · rw [hM, card_empty, filter_empty, card_empty, Nat.cast_zero, mul_zero, add_zero]
     positivity
   obtain ⟨j₀, -⟩ := exists_gates P (T.M_computed hg)
-  exact fitBoundSlots_but T σ P I start Nstar S b_w w_e hbw hwe hgap ((Nat.cast_nonneg _).trans (hS j₀))
-    (fun j _ => hS j) hR hF
+  have hk : ((k - I.card : ℕ) : ℝ) ≤ k := Nat.cast_le.2 (Nat.sub_le _ _)
+  refine (fitBoundSlots_but T σ P I start Nstar S b_w w_e hbw hwe hgap ((Nat.cast_nonneg _).trans (hS j₀))
+    (fun j _ => hS j) hR hF).trans (add_le_add_left ?_ _)
+  gcongr
 
 /-- The counted multiplications of the threads in `K`. -/
 def threadGates (T : Threading c) (K : Finset (Fin T.m)) : Finset (Fin c.D.N) :=

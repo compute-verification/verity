@@ -231,11 +231,11 @@ noncomputable def unaccounted (x_s x_b y_b : ℕ) (p : Recipe) : ℕ :=
   (F.m - x_s + p.o_s) + (min (F.b * F.ω) y_b - x_b + p.o_b)
 
 /-- **The fit bound**: the counted multiplications a computation can hold of a reference training algorithm, when a
-covered window reads at most `S' = unaccounted` bits of it: `n J · reuse · N* S'² / (4 w_e (N* b_w − S'))` over the
-windows, and for each missed window the work its server's limit leaves over the window's ticks beside the `x_w`
+covered window reads at most `S' = unaccounted` bits of it: `reuse · N* S'² / (4 w_e (N* b_w − S'))` for each covered
+window, and for each missed window the work its server's limit leaves over the window's ticks beside the `x_w`
 accounted for, with the multiplications shared with the declared circuit. -/
 noncomputable def bound (x_s x_b x_w y_b : ℕ) (p : Recipe) : ℝ :=
-  (F.n * F.cuts.J : ℕ) * p.reuse * p.Nstar * (F.unaccounted x_s x_b y_b p : ℝ) ^ 2 /
+  (F.n * F.cuts.J - F.missed.card : ℕ) * p.reuse * p.Nstar * (F.unaccounted x_s x_b y_b p : ℝ) ^ 2 /
       (4 * p.w_e * (p.Nstar * p.b_w - (F.unaccounted x_s x_b y_b p : ℝ))) +
     (∑ u ∈ F.missed, (F.Φ * F.len (finProdFinEquiv.symm u).2 - x_w + p.o_w) : ℕ)
 
