@@ -69,8 +69,11 @@ variable {L E : Type*} (F : Frame L E)
 /-- The ticks of window `j`: `[τ j, τ (j + 1))`. -/
 def span (j : Fin F.cuts.J) : Set ℕ := Set.Ico (F.cuts.τ j.castSucc) (F.cuts.τ j.succ)
 
+/-- The length of window `j`, in ticks. -/
+def len (j : Fin F.cuts.J) : ℕ := F.cuts.τ j.succ - F.cuts.τ j.castSucc
+
 /-- `ω`: the longest window, in ticks. -/
-def ω : ℕ := univ.sup fun j : Fin F.cuts.J => F.cuts.τ j.succ - F.cuts.τ j.castSucc
+def ω : ℕ := univ.sup F.len
 
 /-- `m`: the most bits a server carries across a tick. -/
 def m : ℕ := univ.sup fun i => F.hw.M (F.server i)
@@ -226,12 +229,12 @@ noncomputable def unaccounted (x_s x_b y_b : ℕ) (p : Recipe) : ℕ :=
 
 /-- **The fit bound**: the counted multiplications a computation can hold of a reference training algorithm, when a
 covered window reads at most `S' = unaccounted` bits of it: `n J · reuse · N* S'² / (4 w_e (N* b_w − S'))` over the
-windows, and for each missed window the work its server's limit leaves beside the `x_w` accounted for, with the
-multiplications shared with the declared circuit. -/
+windows, and for each missed window the work its server's limit leaves over the window's ticks beside the `x_w`
+accounted for, with the multiplications shared with the declared circuit. -/
 noncomputable def bound (x_s x_b x_w y_b : ℕ) (p : Recipe) : ℝ :=
   (F.n * F.cuts.J : ℕ) * p.reuse * p.Nstar * (F.unaccounted x_s x_b y_b p : ℝ) ^ 2 /
       (4 * p.w_e * (p.Nstar * p.b_w - (F.unaccounted x_s x_b y_b p : ℝ))) +
-    (F.missed.card * (F.Φ * F.ω - x_w + p.o_w) : ℕ)
+    (∑ u ∈ F.missed, (F.Φ * F.len (finProdFinEquiv.symm u).2 - x_w + p.o_w) : ℕ)
 
 end Frame
 

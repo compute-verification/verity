@@ -17,7 +17,7 @@ is at least the fit bound (`Frame.bound`) and the bits a covered window can read
   the server carries at most `m − x_s` bits outside the declared circuit across it (`state_outside`); one whose links
   deliver to a window's server `x_b` bits of the declared circuit and `y_b` bits in all reads at most
   `min (b ω) y_b − x_b` others from outside the server (`delivered_outside`); and one whose declared circuit does `x_w`
-  work in a window does at most `Φ ω − x_w` outside it there (`work_outside`).
+  work in a window of `len` ticks does at most `Φ len − x_w` outside it there (`work_outside`).
 * What a covered window reads of the reference training algorithm's novel gates: what its server carries across the
   cut that opens it plus what crosses the server's boundary, each split into the part outside the declared circuit,
   which the limits leave, and the part the algorithm shares with it (`window_reads_le`).
@@ -26,7 +26,7 @@ is at least the fit bound (`Frame.bound`) and the bits a covered window can read
   declared circuit (`card_missed_le`).
 
 `secure_work` is the claim from work alone: at a frame whose every window the memory and bandwidth audits miss, `Y` at
-least `n J (Φ ω − x_w + o_w)`, with no premise on the recipe's other parameters.
+least the sum over the windows of `Φ len − x_w + o_w`, with no premise on the recipe's other parameters.
 
 Over the audits' runs, with `ExceptWith` the tree's "fails on an accepted run with probability at most `ε`":
 `accounted_of_windows` adds the audits' errors over the windows (an accepted run is in `A` outside
@@ -65,22 +65,22 @@ theorem window_reads_le {L : Type*} [DecidableEq L] (A : Placed L) {ℓ : L → 
 
 open Classical in
 /-- **The counted multiplications placed in the windows of `I`**: in each, those outside `S` number at most the work
-the compute rate leaves beside the `x_w` that `S` does there, `Φ ω − x_w` at a price of at least 1 a counted
-multiplication, and those in `S` at most `o_w`. -/
+the compute rate leaves over the window's ticks beside the `x_w` that `S` does there, at a price of at least 1 a
+counted multiplication, and those in `S` at most `o_w`. -/
 theorem card_missed_le {L : Type*} [DecidableEq L] (A : Placed L) (n : ℕ) (X : Fin n → Finset L)
-    (θ : Finset (Fin A.N)) (hθ : ∀ a ∈ θ, A.isInput a = true) (t : ℕ) (κ : Cuts t) (ω : ℕ)
+    (θ : Finset (Fin A.N)) (hθ : ∀ a ∈ θ, A.isInput a = true) (t : ℕ) (κ : Cuts t)
     {𝒳 : Set (Finset L)} (compute : Finset L → ℕ) (π : Fin A.N → ℕ) (Φ x_w o_w : ℕ) (S : Finset (Fin A.N))
     (c : RegisteredCircuit) (M : Containment c.D (A.declaration (univ.biUnion X) t θ hθ).D) (T : Threading c)
     (I : Finset (Fin (n * κ.J)))
-    (hW : A.ComputeRate 𝒳 π compute) (hX : ∀ i, X i ∈ 𝒳)
-    (hω : ∀ j : Fin κ.J, κ.τ j.succ - κ.τ j.castSucc ≤ ω) (hΦ : ∀ i, compute (X i) ≤ Φ)
+    (hW : A.ComputeRate 𝒳 π compute) (hX : ∀ i, X i ∈ 𝒳) (hΦ : ∀ i, compute (X i) ≤ Φ)
     (hπ : ∀ g ∈ T.M, 1 ≤ π (M.emb g))
     (hx : ∀ (i : Fin n) (j : Fin κ.J), finProdFinEquiv (i, j) ∈ I →
       x_w ≤ A.work π (A.region (X i) (Set.Ico (κ.τ j.castSucc) (κ.τ j.succ)) ∩ S))
     (ho : ∀ (i : Fin n) (j : Fin κ.J), finProdFinEquiv (i, j) ∈ I →
       (T.M.filter fun g => M.emb g ∈ A.region (X i) (Set.Ico (κ.τ j.castSucc) (κ.τ j.succ)) ∩ S).card ≤ o_w) :
     (T.M.filter fun g => ∃ i j, finProdFinEquiv (i, j) ∈ I ∧
-      M.emb g ∈ A.region (X i) (Set.Ico (κ.τ j.castSucc) (κ.τ j.succ))).card ≤ I.card * (Φ * ω - x_w + o_w) := by
+      M.emb g ∈ A.region (X i) (Set.Ico (κ.τ j.castSucc) (κ.τ j.succ))).card ≤
+      ∑ u ∈ I, (Φ * (κ.τ (finProdFinEquiv.symm u).2.succ - κ.τ (finProdFinEquiv.symm u).2.castSucc) - x_w + o_w) := by
   have hsub : (T.M.filter fun g => ∃ i j, finProdFinEquiv (i, j) ∈ I ∧
       M.emb g ∈ A.region (X i) (Set.Ico (κ.τ j.castSucc) (κ.τ j.succ))) ⊆
       I.biUnion fun u => T.M.filter fun g => M.emb g ∈ A.region (X (finProdFinEquiv.symm u).1)
@@ -92,24 +92,22 @@ theorem card_missed_le {L : Type*} [DecidableEq L] (A : Placed L) (n : ℕ) (X :
     exact hgr
   have hwin : ∀ (i : Fin n) (j : Fin κ.J), finProdFinEquiv (i, j) ∈ I →
       (T.M.filter fun g => M.emb g ∈ A.region (X i) (Set.Ico (κ.τ j.castSucc) (κ.τ j.succ))).card ≤
-        Φ * ω - x_w + o_w := by
+        Φ * (κ.τ j.succ - κ.τ j.castSucc) - x_w + o_w := by
     intro i j hu
     have hout : (T.M.filter fun g => M.emb g ∈ A.region (X i) (Set.Ico (κ.τ j.castSucc) (κ.τ j.succ)) \ S).card ≤
-        Φ * ω - x_w := by
+        Φ * (κ.τ j.succ - κ.τ j.castSucc) - x_w := by
       have h1 : (T.M.filter fun g => M.emb g ∈ A.region (X i) (Set.Ico (κ.τ j.castSucc) (κ.τ j.succ)) \ S).card ≤
           A.work π (A.region (X i) (Set.Ico (κ.τ j.castSucc) (κ.τ j.succ)) \ S) := by
         convert card_filter_le_work A π _ T.M ⟨M.emb, M.emb_inj⟩ hπ
       exact h1.trans ((work_outside A hW (hX i) _ _ S (hx i j hu)).trans
-        (Nat.sub_le_sub_right (Nat.mul_le_mul (hΦ i) (hω j)) _))
+        (Nat.sub_le_sub_right (Nat.mul_le_mul_right _ (hΦ i)) _))
     refine (card_le_card fun g hg => ?_).trans ((card_union_le _ _).trans (Nat.add_le_add hout (ho i j hu)))
     obtain ⟨hgs, hgr⟩ := mem_filter.1 hg
     by_cases hS : M.emb g ∈ S
     · exact mem_union_right _ (mem_filter.2 ⟨hgs, mem_inter.2 ⟨hgr, hS⟩⟩)
     · exact mem_union_left _ (mem_filter.2 ⟨hgs, mem_sdiff.2 ⟨hgr, hS⟩⟩)
-  refine (card_le_card hsub).trans (card_biUnion_le.trans ?_)
-  calc _ ≤ ∑ _u ∈ I, (Φ * ω - x_w + o_w) := sum_le_sum fun u hu =>
-        hwin _ _ (by rwa [Prod.mk.eta, Equiv.apply_symm_apply])
-    _ = I.card * (Φ * ω - x_w + o_w) := by rw [sum_const, smul_eq_mul]
+  exact (card_le_card hsub).trans (card_biUnion_le.trans (sum_le_sum fun u hu =>
+    hwin _ _ (by rwa [Prod.mk.eta, Equiv.apply_symm_apply])))
 
 /-- **No computation is feasible, accounted for and prohibited.** At a frame `F`, amounts `x_s`, `x_b`, `x_w` and
 `y_b`, and a recipe `p` with `b_w ≥ 0`, `w_e > 0` and the bits a covered window can read of a reference training
@@ -123,7 +121,7 @@ theorem secure {L E : Type*} [Fintype E] [DecidableEq L] (F : Frame L E) (x_s x_
     M ∈ H F → M ∈ A F x_s x_b x_w y_b → M ∉ B F p Y := by
   rintro ⟨⟨hC, hW, -, -, hL⟩, hMem⟩ hA ⟨c, emb, T, start, hT, hlt⟩
   have hω : ∀ j : Fin F.cuts.J, F.cuts.τ j.succ - F.cuts.τ j.castSucc ≤ F.ω := fun j =>
-    le_sup (f := fun j : Fin F.cuts.J => F.cuts.τ j.succ - F.cuts.τ j.castSucc) (mem_univ j)
+    le_sup (f := F.len) (mem_univ j)
   have hm : ∀ i, F.hw.M (F.server i) ≤ F.m := fun i => le_sup (f := fun i => F.hw.M (F.server i)) (mem_univ i)
   have hb : ∀ i, linkCapacity F.hw.ends F.hw.β (F.server i) ≤ F.b := fun i =>
     le_sup (f := fun i => linkCapacity F.hw.ends F.hw.β (F.server i)) (mem_univ i)
@@ -151,9 +149,10 @@ theorem secure {L E : Type*} [Fintype E] [DecidableEq L] (F : Frame L E) (x_s x_
   have hk := fitRate_of_reads_but M.run.A F.hw.ℓ F.hw.ends F.hw.β M.usage.link F.n F.server M.registered
     M.registered_input F.t F.cuts ((F.unaccounted x_s x_b y_b p : ℕ) : ℝ) c emb T start F.missed p.Nstar p.b_w p.w_e
     F.disjoint hC hL hbw hwe.le (Nat.cast_nonneg _) hS hgap fun Q hQ => ⟨hT.reach Q hQ, hT.fits Q hQ⟩
-  have hcount := card_missed_le M.run.A F.n F.server M.registered M.registered_input F.t F.cuts F.ω F.hw.compute
-    M.usage.π F.Φ x_w p.o_w M.declared c emb T F.missed hW F.unit hω hΦ hT.load (fun i j hu => (hA i j).2 hu)
-    hT.shared_work
+  have hcount : _ ≤ ∑ u ∈ F.missed, (F.Φ * F.len (finProdFinEquiv.symm u).2 - x_w + p.o_w) :=
+    card_missed_le M.run.A F.n F.server M.registered M.registered_input F.t F.cuts F.hw.compute
+      M.usage.π F.Φ x_w p.o_w M.declared c emb T F.missed hW F.unit hΦ hT.load (fun i j hu => (hA i j).2 hu)
+      hT.shared_work
   have hc : 0 < 4 * p.w_e * (p.Nstar * p.b_w - ((F.unaccounted x_s x_b y_b p : ℕ) : ℝ)) :=
     mul_pos (mul_pos (by norm_num) hwe) (sub_pos.2 hgap)
   have hreuse : ((F.n * F.cuts.J : ℕ) : ℝ) * T.reuse * p.Nstar * ((F.unaccounted x_s x_b y_b p : ℕ) : ℝ) ^ 2 ≤
@@ -184,31 +183,32 @@ theorem delivered_le_capacity {L E : Type*} [Fintype E] [DecidableEq L] (F : Fra
   simp only [inter_univ]
   refine (le_of_eq (sum_congr rfl fun τ _ => ?_)).trans ((delivered_le M.run.A hM.1.2.2.2.2 (F.server i) _ _).trans
     (Nat.mul_le_mul (le_sup (f := fun i => linkCapacity F.hw.ends F.hw.β (F.server i)) (mem_univ i))
-      (le_sup (f := fun j : Fin F.cuts.J => F.cuts.τ j.succ - F.cuts.τ j.castSucc) (mem_univ j))))
+      (le_sup (f := F.len) (mem_univ j))))
   congr
 
 /-- **Work alone.** At a frame whose every window the memory and bandwidth audits miss, a feasible computation in
 `A` holds no reference training algorithm of more than `Y` counted multiplications, for every `Y` at least
-`n J (Φ ω − x_w + o_w)`: what the compute rate leaves beside the `x_w` work the declared circuit does in each window.
+the sum over the windows of `Φ len − x_w + o_w`: what the compute rate leaves over each window's ticks beside the
+`x_w` work the declared circuit does in it.
 No premise on the recipe's other parameters. -/
 theorem secure_work {L E : Type*} [Fintype E] [DecidableEq L] (F : Frame L E) (hF : F.missed = univ)
     (x_s x_b x_w y_b : ℕ) (p : Recipe) (Y : ℝ)
-    (hY : ((F.n * F.cuts.J * (F.Φ * F.ω - x_w + p.o_w) : ℕ) : ℝ) ≤ Y) (M : Computation L E) :
+    (hY : ((∑ u : Fin (F.n * F.cuts.J), (F.Φ * F.len (finProdFinEquiv.symm u).2 - x_w + p.o_w) : ℕ) : ℝ) ≤ Y)
+    (M : Computation L E) :
     M ∈ H F → M ∈ A F x_s x_b x_w y_b → M ∉ B F p Y := by
   classical
   rintro ⟨⟨hC, hW, -, -, hL⟩, -⟩ hA ⟨c, emb, T, start, hT, hlt⟩
-  have hω : ∀ j : Fin F.cuts.J, F.cuts.τ j.succ - F.cuts.τ j.castSucc ≤ F.ω := fun j =>
-    le_sup (f := fun j : Fin F.cuts.J => F.cuts.τ j.succ - F.cuts.τ j.castSucc) (mem_univ j)
   have hΦ : ∀ i, F.hw.compute (F.server i) ≤ F.Φ := fun i =>
     le_sup (f := fun i => F.hw.compute (F.server i)) (mem_univ i)
   have hin : ∀ i j, finProdFinEquiv (i, j) ∈ F.missed := fun i j => hF ▸ mem_univ _
   obtain ⟨P, hP⟩ := ResourceAccounting.SecurityProofs.Actual.ServerBlocksAt M.run.A F.hw.ℓ (fun _ => M.run.A.N) F.hw.ends
     F.hw.β M.usage.link F.n F.server M.registered M.registered_input F.t F.cuts ∅ F.disjoint hC
     (computeRate_N M.run.A _) hL
-  have hcount := card_missed_le M.run.A F.n F.server M.registered M.registered_input F.t F.cuts F.ω F.hw.compute
-    M.usage.π F.Φ x_w p.o_w M.declared c emb T F.missed hW F.unit hω hΦ hT.load (fun i j hu => (hA i j).2 hu)
-    hT.shared_work
-  have hall : T.M.card ≤ F.missed.card * (F.Φ * F.ω - x_w + p.o_w) := by
+  have hcount : _ ≤ ∑ u ∈ F.missed, (F.Φ * F.len (finProdFinEquiv.symm u).2 - x_w + p.o_w) :=
+    card_missed_le M.run.A F.n F.server M.registered M.registered_input F.t F.cuts F.hw.compute
+      M.usage.π F.Φ x_w p.o_w M.declared c emb T F.missed hW F.unit hΦ hT.load (fun i j hu => (hA i j).2 hu)
+      hT.shared_work
+  have hall : T.M.card ≤ ∑ u ∈ F.missed, (F.Φ * F.len (finProdFinEquiv.symm u).2 - x_w + p.o_w) := by
     refine (card_le_card fun g hg => mem_filter.2 ⟨hg, ?_⟩).trans hcount
     have hne : (pull emb P).unit g ≠ none := fun h =>
       absurd (((pull emb P).input_iff g).1 h) (by simp [(mem_filter.1 (T.M_computed hg)).2])
@@ -216,7 +216,7 @@ theorem secure_work {L E : Type*} [Fintype E] [DecidableEq L] (F : Frame L E) (h
     obtain ⟨⟨i, j⟩, rfl⟩ := finProdFinEquiv.surjective u
     have h2 := mem_pull_gates.1 ((Partition.mem_gates _).2 hu)
     exact ⟨i, j, hin i j, (Iff.of_eq (congrArg (fun s => emb.emb g ∈ s) (hP i j).1)).1 h2⟩
-  rw [hF, card_univ, Fintype.card_fin] at hall
+  rw [hF] at hall
   exact absurd ((Nat.cast_le.2 hall).trans hY) (not_le.2 hlt)
 
 section Runs

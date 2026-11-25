@@ -248,6 +248,11 @@ theorem ω_eq : (frame c m β I).ω = 1 := by
   change (frame 0 0 0 ∅).ω = 1
   decide
 
+theorem len_eq (j : Fin (frame c m β I).cuts.J) : (frame c m β I).len j = 1 := by
+  have hj : j = (0 : Fin 1) := Subsingleton.elim _ _
+  subst hj
+  rfl
+
 theorem m_eq : (frame c m β I).m = m :=
   (single_m _ _ _ 1 cuts I).trans (by simp [Hardware.ofLeaves])
 
@@ -270,8 +275,8 @@ theorem params : 0 ≤ recipe.b_w ∧ 0 < recipe.w_e ∧
   · rw [unaccounted_eq]
     norm_num
   · unfold Frame.bound
-    rw [unaccounted_eq, Φ_eq, ω_eq]
-    simp
+    rw [unaccounted_eq, Φ_eq]
+    simp [len_eq]
 
 /-- The reference training algorithm: the weight `0`, the activation `2` and their counted multiplication `3`. -/
 abbrev ref : Circuit where
@@ -455,7 +460,7 @@ theorem work_needed :
   · rw [hu]
     norm_num
   · unfold Frame.bound
-    rw [hu, Φ_eq, ω_eq]
+    rw [hu, Φ_eq]
     simp
 
 /-- The circuit of a run out of order: three computed gates that read nothing, and gate `3` reading `0` and `2`. -/

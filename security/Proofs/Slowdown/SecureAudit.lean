@@ -65,6 +65,14 @@ theorem whole_ω {L E : Type*} (hw : Hardware L E) (X : Finset L) (hX : X ∈ hw
   change (univ : Finset (Fin 1)).sup (fun j => j.succ.val * t - j.castSucc.val * t) = t
   simp
 
+/-- The one window of `wholeCuts t` is `t` ticks long. -/
+theorem whole_len {L E : Type*} (hw : Hardware L E) (X : Finset L) (hX : X ∈ hw.units) (t : ℕ)
+    (missed : Finset (Fin (1 * (wholeCuts t).J))) (j : Fin (wholeCuts t).J) :
+    (Frame.single hw X hX t (wholeCuts t) missed).len j = t := by
+  change (wholeCuts t).τ j.succ - (wholeCuts t).τ j.castSucc = t
+  rw [wholeCuts_succ, wholeCuts_castSucc]
+  omega
+
 section Audit
 
 variable {L : Type*} {ι α E ΩW ΩQ ΩS : Type} [Fintype α] [DecidableEq α] {d : Device ι} (r : Run d α ΩW ΩQ ΩS)
@@ -117,7 +125,9 @@ theorem secure_compute (hwin : r.win .compute = ⟨0, t⟩) (hbm : E × L) (side
   have hx : ⌈W - pRead * r.pouwRead ω⌉₊ ≤ r.work pc ω := Nat.ceil_le.2 (by linarith)
   refine secure_work (deviceFrame hw chip mem hX t) rfl 0 0 ⌈W - pRead * r.pouwRead ω⌉₊ 0 p _ ?_ _ (hH ω)
     (fun i j => ⟨fun h => absurd (mem_univ _) h, fun _ => hx.trans ?_⟩) hω.2
-  · rw [single_Φ, whole_ω]
+  · rw [single_Φ]
+    simp only [whole_len]
+    rw [sum_const, card_univ, Fintype.card_fin]
     exact le_of_eq (by simp [wholeCuts])
   · have hwork := covers_work (ρ ω) chip mem (cls ω) (acct ω) (usage ω).link hbm side
       (fun g hg => hπ ω g (by convert hg)) ⟨0, t⟩ (r.acct .compute)
