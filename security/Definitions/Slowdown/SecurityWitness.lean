@@ -78,7 +78,16 @@ abbrev served : Computation Bool Unit := ⟨actual, usage, ∅, fun _ h => absur
 abbrev trained : Computation Bool Unit := ⟨actual, usage, ∅, fun _ h => absurd h (notMem_empty _), ∅⟩
 
 /-- The recipe: one weight reaches the target, a window reads two bits for each weight it uses and one for each
-thread it enters, a thread uses a weight once, and nothing is shared with the declared circuit. -/
-noncomputable abbrev recipe : Recipe := ⟨1, 2, 1, 1, 0, 0, 0⟩
+thread it enters, and a thread uses a weight once. -/
+noncomputable abbrev recipe : Recipe := ⟨1, 2, 1, 1⟩
+
+/-- The fit bound at the recipe. -/
+noncomputable abbrev fitted : Training := Training.fit recipe
+
+/-- The training bound with no premise and the count `0`, which does not hold. -/
+abbrev free : Training := ⟨fun {_} _ {_} _ _ _ => True, fun _ => True, fun _ _ => 0, fun _ => rfl⟩
+
+/-- Nothing is shared with the declared circuit. -/
+abbrev apart : Shared := ⟨0, 0, 0⟩
 
 end Slowdown.Security.Witness

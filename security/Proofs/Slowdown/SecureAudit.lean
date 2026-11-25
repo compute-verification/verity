@@ -37,11 +37,11 @@ server over the ticks `[0, t)`, one window (`wholeCuts`) or two (`cutAt`):
 * `secure_compute`: the device `chip ∪ mem` over one window that the memory and bandwidth audits miss.
   The probability that the compute audit accepts a run holding a reference training algorithm of more than
   `Φ t − ⌈W − pRead · read⌉ + o_w` counted multiplications is at most `ε`.
-* `secure_bandwidth`: the chip over one covered window, with no memory audit. The count is the fit
-  bound at `S' = (m + o_s) + (b t − ⌈Q⌉ + o_b)`.
+* `secure_bandwidth`: the chip over one covered window, with no memory audit. The count is the training bound's at
+  `S' = (m + o_s) + (b t − ⌈Q⌉ + o_b)`.
 * `secure_capacity`: the device cut at the end of the capacity audit's tick `c`; the window before the
-  cut is missed and charged the device's whole work, the window after it is covered. The count is the fit bound at
-  `S' = (m − ⌈S⌉ + o_s) + (b ω + o_b)` plus `Φ (c + 1) + o_w`.
+  cut is missed and charged the device's whole work, the window after it is covered. The count is the training
+  bound's at `S' = (m − ⌈S⌉ + o_s) + (b ω + o_b)` plus `Φ (c + 1) + o_w`.
 * `secure_device`: work, memory and a count of ingress in one bound, on that frame. The compute audit's window is
   the ticks before the cut and the capacity audit's the last of them, both charging one account, and a verdict
   `counted` bounds what the device's links deliver after the cut by `y`. The error is the two audits' together.
@@ -242,32 +242,32 @@ the joint audit's schedule is the one the run induces on the device `chip ∪ me
 channels `side`; the compute window is `[0, t)`; the pricing is the compute audit's price `pc` on each op class and
 nothing on a gate of none; and the compute audit has its per-run guarantee on the priced sum at certificate `W`, read
 price `pRead` and error `ε`. Then the probability that the compute audit accepts and the computation holds a reference
-training algorithm of more than `Φ t − ⌈W − pRead · read⌉ + o_w` counted multiplications that meets the recipe's
-premises is at most `ε`, with `Φ` the device's compute a tick and `read` the bits the compute account read from device
-memory on that run. -/
+training algorithm of more than `Φ t − ⌈W − pRead · read⌉ + o_w` counted multiplications that meets a sound
+training bound's premises is at most `ε`, with `Φ` the device's compute a tick and `read` the bits the compute
+account read from device memory on that run. -/
 theorem secure_compute (hwin : r.win .compute = ⟨0, t⟩) (hbm : E × L) (side : ι → E × L)
     (hsched : ∀ ω, r.schedule ω = (ρ ω).schedule chip mem (cls ω) (acct ω) (usage ω).link hbm side) (pc : Price)
     (hπ : ∀ ω g, (ρ ω).A.x g ∈ chip ∪ mem → (usage ω).π g = (cls ω g).elim 0 pc)
     (hH : ∀ ω, computation r ρ usage θ hθ acct .compute ω ∈ H hw) {pRead W ε : ℝ}
     (hsound : r.ComputeSoundPerRunPriced pc pRead W ε)
-    (p : Recipe) :
+    (tb : Training) (htb : tb.Holds) (sh : Shared) :
     Pouw.pr (fun ω => r.accepts .compute ω ∧
-      computation r ρ usage θ hθ acct .compute ω ∈ B (deviceFrame hw chip mem hX t) p
-        ((hw.compute (chip ∪ mem) * t - ⌈W - pRead * r.pouwRead ω⌉₊ + p.o_w : ℕ) : ℝ)) ≤ ε := by
+      computation r ρ usage θ hθ acct .compute ω ∈ B (deviceFrame hw chip mem hX t) tb sh
+        ((hw.compute (chip ∪ mem) * t - ⌈W - pRead * r.pouwRead ω⌉₊ + sh.o_w : ℕ) : ℝ)) ≤ ε := by
   have hε : 0 ≤ ε := (Pouw.pr_nonneg _).trans (r.pr_computePricedLt_le hsound)
   rcases isEmpty_or_nonempty ΩW with hΩ | hΩ
   · exact pr_le_of_isEmpty _ hε
-  have hY : ∀ ω, (deviceFrame hw chip mem hX t).BoundAtMost 0 0 ⌈W - pRead * r.pouwRead ω⌉₊ 0 p
-      ((hw.compute (chip ∪ mem) * t - ⌈W - pRead * r.pouwRead ω⌉₊ + p.o_w : ℕ) : ℝ) := fun ω => by
-    refine ⟨fun h => absurd rfl h, ((bound_of_missed _ rfl _ _ _ _ p).trans ?_).le⟩
+  have hY : ∀ ω, (deviceFrame hw chip mem hX t).BoundAtMost 0 0 ⌈W - pRead * r.pouwRead ω⌉₊ 0 tb sh
+      ((hw.compute (chip ∪ mem) * t - ⌈W - pRead * r.pouwRead ω⌉₊ + sh.o_w : ℕ) : ℝ) := fun ω => by
+    refine ⟨fun h => absurd rfl h, ((bound_of_missed _ rfl _ _ _ _ tb sh).trans ?_).le⟩
     rw [single_Φ]
     simp only [whole_len]
     rw [sum_const, card_univ, Fintype.card_fin]
     simp [wholeCuts]
   have h := RunSecure (Game.draw (ΩW × ΩQ × ΩS)) (computation r ρ usage θ hθ acct .compute)
-    (deviceFrame hw chip mem hX t) (fun _ => 0) (fun _ => 0) (fun ω => ⌈W - pRead * r.pouwRead ω⌉₊) (fun _ => 0) p
-    (fun ω => ((hw.compute (chip ∪ mem) * t - ⌈W - pRead * r.pouwRead ω⌉₊ + p.o_w : ℕ) : ℝ))
-    (fun _ => True) (fun _ => True) (fun _ => True) (r.accepts .compute) 0 0 0 (ENNReal.ofReal ε) hY hH
+    (deviceFrame hw chip mem hX t) (fun _ => 0) (fun _ => 0) (fun ω => ⌈W - pRead * r.pouwRead ω⌉₊) (fun _ => 0) tb
+    sh (fun ω => ((hw.compute (chip ∪ mem) * t - ⌈W - pRead * r.pouwRead ω⌉₊ + sh.o_w : ℕ) : ℝ))
+    (fun _ => True) (fun _ => True) (fun _ => True) (r.accepts .compute) 0 0 0 (ENNReal.ofReal ε) htb hY hH
     (fun i j h => absurd (mem_univ _) h) (fun i j h => absurd (mem_univ _) h) (fun i j h => absurd (mem_univ _) h)
     (fun i j _ => work_slot r ρ usage θ hθ acct chip mem cls hbm side (deviceFrame hw chip mem hX t) i j .compute
       rfl rfl hwin (deviceFrame_span hw chip mem hX t j) hsched pc hπ hsound)
@@ -329,30 +329,30 @@ variable {ι α ΩW ΩQ ΩS : Type} [Fintype α] [DecidableEq α] [Fintype ΩW] 
 is `[0, t)`, the joint audit's schedule at each coin is the one the run induces on the device with its chip at `chip`,
 the memory link `hbm` ends at a leaf of `chip` and its other end is outside `chip`, every run is feasible, and the
 bandwidth audit has its per-run guarantee at certificate `Q` and error `ε`. Then, with the declared circuit's gates
-those charged to the bandwidth account and `Y` at least the fit bound of the chip's frame at `x_b = ⌈Q⌉` and no other
-amount, the probability that the audit accepts a run holding a reference training algorithm of more than `Y` counted
-multiplications is at most `ε`. -/
+those charged to the bandwidth account, a training bound that holds, defined at what the chip's window can read, and `Y`
+at least the bound on training of the chip's frame at `x_b = ⌈Q⌉` and no other amount, the probability that the
+audit accepts a run holding a reference training algorithm of more than `Y` counted multiplications is at most
+`ε`. -/
 theorem secure_bandwidth (hwin : r.win .bandwidth = ⟨0, t⟩) (hbm : E × L) (side : ι → E × L)
     (hsched : ∀ ω, r.schedule ω = (ρ ω).schedule chip mem (cls ω) (acct ω) (usage ω).link hbm side)
     (hchip : hbm.2 ∈ chip)
     (hfar : ∀ y, hw.ends hbm.1 = (y, hbm.2) ∨ hw.ends hbm.1 = (hbm.2, y) → y ∉ chip)
     (hH : ∀ ω, computation r ρ usage θ hθ acct .bandwidth ω ∈ H hw) {Q ε : ℝ}
-    (hsound : r.BandwidthSoundPerRun Q ε) (p : Recipe) (Y : ℝ)
-    (hbw : 0 ≤ p.b_w) (hwe : 0 < p.w_e)
-    (hgap : ((chipFrame hw chip hX t).unaccounted 0 ⌈Q⌉₊
-      ((chipFrame hw chip hX t).b * (chipFrame hw chip hX t).ω) p : ℝ) < p.Nstar * p.b_w)
+    (hsound : r.BandwidthSoundPerRun Q ε) (tb : Training) (htb : tb.Holds) (sh : Shared) (Y : ℝ)
+    (hvalid : tb.Valid ((chipFrame hw chip hX t).unaccounted 0 ⌈Q⌉₊
+      ((chipFrame hw chip hX t).b * (chipFrame hw chip hX t).ω) sh : ℕ))
     (hY : (chipFrame hw chip hX t).bound 0 ⌈Q⌉₊ 0
-      ((chipFrame hw chip hX t).b * (chipFrame hw chip hX t).ω) p ≤ Y) :
+      ((chipFrame hw chip hX t).b * (chipFrame hw chip hX t).ω) tb sh ≤ Y) :
     Pouw.pr (fun ω => r.accepts .bandwidth ω ∧
-      computation r ρ usage θ hθ acct .bandwidth ω ∈ B (chipFrame hw chip hX t) p Y) ≤ ε := by
+      computation r ρ usage θ hθ acct .bandwidth ω ∈ B (chipFrame hw chip hX t) tb sh Y) ≤ ε := by
   have hε : 0 ≤ ε := (Pouw.pr_nonneg _).trans (r.pr_bandwidthLt_le hsound)
   rcases isEmpty_or_nonempty ΩQ with hΩ | hΩ
   · exact pr_le_of_isEmpty _ hε
   have h := RunSecure (Game.draw (ΩW × ΩQ × ΩS)) (computation r ρ usage θ hθ acct .bandwidth)
     (chipFrame hw chip hX t) (fun _ => 0) (fun _ => ⌈Q⌉₊) (fun _ => 0)
-    (fun _ => (chipFrame hw chip hX t).b * (chipFrame hw chip hX t).ω) p (fun _ => Y)
-    (fun _ => True) (r.accepts .bandwidth) (fun _ => True) (fun _ => True) 0 (ENNReal.ofReal ε) 0 0
-    (fun _ => ⟨fun _ => ⟨hbw, hwe, hgap⟩, hY⟩) hH
+    (fun _ => (chipFrame hw chip hX t).b * (chipFrame hw chip hX t).ω) tb sh (fun _ => Y)
+    (fun _ => True) (r.accepts .bandwidth) (fun _ => True) (fun _ => True) 0 (ENNReal.ofReal ε) 0 0 htb
+    (fun _ => ⟨fun _ => hvalid, hY⟩) hH
     (fun i j _ => sound_of_imp _ fun _ _ => Nat.zero_le _)
     (fun i j _ => delivered_slot r ρ usage θ hθ acct chip mem cls hbm side (chipFrame hw chip hX t) i j hw rfl hwin
       (wholeCuts_castSucc t j) (wholeCuts_succ t j) hsched hchip hfar hH hsound)
@@ -447,28 +447,29 @@ variable {ι α ΩW ΩQ ΩS : Type} [Fintype α] [DecidableEq α] [Fintype ΩW] 
 /-- **An accepted capacity audit's run is not prohibited, outside the audit's error.** The capacity audit's window is
 the one tick `c`, the joint audit's schedule at each coin is the one the run induces on the device `chip ∪ mem`, every
 run is feasible, and the capacity audit has its per-run guarantee at certificate `S` and error `ε`. Then, with the
-declared circuit's gates those charged to the capacity account and `Y` at least the fit bound of the device's frame
-cut at the end of tick `c`, at `x_s = ⌈S⌉` and no other amount, the probability that the audit accepts a run holding a
-reference training algorithm of more than `Y` counted multiplications is at most `ε`. The bound charges the ticks
-before the cut the device's whole work. -/
+declared circuit's gates those charged to the capacity account, a training bound that holds, defined at what the covered
+window can read, and `Y` at least the bound on training of the device's frame cut at the end of tick `c`, at
+`x_s = ⌈S⌉` and no other amount, the probability that the audit accepts a run holding a reference training
+algorithm of more than `Y` counted multiplications is at most `ε`. The bound charges the ticks before the cut the
+device's whole work. -/
 theorem secure_capacity (hwin : r.win .capacity = ⟨c, 1⟩) (hbm : E × L) (side : ι → E × L)
     (hsched : ∀ ω, r.schedule ω = (ρ ω).schedule chip mem (cls ω) (acct ω) (usage ω).link hbm side)
     (hH : ∀ ω, computation r ρ usage θ hθ acct .capacity ω ∈ H hw) {S ε : ℝ}
-    (hsound : r.CapacitySoundPerRun S ε) (p : Recipe) (Y : ℝ) (hbw : 0 ≤ p.b_w) (hwe : 0 < p.w_e)
-    (hgap : ((cutFrame hw chip mem hX c t hc).unaccounted ⌈S⌉₊ 0
-      ((cutFrame hw chip mem hX c t hc).b * (cutFrame hw chip mem hX c t hc).ω) p : ℝ) < p.Nstar * p.b_w)
+    (hsound : r.CapacitySoundPerRun S ε) (tb : Training) (htb : tb.Holds) (sh : Shared) (Y : ℝ)
+    (hvalid : tb.Valid ((cutFrame hw chip mem hX c t hc).unaccounted ⌈S⌉₊ 0
+      ((cutFrame hw chip mem hX c t hc).b * (cutFrame hw chip mem hX c t hc).ω) sh : ℕ))
     (hY : (cutFrame hw chip mem hX c t hc).bound ⌈S⌉₊ 0 0
-      ((cutFrame hw chip mem hX c t hc).b * (cutFrame hw chip mem hX c t hc).ω) p ≤ Y) :
+      ((cutFrame hw chip mem hX c t hc).b * (cutFrame hw chip mem hX c t hc).ω) tb sh ≤ Y) :
     Pouw.pr (fun ω => r.accepts .capacity ω ∧
-      computation r ρ usage θ hθ acct .capacity ω ∈ B (cutFrame hw chip mem hX c t hc) p Y) ≤ ε := by
+      computation r ρ usage θ hθ acct .capacity ω ∈ B (cutFrame hw chip mem hX c t hc) tb sh Y) ≤ ε := by
   have hε : 0 ≤ ε := (Pouw.pr_nonneg _).trans (r.pr_capacityLt_le hsound)
   rcases isEmpty_or_nonempty ΩS with hΩ | hΩ
   · exact pr_le_of_isEmpty _ hε
   have h := RunSecure (Game.draw (ΩW × ΩQ × ΩS)) (computation r ρ usage θ hθ acct .capacity)
     (cutFrame hw chip mem hX c t hc) (fun _ => ⌈S⌉₊) (fun _ => 0) (fun _ => 0)
-    (fun _ => (cutFrame hw chip mem hX c t hc).b * (cutFrame hw chip mem hX c t hc).ω) p (fun _ => Y)
-    (r.accepts .capacity) (fun _ => True) (fun _ => True) (fun _ => True) (ENNReal.ofReal ε) 0 0 0
-    (fun _ => ⟨fun _ => ⟨hbw, hwe, hgap⟩, hY⟩) hH
+    (fun _ => (cutFrame hw chip mem hX c t hc).b * (cutFrame hw chip mem hX c t hc).ω) tb sh (fun _ => Y)
+    (r.accepts .capacity) (fun _ => True) (fun _ => True) (fun _ => True) (ENNReal.ofReal ε) 0 0 0 htb
+    (fun _ => ⟨fun _ => hvalid, hY⟩) hH
     (fun i j hj => held_slot r ρ usage θ hθ acct chip mem cls hbm side (cutFrame hw chip mem hX c t hc) i j
       .capacity rfl rfl hwin (cutFrame_covered hw chip mem hX c t hc hj) hsched hsound)
     (fun i j _ => sound_of_imp _ fun _ _ => Nat.zero_le _)
@@ -514,8 +515,8 @@ theorem pous_slot [Fintype ι] {D K R : ℕ} (hP : Pous.P2.Assumptions.P2RingAud
 the cut, the capacity audit's the tick `c`, and both charge one account, whose gates are the declared circuit's; each
 has its per-run guarantee, at certificates `W` and `S` and errors `ε_W` and `ε_S`. `counted` is any verdict under
 which the device's links deliver at most `y` bits in the window after the cut. Then the probability that both audits
-accept, the count holds, and the run holds a reference training algorithm of more counted multiplications than the
-fit bound at `S' = (m − ⌈S⌉ + o_s) + (min (b ω) y + o_b)` after the cut plus
+accept, the count holds, and the run holds a reference training algorithm of more counted multiplications than a
+training bound's count at `S' = (m − ⌈S⌉ + o_s) + (min (b ω) y + o_b)` after the cut plus
 `Φ (c + 1) − ⌈W − pRead · read⌉ + o_w` before it, is at most `ε_W + ε_S`. With no count, `counted` is `True` and `y`
 the links' capacity `b ω` (`delivered_le_capacity`). -/
 theorem secure_device [Nonempty ΩS] (hwinW : r.win .compute = ⟨0, c + 1⟩) (hwinS : r.win .capacity = ⟨c, 1⟩)
@@ -527,18 +528,18 @@ theorem secure_device [Nonempty ΩS] (hwinW : r.win .compute = ⟨0, c + 1⟩) (
     (counted : ΩW × ΩQ × ΩS → Prop) (y : ℕ)
     (hy : ∀ ω i j, counted ω → finProdFinEquiv (i, j) ∉ (cutFrame hw chip mem hX c t hc).missed →
       (computation r ρ usage θ hθ acct .capacity ω).delivered (cutFrame hw chip mem hX c t hc) i j univ ≤ y)
-    (p : Recipe) (hbw : 0 ≤ p.b_w) (hwe : 0 < p.w_e)
-    (hgap : ((cutFrame hw chip mem hX c t hc).unaccounted ⌈S⌉₊ 0 y p : ℝ) < p.Nstar * p.b_w) :
+    (tb : Training) (htb : tb.Holds) (sh : Shared)
+    (hvalid : tb.Valid ((cutFrame hw chip mem hX c t hc).unaccounted ⌈S⌉₊ 0 y sh : ℕ)) :
     Pouw.pr (fun ω => r.accepts .compute ω ∧ r.accepts .capacity ω ∧ counted ω ∧
-      computation r ρ usage θ hθ acct .capacity ω ∈ B (cutFrame hw chip mem hX c t hc) p
-        ((cutFrame hw chip mem hX c t hc).bound ⌈S⌉₊ 0 ⌈W - pRead * r.pouwRead ω⌉₊ y p)) ≤ εW + εS := by
+      computation r ρ usage θ hθ acct .capacity ω ∈ B (cutFrame hw chip mem hX c t hc) tb sh
+        ((cutFrame hw chip mem hX c t hc).bound ⌈S⌉₊ 0 ⌈W - pRead * r.pouwRead ω⌉₊ y tb sh)) ≤ εW + εS := by
   have hεW : 0 ≤ εW := (Pouw.pr_nonneg _).trans (r.pr_computePricedLt_le hW)
   have hεS : 0 ≤ εS := (Pouw.pr_nonneg _).trans (r.pr_capacityLt_le hS)
   have h := RunSecure (Game.draw (ΩW × ΩQ × ΩS)) (computation r ρ usage θ hθ acct .capacity)
     (cutFrame hw chip mem hX c t hc) (fun _ => ⌈S⌉₊) (fun _ => 0) (fun ω => ⌈W - pRead * r.pouwRead ω⌉₊)
-    (fun _ => y) p (fun ω => (cutFrame hw chip mem hX c t hc).bound ⌈S⌉₊ 0 ⌈W - pRead * r.pouwRead ω⌉₊ y p)
+    (fun _ => y) tb sh (fun ω => (cutFrame hw chip mem hX c t hc).bound ⌈S⌉₊ 0 ⌈W - pRead * r.pouwRead ω⌉₊ y tb sh)
     (r.accepts .capacity) (fun _ => True) counted (r.accepts .compute) (ENNReal.ofReal εS) 0 0 (ENNReal.ofReal εW)
-    (fun _ => ⟨fun _ => ⟨hbw, hwe, hgap⟩, le_rfl⟩) hH
+    htb (fun _ => ⟨fun _ => hvalid, le_rfl⟩) hH
     (fun i j hj => held_slot r ρ usage θ hθ acct chip mem cls hbm side (cutFrame hw chip mem hX c t hc) i j
       .capacity rfl rfl hwinS (cutFrame_covered hw chip mem hX c t hc hj) hsched hS)
     (fun i j _ => sound_of_imp _ fun _ _ => Nat.zero_le _)

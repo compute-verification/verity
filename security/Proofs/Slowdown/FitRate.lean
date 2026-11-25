@@ -13,9 +13,6 @@ of `c`'s novel gates, the windows pulled into `c` (`pull`) read at most that (`f
 most `R + r ω`, and `FitBound` gives the count over the `n J` windows. Its compute-rate hypothesis holds at `Φ = A.N`
 (`computeRate_N`), and the count does not read `Φ`. Windows of at least `ω₀` ticks number at most `t / ω₀`
 (`cuts_mul_le`), which gives the rate.
-
-`fitRate_of_reads_but` is the count at any bound on the reads of the windows outside a set `I`, with nothing asked of
-the windows in `I`: their counted multiplications are added to the bound (`Fit.fitBoundSlots_but`).
 -/
 
 @[expose] public section
@@ -72,63 +69,6 @@ theorem cuts_mul_le {t : ℕ} (κ : Cuts t) {ω₀ : ℕ} (h : ∀ j : Fin κ.J,
       omega
   have h5 : κ.τ ⟨κ.J, Nat.lt_succ_of_le le_rfl⟩ = t := κ.last
   exact (key κ.J le_rfl).trans h5.le
-
-open Classical in
-/-- **The fit bound from the windows' reads, with windows left out**: `FitRate`'s count when a bound `S ≥ 0` on a
-window's reads in the image of `c`'s novel gates, whatever bounds them, and the window half of `Fits`, hold at the
-windows outside `I` only, and each thread started outside `I` that works in its start window uses at least `Nstar`
-weights outside `I`'s windows. The bound counts the windows outside `I`, and the counted multiplications placed in
-`I`'s windows are added to it (`Fit.fitBoundSlots_but`). -/
-theorem fitRate_of_reads_but {L E : Type*} [Fintype E] [DecidableEq L] (A : Placed L) (ℓ : L → L → ℕ)
-    (ends : E → L × L) (β : E → ℕ) (link : Fin A.N → Fin A.N → E) (n : ℕ) (X : Fin n → Finset L)
-    (θ : Finset (Fin A.N)) (hθ : ∀ a ∈ θ, A.isInput a = true) (t : ℕ) (κ : Cuts t) (S : ℝ)
-    (c : RegisteredCircuit) (M : Containment c.D (A.declaration (univ.biUnion X) t θ hθ).D) (T : Threading c)
-    (start : Fin T.m → Fin (n * κ.J)) (I : Finset (Fin (n * κ.J))) (Nstar : ℕ) (b_w w_e : ℝ)
-    (hX : ∀ i j, i ≠ j → Disjoint (X i) (X j)) (hC : A.Causal ℓ) (hL : A.Links ends β link)
-    (hbw : 0 ≤ b_w) (hwe : 0 ≤ w_e) (hS0 : 0 ≤ S)
-    (hS : ∀ (i : Fin n) (j : Fin κ.J), finProdFinEquiv (i, j) ∉ I →
-      (readsIn (A.declaration (univ.biUnion X) t θ hθ)
-        (A.region (X i) (Set.Ico (κ.τ j.castSucc) (κ.τ j.succ))) ((c.θᶜ).map ⟨M.emb, M.emb_inj⟩) : ℝ) ≤ S)
-    (hgap : S < Nstar * b_w)
-    (hRF : ∀ Q : Partition c.D (n * κ.J), (∀ (i : Fin n) (j : Fin κ.J) (g : Fin c.D.N),
-        g ∈ Q.gates (finProdFinEquiv (i, j)) ↔ M.emb g ∈ A.region (X i) (Set.Ico (κ.τ j.castSucc) (κ.τ j.succ))) →
-      (∀ u, start u ∉ I → (T.threadMults (Q.gates (start u)) u).Nonempty →
-        Nstar ≤ (T.threadWeights (Fit.outside Q I) u).card) ∧
-      ∀ j ∉ I, b_w * (T.weightsUsed (Q.gates j)).card + w_e * (T.entered Q start j).card ≤
-        freshInput c (Q.gates j)) :
-    4 * w_e * (Nstar * b_w - S) * T.M.card ≤ (n * κ.J - I.card : ℕ) * T.reuse * Nstar * S ^ 2 +
-      4 * w_e * (Nstar * b_w - S) * (T.M.filter fun g => ∃ i j, finProdFinEquiv (i, j) ∈ I ∧
-        M.emb g ∈ A.region (X i) (Set.Ico (κ.τ j.castSucc) (κ.τ j.succ))).card := by
-  obtain ⟨P, hP⟩ := ResourceAccounting.SecurityProofs.Actual.ServerBlocksAt A ℓ (fun _ => A.N) ends β link n X θ hθ t κ
-    ((c.θᶜ).map ⟨M.emb, M.emb_inj⟩) hX hC (computeRate_N A _) hL
-  have hQ : ∀ (i : Fin n) (j : Fin κ.J) (g : Fin c.D.N), g ∈ (pull M P).gates (finProdFinEquiv (i, j)) ↔
-      M.emb g ∈ A.region (X i) (Set.Ico (κ.τ j.castSucc) (κ.τ j.succ)) := fun i j g =>
-    mem_pull_gates.trans (Iff.of_eq (congrArg (fun s => M.emb g ∈ s) (hP i j).1))
-  have hread : ∀ u ∉ I, (freshInput c ((pull M P).gates u) : ℝ) ≤ S := by
-    intro u hu
-    obtain ⟨⟨i, j⟩, rfl⟩ := finProdFinEquiv.surjective u
-    have h1 := freshInput_pull_le_readsIn_compl M P (finProdFinEquiv (i, j))
-    rw [(hP i j).1] at h1
-    exact (Nat.cast_le.2 h1).trans (hS i j hu)
-  obtain ⟨hR, hF⟩ := hRF _ hQ
-  have hk := Fit.fitBoundSlots_but T (Fit.idSlots T) (pull M P) I start Nstar S b_w w_e hbw hwe hgap hS0 hread
-    (fun u hu hne => by
-      have h1 := hR u hu (hne.mono fun g hg => ((Fit.mem_keep_threadMults T _ _ u g).1 hg).1)
-      have h2 := Fit.card_threadSlots (Fit.keepSlots (Fit.idSlots T) (Fit.outside (pull M P) I))
-        (Fit.idSlots_injOn T) univ u
-      rw [Fit.keep_threadWeights_univ] at h2
-      exact h1.trans h2.ge)
-    (fun j hj => by
-      have h2 := Fit.card_slotsUsed (Fit.idSlots T) (Fit.idSlots_injOn T) ((pull M P).gates j)
-      rw [h2]
-      exact hF j hj)
-  have hout : (T.M.filter fun g => ∃ j ∈ I, g ∈ (pull M P).gates j) = T.M.filter fun g => ∃ i j,
-      finProdFinEquiv (i, j) ∈ I ∧ M.emb g ∈ A.region (X i) (Set.Ico (κ.τ j.castSucc) (κ.τ j.succ)) := by
-    refine filter_congr fun g _ => ⟨fun ⟨u, hu, hg⟩ => ?_, fun ⟨i, j, hu, hg⟩ => ⟨_, hu, (hQ i j g).2 hg⟩⟩
-    obtain ⟨⟨i, j⟩, rfl⟩ := finProdFinEquiv.surjective u
-    exact ⟨i, j, hu, (hQ i j g).1 hg⟩
-  rw [hout] at hk
-  exact_mod_cast hk
 
 theorem FitRate : Guarantees.FitRate := by
   intro L E _ _ A ℓ ends β link n X θ hθ t κ ω R r c M T start Nstar b_w w_e hX hC hL hω hr hR hgap hReach hFits

@@ -22,12 +22,17 @@ prohibited. Each set is a predicate on a computation `M` alone, at public parame
   least `x_s` bits of the declared circuit's gates at the cut that opens it, and during the window the links deliver
   to it at least `x_b` bits of them and at most `y_b` bits in all; at each window they miss, the declared circuit's
   gates do at least `x_w` work.
-* **`B F p Y`**, the prohibited computations: those holding a reference training algorithm of more than `Y` counted
-  multiplications that meets the recipe `p`'s premises (`Trains`).
+* **`B F tb sh Y`**, the prohibited computations: those holding a reference training algorithm of more than `Y`
+  counted multiplications that meets the premises of the training bound `tb` (`Trains`) and shares at most `sh` with
+  the declared circuit.
+* **A training bound** (`Training`): premises on a reference training algorithm, and the count they give for windows
+  that each read at most `S` bits of it. It is the one place a route to a bound on training enters: the fit bound is
+  `Training.fit` at a recipe, and another route is another value, proved to hold (`Training.Holds`) once.
 
-`Slowdown.Guarantees.Secure` is the emptiness, at `Y` the fit bound (`Frame.bound`) on what the limits less the
-amounts leave (`Frame.unaccounted`). `Slowdown.Guarantees.RunSecure` is the statement over a run's coins: the
-verifier accepts a run whose computation is prohibited with probability at most the audits' errors together.
+`Slowdown.Guarantees.Secure` is the emptiness, at any training bound that holds and `Y` its count (`Frame.bound`) on
+what the limits less the amounts leave (`Frame.unaccounted`). `Slowdown.Guarantees.RunSecure` is the statement over a
+run's coins: the verifier accepts a run whose computation is prohibited with probability at most the audits' errors
+together.
 -/
 
 @[expose] public section
@@ -183,18 +188,68 @@ def A [DecidableEq L] (F : Frame L E) (x_s x_b x_w y_b : ℕ) : Set (Computation
       M ∈ HeldAtLeast F i j x_s ∧ M ∈ DeliveredAtLeast F i j x_b ∧ M ∈ DeliveredAtMost F i j y_b) ∧
     (finProdFinEquiv (i, j) ∈ F.missed → M ∈ WorkAtLeast F i j x_w)}
 
-/-- **A recipe**: the parameters of the premises on a reference training algorithm. `Nstar` is the fewest weights that
-reach the target loss, `b_w` the bits a window reads for each weight it uses, `w_e` the bits it reads for each thread it
-works on but didn't start, `reuse` the most times a thread uses one weight, and `o_s`, `o_b` and `o_w` the most the
-algorithm shares with the declared circuit in one window: bits carried, bits read and counted multiplications. -/
+/-- **What a reference training algorithm shares with the declared circuit** in one window, at most: `o_s` bits
+carried, `o_b` bits read and `o_w` counted multiplications. All three are zero when no gate is both the declared
+circuit's and the algorithm's. -/
+structure Shared where
+  o_s : ℕ
+  o_b : ℕ
+  o_w : ℕ
+
+/-- **A training bound**: premises on a reference training algorithm and the count they give. The algorithm is a
+circuit `c` threaded by `T` and divided into `k` windows by a partition, each thread `u` started by the window
+`start u`, with a set `I` of windows left out. `Prem` is the premises, which read nothing of the hardware or the
+audits; `bound k S` is the most counted multiplications `k` windows hold when each reads at most `S` unregistered
+input bits; and `Valid S` is the `S` at which the bound is defined. `Secure` is stated at any training bound that
+holds (`Training.Holds`), so a route to a bound on training is one value of this type with that proof. -/
+structure Training where
+  Prem : ∀ {c : RegisteredCircuit} (T : Threading c) {k : ℕ}, Partition c.D k → Finset (Fin k) →
+    (Fin T.m → Fin k) → Prop
+  Valid : ℝ → Prop
+  bound : ℕ → ℝ → ℝ
+  bound_zero : ∀ S, bound 0 S = 0
+
+open Classical in
+/-- **The training bound holds**: for every circuit `c` threaded by `T`, every division `Q` of it into `k`
+windows and every set `I` of windows left out, where the premises hold and each window outside `I` reads at most `S`
+unregistered input bits, at an `S` the bound is defined at, the counted multiplications outside `I`'s windows number
+at most `bound (k − |I|) S`. It is a statement about circuits alone. -/
+def Training.Holds (tb : Training) : Prop :=
+  ∀ {c : RegisteredCircuit} (T : Threading c) {k : ℕ} (Q : Partition c.D k) (I : Finset (Fin k))
+    (start : Fin T.m → Fin k) (S : ℝ), tb.Valid S → tb.Prem T Q I start →
+    (∀ j ∉ I, (freshInput c (Q.gates j) : ℝ) ≤ S) →
+    ((T.M.filter fun g => ∀ j ∈ I, g ∉ Q.gates j).card : ℝ) ≤ tb.bound (k - I.card) S
+
+/-- **A recipe**: the parameters of the fit bound's premises. `Nstar` is the fewest weights that reach the target
+loss, `b_w` the bits a window reads for each weight it uses, `w_e` the bits it reads for each thread it works on but
+didn't start, and `reuse` the most times a thread uses one weight. -/
 structure Recipe where
   Nstar : ℕ
   b_w : ℝ
   w_e : ℝ
   reuse : ℕ
-  o_s : ℕ
-  o_b : ℕ
-  o_w : ℕ
+
+open Classical in
+/-- **The fit bound**, a training bound at the recipe `p`. Its premises:
+
+* a thread uses one weight at most `p.reuse` times;
+* F3, the loss premise (`Assumptions.Reach` counted outside `I`): each thread started in a window outside `I` that
+  works there uses at least `p.Nstar` distinct weights outside `I`'s windows;
+* F1 and F4 (`Assumptions.Fits` at the windows outside `I`): each window outside `I` reads at least `p.b_w`
+  unregistered input bits for each weight it uses and `p.w_e` for each thread it works on but didn't start.
+
+The second and third are empirical premises about training, with `Assumptions.Reach`'s and `Assumptions.Fits`'s
+failure cases. The count is `reuse · N* S² / (4 w_e (N* b_w − S))` a window, defined where `b_w ≥ 0`, `w_e > 0` and
+`0 ≤ S < N* b_w`. -/
+noncomputable abbrev Training.fit (p : Recipe) : Training where
+  Prem := fun {c} T {_} Q I start => T.reuse ≤ p.reuse ∧
+    (∀ u, start u ∉ I → (T.threadMults (Q.gates (start u)) u).Nonempty →
+      p.Nstar ≤ (T.threadWeights (univ.filter fun g => ∀ j ∈ I, g ∉ Q.gates j) u).card) ∧
+    ∀ j ∉ I, p.b_w * (T.weightsUsed (Q.gates j)).card + p.w_e * (T.entered Q start j).card ≤
+      freshInput c (Q.gates j)
+  Valid S := 0 ≤ p.b_w ∧ 0 < p.w_e ∧ 0 ≤ S ∧ S < p.Nstar * p.b_w
+  bound k S := k * p.reuse * p.Nstar * S ^ 2 / (4 * p.w_e * (p.Nstar * p.b_w - S))
+  bound_zero S := by simp
 
 section Trains
 
@@ -206,43 +261,32 @@ def Divides {c : RegisteredCircuit} (emb : Containment c.D (M.circuit F).D)
   ∀ i j g, g ∈ Q.gates (finProdFinEquiv (i, j)) ↔ emb.emb g ∈ M.window F i j
 
 open Classical in
-/-- **The reference training algorithm `c` trains inside `M`** at the recipe `p`: `c`, threaded by `T`, is contained
-(`emb`) in what the developer's servers did, each thread `u` started by the window `start u`, and
+/-- **The reference training algorithm `c` trains inside `M`** at the training bound `tb`, sharing at most `sh` with
+the declared circuit: `c`, threaded by `T`, is contained (`emb`) in what the developer's servers did, each thread `u`
+started by the window `start u`, and
 
-* `reuse`: a thread uses one weight at most `p.reuse` times;
 * `load`: each counted multiplication uses at least one unit of its location's compute;
-* `reach` (F3, the loss premise, `Assumptions.Reach` counted in the covered windows): each thread started in a covered
-  window that works there uses at least `p.Nstar` distinct weights inside the covered windows;
-* `fits` (F1 and F4, `Assumptions.Fits` at the covered windows): each covered window reads at least `p.b_w`
-  unregistered input bits for each weight it uses and `p.w_e` for each thread it works on but didn't start;
+* `prem`: the training bound's premises hold of `c` divided by the frame's windows, with the missed windows left out;
 * `shared_carried`, `shared_read`, `shared_work`: of `c`'s novel gates, those outside its registered inputs, the
-  declared circuit's gates hold at most `p.o_s` bits carried into a covered window and `p.o_b` bits it reads from
-  outside its server, and at most `p.o_w` of `c`'s counted multiplications in a missed window are the declared
-  circuit's gates.
-
-`reach` and `fits` are empirical premises about training, with `Assumptions.Reach`'s and `Assumptions.Fits`'s failure
-cases. The three `shared` premises are zero when no gate is both the declared circuit's and `c`'s. -/
-structure Trains (p : Recipe) (c : RegisteredCircuit) (emb : Containment c.D (M.circuit F).D) (T : Threading c)
-    (start : Fin T.m → Fin (F.n * F.cuts.J)) : Prop where
-  reuse : T.reuse ≤ p.reuse
+  declared circuit's gates hold at most `sh.o_s` bits carried into a covered window and `sh.o_b` bits it reads from
+  outside its server, and at most `sh.o_w` of `c`'s counted multiplications in a missed window are the declared
+  circuit's gates. -/
+structure Trains (tb : Training) (sh : Shared) (c : RegisteredCircuit) (emb : Containment c.D (M.circuit F).D)
+    (T : Threading c) (start : Fin T.m → Fin (F.n * F.cuts.J)) : Prop where
   load : ∀ g ∈ T.M, 1 ≤ M.usage.π (emb.emb g)
-  reach : ∀ Q : Partition c.D (F.n * F.cuts.J), Divides F M emb Q → ∀ u, start u ∉ F.missed →
-    (T.threadMults (Q.gates (start u)) u).Nonempty →
-      p.Nstar ≤ (T.threadWeights (univ.filter fun g => ∀ j ∈ F.missed, g ∉ Q.gates j) u).card
-  fits : ∀ Q : Partition c.D (F.n * F.cuts.J), Divides F M emb Q → ∀ j ∉ F.missed,
-    p.b_w * (T.weightsUsed (Q.gates j)).card + p.w_e * (T.entered Q start j).card ≤ freshInput c (Q.gates j)
+  prem : ∀ Q : Partition c.D (F.n * F.cuts.J), Divides F M emb Q → tb.Prem T Q F.missed start
   shared_carried : ∀ i j, finProdFinEquiv (i, j) ∉ F.missed →
-    M.carries F i j (M.declared ∩ (c.θᶜ).map ⟨emb.emb, emb.emb_inj⟩) ≤ p.o_s
+    M.carries F i j (M.declared ∩ (c.θᶜ).map ⟨emb.emb, emb.emb_inj⟩) ≤ sh.o_s
   shared_read : ∀ i j, finProdFinEquiv (i, j) ∉ F.missed →
-    M.reads F i j (M.declared ∩ (c.θᶜ).map ⟨emb.emb, emb.emb_inj⟩) ≤ p.o_b
+    M.reads F i j (M.declared ∩ (c.θᶜ).map ⟨emb.emb, emb.emb_inj⟩) ≤ sh.o_b
   shared_work : ∀ i j, finProdFinEquiv (i, j) ∈ F.missed →
-    (T.M.filter fun g => emb.emb g ∈ M.window F i j ∩ M.declared).card ≤ p.o_w
+    (T.M.filter fun g => emb.emb g ∈ M.window F i j ∩ M.declared).card ≤ sh.o_w
 
-/-- **`ℬ`, the prohibited computations** at the recipe `p` and the count `Y`: those in which some reference training
-algorithm trains (`Trains`) with more than `Y` counted multiplications. -/
-def B (p : Recipe) (Y : ℝ) : Set (Computation L E) :=
+/-- **`ℬ`, the prohibited computations** at the training bound `tb`, the shared amounts `sh` and the count `Y`:
+those in which some reference training algorithm trains (`Trains`) with more than `Y` counted multiplications. -/
+def B (tb : Training) (sh : Shared) (Y : ℝ) : Set (Computation L E) :=
   {M | ∃ (c : RegisteredCircuit) (emb : Containment c.D (M.circuit F).D) (T : Threading c)
-    (start : Fin T.m → Fin (F.n * F.cuts.J)), Trains F M p c emb T start ∧ Y < T.M.card}
+    (start : Fin T.m → Fin (F.n * F.cuts.J)), Trains F M tb sh c emb T start ∧ Y < T.M.card}
 
 end Trains
 
@@ -253,25 +297,22 @@ variable [Fintype E] (F : Frame L E)
 /-- **The bits of a reference training algorithm a covered window can read**: what the memory limit leaves beside the
 `x_s` bits accounted for, what the smaller of the links' capacity and the `y_b` bits that entered leaves beside the
 `x_b` bits accounted for, and what the algorithm shares with the declared circuit. -/
-noncomputable def unaccounted (x_s x_b y_b : ℕ) (p : Recipe) : ℕ :=
-  (F.m - x_s + p.o_s) + (min (F.b * F.ω) y_b - x_b + p.o_b)
+noncomputable def unaccounted (x_s x_b y_b : ℕ) (sh : Shared) : ℕ :=
+  (F.m - x_s + sh.o_s) + (min (F.b * F.ω) y_b - x_b + sh.o_b)
 
-/-- **The fit bound**: the counted multiplications a computation can hold of a reference training algorithm, when a
-covered window reads at most `S' = unaccounted` bits of it: `reuse · N* S'² / (4 w_e (N* b_w − S'))` for each covered
-window, and for each missed window the work its server's limit leaves over the window's ticks beside the `x_w`
+/-- **The bound on training**: the counted multiplications a computation can hold of a reference training
+algorithm. The covered windows hold at most the training bound's count at `S' = unaccounted` bits read a window
+(`tb.bound`), and each missed window the work its server's limit leaves over the window's ticks beside the `x_w`
 accounted for, with the multiplications shared with the declared circuit. -/
-noncomputable def bound (x_s x_b x_w y_b : ℕ) (p : Recipe) : ℝ :=
-  (F.n * F.cuts.J - F.missed.card : ℕ) * p.reuse * p.Nstar * (F.unaccounted x_s x_b y_b p : ℝ) ^ 2 /
-      (4 * p.w_e * (p.Nstar * p.b_w - (F.unaccounted x_s x_b y_b p : ℝ))) +
-    (∑ u ∈ F.missed, (F.Φ * F.len (finProdFinEquiv.symm u).2 - x_w + p.o_w) : ℕ)
+noncomputable def bound (x_s x_b x_w y_b : ℕ) (tb : Training) (sh : Shared) : ℝ :=
+  tb.bound (F.n * F.cuts.J - F.missed.card) (F.unaccounted x_s x_b y_b sh : ℕ) +
+    (∑ u ∈ F.missed, (F.Φ * F.len (finProdFinEquiv.symm u).2 - x_w + sh.o_w) : ℕ)
 
-/-- **The fit bound is defined and at most `Y`**: where the memory and bandwidth audits cover a window, the recipe's
-`b_w` is at least 0 and its `w_e` above 0, and a covered window can read fewer than `N* b_w` bits of a reference
-training algorithm; and the fit bound is at most `Y`. Where they miss every window the fit bound is the missed
-windows' sum alone, and nothing is asked of the recipe. -/
-def BoundAtMost (x_s x_b x_w y_b : ℕ) (p : Recipe) (Y : ℝ) : Prop :=
-  (F.missed ≠ univ → 0 ≤ p.b_w ∧ 0 < p.w_e ∧ (F.unaccounted x_s x_b y_b p : ℝ) < p.Nstar * p.b_w) ∧
-    F.bound x_s x_b x_w y_b p ≤ Y
+/-- **The bound on training is defined and at most `Y`**: where the memory and bandwidth audits cover a window, the
+training bound is defined at what a covered window can read (`tb.Valid`); and the bound is at most `Y`. Where they
+miss every window the bound is the missed windows' sum alone, and nothing is asked of the training bound. -/
+def BoundAtMost (x_s x_b x_w y_b : ℕ) (tb : Training) (sh : Shared) (Y : ℝ) : Prop :=
+  (F.missed ≠ univ → tb.Valid (F.unaccounted x_s x_b y_b sh : ℕ)) ∧ F.bound x_s x_b x_w y_b tb sh ≤ Y
 
 end Frame
 

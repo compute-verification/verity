@@ -2,9 +2,9 @@
 
 `security/Definitions/Slowdown/Security.lean` holds the three sets of the security argument, and
 `security/Definitions/Slowdown/Guarantees/Secure.lean` its one statement, `Slowdown.Guarantees.Secure`: at a frame
-`F`, no computation is in `H F.hw`, in `A F x_s x_b x_w y_b` and in `B F p Y`, for every count `Y` at least the fit
-bound (`Frame.bound`). `security/Definitions/Slowdown/Guarantees/Run.lean` holds the two statements over a run's
-coins that stand on it, `RunSecure` and `RunComplete`. This file says why the hardware model `H` has the clauses it
+`F`, no computation is in `H F.hw`, in `A F x_s x_b x_w y_b` and in `B F tb sh Y`, for every training bound `tb` that
+holds and every count `Y` at least its count on the frame (`Frame.bound`).
+`security/Definitions/Slowdown/Guarantees/Run.lean` holds the two statements over a run's coins that stand on it, `RunSecure` and `RunComplete`. This file says why the hardware model `H` has the clauses it
 has, what it takes from an H100's card, what the statements over a run say, and what they do not give.
 
 ## The computation and the hardware
@@ -31,7 +31,7 @@ host's compute and a switch are more leaves of the one model.
 | Bandwidth | each link delivers at most its capacity a tick, each way | `Placed.Links` | the links across each server's boundary, over covered windows | `bandwidth_needed` |
 
 Each theorem of the last column (`security/Proofs/Slowdown/SecureWitness.lean`) is a run that meets the other three
-clauses, is in `A` and is in `B` at the fit bound, so the statement is false with any one clause dropped. `H` is a
+clauses, is in `A` and is in `B` at the fit bound's count, so the statement is false with any one clause dropped. `H` is a
 set at the hardware alone: every audit's claim (`security/Proofs/Slowdown/SecureAudit.lean`) is about the same `H`,
 whatever frame the audit covers.
 
@@ -44,6 +44,17 @@ at its deadline as a premise.
 `H` leaves out `ResourceAccounting.Feasible`'s sequential speed and a bound on depth a tick, which no claim over `H`
 reads. Dropping a clause enlarges `H`, so the statement holds of more computations. The rest of the `Hardware` bundle
 (the ring, the trusted devices' leaves, buckets, jitter, record cells) is protocol structure, which `H` doesn't read.
+
+## The training bound is a parameter
+
+`Secure` and `RunSecure` take a training bound (`Training`): the premises it asks of a reference training algorithm
+divided into windows, the read sizes it is defined at, and its count for `k` windows that each read at most `S` bits.
+`Training.Holds` is its one obligation: under its premises, the counted multiplications outside a set of windows
+number at most its count for the windows left. The statements read nothing else of it, so a route to a bound on
+training is a value of `Training` with a proof of `Training.Holds`, and it enters at no other place. The fit bound is
+`Training.fit` at a recipe (`fit_holds`, `security/Proofs/Slowdown/Secure.lean`). The missed windows' work
+and what a reference training algorithm shares with the declared circuit (`Shared`) are not the training bound's:
+`Secure` adds them for every bound.
 
 ## Choices the proofs forced
 
@@ -72,8 +83,8 @@ protocol's guarantee in that form composes with these with no translation.
   audit is sound, at its own error, for one clause of `A` at each window it covers: bits held (`HeldAtLeast`), bits
   delivered to the declared circuit (`DeliveredAtLeast`), bits delivered in all (`DeliveredAtMost`) and work
   (`WorkAtLeast`). A clause's amount is what the audit certifies at the outcome, so it may read the outcome. Then
-  against every developer the verifier accepts a run whose computation is in `B`, at a count at least the fit bound
-  at the outcome's amounts, with probability at most the errors added over the windows. `Secure` is the step from
+  against every developer the verifier accepts a run whose computation is in `B`, at a training bound that holds and a
+  count at least its count at the outcome's amounts, with probability at most the errors added over the windows. `Secure` is the step from
   `A` to `B` inside it.
 - **`RunComplete`.** A developer whose strategy each audit rejects with probability at most its own error is
   rejected with probability at most their sum.
@@ -130,8 +141,9 @@ processors), the sideband buses, and the limits the firmware sets (the clocks, t
 - **The audits' premises.** Each slot's filler takes that the audit's schedule is the one the run
   induces on the device, and the premises of the audit's own guarantee, among them the memory audit's device model at
   its deadline, which is not derived from `H`'s latency.
-- **Training.** That a run which trains is in `B` is `Trains`'s premises: `reach` and `fits` are empirical, and the
-  three `shared` premises bound what a reference training algorithm shares with the declared circuit.
+- **Training.** That a run which trains is in `B` is `Trains`'s premises: the training bound's (`Training.Prem`;
+  the fit bound's reach and fit are empirical), and the three `shared` premises, which bound what a reference
+  training algorithm shares with the declared circuit.
 - **Units.** `A` counts bits held, and a wipe's guarantee bounds the information that survives it.
 - **The run's slots.** The count's slot has no audit: at a server the network attester counts ingress, and its
   guarantee is not restated as the slot's premise. The filled slots are at the run of one uniform coin; an audit

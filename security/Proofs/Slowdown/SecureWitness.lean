@@ -7,8 +7,8 @@ import Proofs.Pouw.Prob
 # The three sets meet two by two
 
 `Secure` says no computation is feasible, accounted for and prohibited. Here its hypotheses hold together and each
-pair of its sets it can meet does, at one recipe and at a frame whose one window is covered or missed, so the theorem
-is not true for want of a computation, on either of its branches:
+pair of its sets it can meet does, at the fit bound of one recipe and at a frame whose one window is covered or
+missed, so the theorem is not true for want of a computation:
 
 * `served_mem`: a computation in `H ∩ A`, at amounts that are the whole of the server's memory, of its link and of
   its work;
@@ -208,19 +208,19 @@ theorem b_eq : (frame c m β I).b = β :=
 theorem Φ_eq : (frame c m β I).Φ = c :=
   (single_Φ _ _ _ 1 cuts I).trans (by simp [Hardware.ofLeaves])
 
-theorem unaccounted_eq : (frame 1 1 1 I).unaccounted 1 1 1 recipe = 0 := by
+theorem unaccounted_eq : (frame 1 1 1 I).unaccounted 1 1 1 apart = 0 := by
   simp [Frame.unaccounted, m_eq, ω_eq, b_eq]
 
 /-- **`Secure`'s condition on the amounts, the recipe and the count holds** at the amounts `1`, `1`, `1` and `1` and
 the count `Y = 0`: the audits account for all the server's memory, all its link carries and all its work, so a covered
 window can read no bit of a reference training algorithm, a missed one has no work left for it, and the fit bound is
 `0`. -/
-theorem params : (frame 1 1 1 I).BoundAtMost 1 1 1 1 recipe 0 := by
-  refine ⟨fun _ => ⟨by norm_num, by norm_num, ?_⟩, ?_⟩
+theorem params : (frame 1 1 1 I).BoundAtMost 1 1 1 1 fitted apart 0 := by
+  refine ⟨fun _ => ⟨by norm_num, by norm_num, Nat.cast_nonneg _, ?_⟩, ?_⟩
   · rw [unaccounted_eq]
     norm_num
   · unfold Frame.bound
-    rw [unaccounted_eq, Φ_eq]
+    rw [fit_bound, unaccounted_eq, Φ_eq]
     simp [len_eq]
 
 /-- The reference training algorithm: the weight `0`, the activation `2` and their counted multiplication `3`. -/
@@ -297,30 +297,16 @@ theorem gates_eq {Q : Partition decl.D ((frame c m β I).n * (frame c m β I).cu
   change g ∈ run.region ((frame c m β I).server 0) ((frame c m β I).span 0) ↔ _
   rw [window_eq]
 
-/-- The reference training algorithm trains inside a computation with no gate the declared circuit's whose one window
-holds the algorithm's counted multiplication, each such gate using a unit of compute. -/
-theorem trains_of (M : Computation Bool Unit) (hd : M.declared = ∅)
+/-- The reference training algorithm trains inside a computation with no gate the declared circuit's, each of its
+counted multiplications using a unit of compute, at any training bound whose premises hold of it divided by the
+frame's windows. -/
+theorem trains_of (tb : Training) (M : Computation Bool Unit) (hd : M.declared = ∅)
     (e : Containment decl.D (M.circuit (frame c m β I)).D) (hload : ∀ g ∈ threading.M, 1 ≤ M.usage.π (e.emb g))
-    (hgates : ∀ Q : Partition decl.D ((frame c m β I).n * (frame c m β I).cuts.J),
-      Divides (frame c m β I) M e Q → ∀ j, Q.gates j = {3}) :
-    Trains (frame c m β I) M recipe decl e threading (start c m β I) where
-  reuse := le_rfl
+    (hprem : ∀ Q : Partition decl.D ((frame c m β I).n * (frame c m β I).cuts.J),
+      Divides (frame c m β I) M e Q → tb.Prem threading Q (frame c m β I).missed (start c m β I)) :
+    Trains (frame c m β I) M tb apart decl e threading (start c m β I) where
   load := hload
-  reach Q hQ u hu _ := by
-    have hcard : ∀ u, 1 ≤ (threading.threadWeights univ u).card := by decide +kernel
-    have hf : (univ.filter fun g => ∀ j ∈ (frame c m β I).missed, g ∉ Q.gates j) = univ :=
-      filter_true_of_mem fun g _ j hj => absurd (Subsingleton.elim (α := Fin 1) j (start c m β I u) ▸ hj) hu
-    rw [hf]
-    exact hcard u
-  fits Q hQ j _ := by
-    have hw : (threading.weightsUsed ({3} : Finset (Fin 4))).card = 1 := by decide +kernel
-    have hf : freshInput decl ({3} : Finset (Fin 4)) = 2 := by decide +kernel
-    have he : threading.entered Q (start c m β I) j = ∅ := by
-      ext t
-      simp only [Threading.entered, mem_filter, mem_univ, true_and, notMem_empty, iff_false, not_and, not_not]
-      exact fun _ => Subsingleton.elim (α := Fin 1) _ _
-    rw [hgates Q hQ, hw, hf, he]
-    norm_num
+  prem := hprem
   shared_carried i j _ := by simp [Computation.carries, Placed.stateIn, Circuit.width, hd]
   shared_read i j _ := by simp [Computation.reads, Circuit.width, hd]
   shared_work i j _ := by
@@ -329,12 +315,34 @@ theorem trains_of (M : Computation Bool Unit) (hd : M.declared = ∅)
     rw [mem_filter] at hg
     exact notMem_empty _ (hd ▸ (mem_inter.1 hg.2).2)
 
-theorem trains : Trains (frame c m β I) trained recipe decl (emb c m β I) threading (start c m β I) :=
-  trains_of c m β I trained rfl (emb c m β I) (fun _ _ => le_rfl) fun _ hQ j => gates_eq c m β I hQ j
+/-- The fit bound's premises hold of the reference training algorithm divided into windows that each hold its
+counted multiplication. -/
+theorem fit_prem (Q : Partition decl.D ((frame c m β I).n * (frame c m β I).cuts.J))
+    (hgates : ∀ j, Q.gates j = {3}) :
+    fitted.Prem threading Q (frame c m β I).missed (start c m β I) := by
+  refine ⟨le_rfl, fun u hu _ => ?_, fun j _ => ?_⟩
+  · have hcard : ∀ u, 1 ≤ (threading.threadWeights univ u).card := by decide +kernel
+    have hf : (univ.filter fun g => ∀ j ∈ (frame c m β I).missed, g ∉ Q.gates j) = univ :=
+      filter_true_of_mem fun g _ j hj => absurd (Subsingleton.elim (α := Fin 1) j (start c m β I u) ▸ hj) hu
+    rw [hf]
+    exact hcard u
+  · have hw : (threading.weightsUsed ({3} : Finset (Fin 4))).card = 1 := by decide +kernel
+    have hf : freshInput decl ({3} : Finset (Fin 4)) = 2 := by decide +kernel
+    have he : threading.entered Q (start c m β I) j = ∅ := by
+      ext t
+      simp only [Threading.entered, mem_filter, mem_univ, true_and, notMem_empty, iff_false, not_and, not_not]
+      exact fun _ => Subsingleton.elim (α := Fin 1) _ _
+    rw [hgates, hw, hf, he]
+    norm_num
 
-theorem prohibited_of (M : Computation Bool Unit) (e : Containment decl.D (M.circuit (frame c m β I)).D)
-    (hT : Trains (frame c m β I) M recipe decl e threading (start c m β I)) {Y : ℝ} (hY : Y < 1) :
-    M ∈ B (frame c m β I) recipe Y :=
+theorem trains : Trains (frame c m β I) trained fitted apart decl (emb c m β I) threading (start c m β I) :=
+  trains_of c m β I fitted trained rfl (emb c m β I) (fun _ _ => le_rfl) fun Q hQ =>
+    fit_prem c m β I Q fun j => gates_eq c m β I hQ j
+
+theorem prohibited_of (tb : Training) (M : Computation Bool Unit)
+    (e : Containment decl.D (M.circuit (frame c m β I)).D)
+    (hT : Trains (frame c m β I) M tb apart decl e threading (start c m β I)) {Y : ℝ} (hY : Y < 1) :
+    M ∈ B (frame c m β I) tb apart Y :=
   ⟨decl, e, threading, start c m β I, hT, by
     have h : threading.M.card = 1 := by decide +kernel
     rw [h]
@@ -342,27 +350,32 @@ theorem prohibited_of (M : Computation Bool Unit) (e : Containment decl.D (M.cir
 
 /-- The run with no gate the declared circuit's holds a reference training algorithm of one counted multiplication
 that meets the recipe's premises, whatever the hardware's limits. -/
-theorem trained_prohibited {Y : ℝ} (hY : Y < 1) : trained ∈ B (frame c m β I) recipe Y :=
-  prohibited_of c m β I trained (emb c m β I) (trains c m β I) hY
+theorem trained_prohibited {Y : ℝ} (hY : Y < 1) : trained ∈ B (frame c m β I) fitted apart Y :=
+  prohibited_of c m β I fitted trained (emb c m β I) (trains c m β I) hY
+
+/-- The run with no gate the declared circuit's is prohibited at the training bound with no premise. -/
+theorem trained_free {Y : ℝ} (hY : Y < 1) : trained ∈ B (frame c m β I) free apart Y :=
+  prohibited_of c m β I free trained (emb c m β I)
+    (trains_of c m β I free trained rfl (emb c m β I) (fun _ _ => le_rfl) fun _ _ => trivial) hY
 
 /-- **A computation that is feasible and prohibited**, at the count `0`. -/
-theorem trained_mem : trained ∈ H (hw 1 1 1) ∧ trained ∈ B (frame 1 1 1 I) recipe 0 :=
+theorem trained_mem : trained ∈ H (hw 1 1 1) ∧ trained ∈ B (frame 1 1 1 I) fitted apart 0 :=
   ⟨feasible, trained_prohibited 1 1 1 I (by norm_num)⟩
 
 /-- `Secure` at the witness: the run with no gate the declared circuit's is not accounted for. -/
 theorem trained_not_accounted : trained ∉ A (frame 1 1 1 I) 1 1 1 1 := fun hA =>
-  Secure (frame 1 1 1 I) 1 1 1 1 recipe 0 (params I) trained
+  Secure (frame 1 1 1 I) 1 1 1 1 fitted apart 0 (fit_holds recipe) (params I) trained
     (trained_mem I).1 hA (trained_mem I).2
 
 /-- `Secure` at the witness: the run with every gate the declared circuit's is not prohibited. -/
-theorem served_not_prohibited : served ∉ B (frame 1 1 1 I) recipe 0 :=
-  Secure (frame 1 1 1 I) 1 1 1 1 recipe 0 (params I) served
+theorem served_not_prohibited : served ∉ B (frame 1 1 1 I) fitted apart 0 :=
+  Secure (frame 1 1 1 I) 1 1 1 1 fitted apart 0 (fit_holds recipe) (params I) served
     (served_mem I).1 (served_mem I).2
 
 /-- **`Secure`'s conclusion fails of `M` at the frame `F`**: its condition on the amounts and the count holds, and
 `M` is accounted for and prohibited. By `Secure`, `M` is then not feasible on `F`'s hardware. -/
 def Escapes (M : Computation Bool Unit) (F : Frame Bool Unit) (x_s x_b x_w y_b : ℕ) (Y : ℝ) : Prop :=
-  F.BoundAtMost x_s x_b x_w y_b recipe Y ∧ M ∈ A F x_s x_b x_w y_b ∧ M ∈ B F recipe Y
+  F.BoundAtMost x_s x_b x_w y_b fitted apart Y ∧ M ∈ A F x_s x_b x_w y_b ∧ M ∈ B F fitted apart Y
 
 theorem accounted_covered : trained ∈ A (frame c m β ∅) 0 0 0 1 := fun i j =>
   ⟨fun _ => ⟨Nat.zero_le _, Nat.zero_le _, (delivered_univ c m β ∅ i j).le⟩, fun h => absurd h (notMem_empty _)⟩
@@ -371,14 +384,14 @@ theorem accounted_missed : trained ∈ A (frame c m β univ) 1 1 0 1 := fun _ _ 
   ⟨fun h => absurd (mem_univ _) h, fun _ => Nat.zero_le _⟩
 
 theorem escapes_covered (h : m + min β 1 = 1) : Escapes trained (frame c m β ∅) 0 0 0 1 (1 / 4) := by
-  have hu : (frame c m β ∅).unaccounted 0 0 1 recipe = 1 := by
+  have hu : (frame c m β ∅).unaccounted 0 0 1 apart = 1 := by
     simpa [Frame.unaccounted, m_eq, b_eq, ω_eq] using h
-  refine ⟨⟨fun _ => ⟨by norm_num, by norm_num, ?_⟩, ?_⟩, accounted_covered c m β,
+  refine ⟨⟨fun _ => ⟨by norm_num, by norm_num, Nat.cast_nonneg _, ?_⟩, ?_⟩, accounted_covered c m β,
     trained_prohibited c m β ∅ (by norm_num)⟩
   · rw [hu]
     norm_num
   · unfold Frame.bound
-    rw [hu]
+    rw [fit_bound, hu]
     norm_num
 
 /-- **The memory clause is needed.** On a server that carries nothing, the run meets the order, work and bandwidth
@@ -398,12 +411,12 @@ memory and bandwidth clauses, and with no gate the declared circuit's it is acco
 bound. -/
 theorem work_needed :
     Order trained ∧ Memory 1 trained ∧ Bandwidth 1 trained ∧ Escapes trained (frame 0 1 1 univ) 1 1 0 1 0 := by
-  have hu : (frame 0 1 1 univ).unaccounted 1 1 1 recipe = 0 := by
+  have hu : (frame 0 1 1 univ).unaccounted 1 1 1 apart = 0 := by
     simp [Frame.unaccounted, m_eq, b_eq, ω_eq]
   refine ⟨order, memory 1 le_rfl, bandwidth 1 le_rfl, ⟨fun h => absurd rfl h, ?_⟩, accounted_missed 0 1 1,
     trained_prohibited 0 1 1 univ (by norm_num)⟩
   unfold Frame.bound
-  rw [hu, Φ_eq]
+  rw [fit_bound, hu, Φ_eq]
   simp
 
 /-- The circuit of a run out of order: three computed gates that read nothing, and gate `3` reading `0` and `2`. -/
@@ -502,9 +515,10 @@ noncomputable def lateEmb : Containment decl.D (late.circuit (frame c m β I)).D
     rw [late_developer]
     exact ho
 
-theorem late_trains : Trains (frame c m β I) late recipe decl (lateEmb c m β I) threading (start c m β I) :=
-  trains_of c m β I late rfl (lateEmb c m β I)
-    (fun g hg => (by decide +kernel : ∀ g ∈ threading.M, 1 ≤ lateUsage.π g) g hg) fun Q hQ j => by
+theorem late_trains : Trains (frame c m β I) late fitted apart decl (lateEmb c m β I) threading (start c m β I) :=
+  trains_of c m β I fitted late rfl (lateEmb c m β I)
+    (fun g hg => (by decide +kernel : ∀ g ∈ threading.M, 1 ≤ lateUsage.π g) g hg) fun Q hQ =>
+    fit_prem c m β I Q fun j => by
     have hj : j = finProdFinEquiv ((0 : Fin 1), (0 : Fin 1)) := Subsingleton.elim (α := Fin 1) _ _
     ext g
     rw [hj, hQ 0 0 g]
@@ -562,15 +576,16 @@ theorem late_bandwidth : Bandwidth 0 late := by
 of order meets the work, memory and bandwidth clauses, and it is accounted for and prohibited at the fit bound. -/
 theorem order_needed :
     Work 1 late ∧ Memory 0 late ∧ Bandwidth 0 late ∧ Escapes late (frame 1 0 0 ∅) 0 0 0 0 0 := by
-  have hu : (frame 1 0 0 ∅).unaccounted 0 0 0 recipe = 0 := by
+  have hu : (frame 1 0 0 ∅).unaccounted 0 0 0 apart = 0 := by
     simp [Frame.unaccounted, m_eq, b_eq, ω_eq]
-  refine ⟨late_work, late_memory, late_bandwidth, ⟨fun _ => ⟨by norm_num, by norm_num, ?_⟩, ?_⟩,
+  refine ⟨late_work, late_memory, late_bandwidth,
+    ⟨fun _ => ⟨by norm_num, by norm_num, Nat.cast_nonneg _, ?_⟩, ?_⟩,
     fun i j => ⟨fun _ => ⟨Nat.zero_le _, Nat.zero_le _, ?_⟩, fun h => absurd h (notMem_empty _)⟩,
-    prohibited_of 1 0 0 ∅ late _ (late_trains 1 0 0 ∅) (by norm_num)⟩
+    prohibited_of 1 0 0 ∅ fitted late _ (late_trains 1 0 0 ∅) (by norm_num)⟩
   · rw [hu]
     norm_num
   · unfold Frame.bound
-    rw [hu]
+    rw [fit_bound, hu]
     simp
   · have hj : j = (0 : Fin 1) := Subsingleton.elim _ _
     subst hj
@@ -636,13 +651,14 @@ theorem audit_sound (chip mem : Finset Bool) (h : chip ∪ mem = {true}) :
 /-- **`secure_compute` is not vacuous**: its hypotheses hold together at an audit that accepts every run, at the
 certificate 1, which is all the work the server does in the tick. So the run holds no reference training algorithm
 of more counted multiplications than it shares with the compute account's gates. -/
-theorem compute_witness (p : Recipe) (ω : Unit × Unit × Unit) :
+theorem compute_witness (tb : Training) (htb : tb.Holds) (sh : Shared) (ω : Unit × Unit × Unit) :
     computation audit (fun _ => actual) (fun _ => usage) (fun _ => ∅) (fun _ _ h => absurd h (notMem_empty _))
-      (fun _ _ => ()) .compute ω ∉ B (deviceFrame (hw 1 1 1) {true} ∅ (Set.mem_univ _) 1) p (p.o_w : ℕ) := fun hB => by
+      (fun _ _ => ()) .compute ω ∉ B (deviceFrame (hw 1 1 1) {true} ∅ (Set.mem_univ _) 1) tb sh (sh.o_w : ℕ) :=
+    fun hB => by
   have h := secure_compute (hw 1 1 1) {true} ∅ (Set.mem_univ _) 1 audit (fun _ => actual) (fun _ => usage) (fun _ => ∅)
     (fun _ _ h => absurd h (notMem_empty _)) (fun _ _ => some .tc) (fun _ _ => ()) rfl ((), true) Empty.elim
-    (fun _ => rfl) price (fun _ _ _ => rfl) (fun _ => feasible) (audit_sound {true} ∅ (union_empty _)) p
-  have hY : ∀ x, (hw 1 1 1).compute ({true} ∪ ∅) * 1 - ⌈(1 : ℝ) - 0 * audit.pouwRead x⌉₊ + p.o_w = p.o_w :=
+    (fun _ => rfl) price (fun _ _ _ => rfl) (fun _ => feasible) (audit_sound {true} ∅ (union_empty _)) tb htb sh
+  have hY : ∀ x, (hw 1 1 1).compute ({true} ∪ ∅) * 1 - ⌈(1 : ℝ) - 0 * audit.pouwRead x⌉₊ + sh.o_w = sh.o_w :=
     fun _ => by simp [Hardware.ofLeaves]
   simp only [hY] at h
   have h1 := Pouw.pr_eq_one (P := fun ω => audit.accepts .compute ω ∧ _) fun x =>
@@ -671,7 +687,8 @@ certificate 1, which is all the memory link delivers in the tick. The chip carri
 bit of a reference training algorithm, and the run holds none of more than `1/4` counted multiplications. -/
 theorem bandwidth_witness (ω : Unit × Unit × Unit) :
     computation audit (fun _ => actual) (fun _ => usage) (fun _ => ∅) (fun _ _ h => absurd h (notMem_empty _))
-      (fun _ _ => ()) .bandwidth ω ∉ B (chipFrame (hw 1 1 1) {true} (Set.mem_univ _) 1) recipe (1 / 4) := fun hB => by
+      (fun _ _ => ()) .bandwidth ω ∉ B (chipFrame (hw 1 1 1) {true} (Set.mem_univ _) 1) fitted apart (1 / 4) :=
+    fun hB => by
   have hm : (chipFrame (hw 1 1 1) {true} (Set.mem_univ _) 1).m = 1 :=
     (single_m _ _ _ 1 _ _).trans (by simp [Hardware.ofLeaves])
   have hb : (chipFrame (hw 1 1 1) {true} (Set.mem_univ _) 1).b = 1 :=
@@ -679,7 +696,7 @@ theorem bandwidth_witness (ω : Unit × Unit × Unit) :
   have hω : (chipFrame (hw 1 1 1) {true} (Set.mem_univ _) 1).ω = 1 := whole_ω _ _ _ _ _
   have hu : (chipFrame (hw 1 1 1) {true} (Set.mem_univ _) 1).unaccounted 0 ⌈(1 : ℝ)⌉₊
       ((chipFrame (hw 1 1 1) {true} (Set.mem_univ _) 1).b * (chipFrame (hw 1 1 1) {true} (Set.mem_univ _) 1).ω)
-      recipe = 1 := by
+      apart = 1 := by
     simp [Frame.unaccounted, hm, hb, hω]
   have h := secure_bandwidth (hw 1 1 1) {true} ∅ (Set.mem_univ _) 1 audit (fun _ => actual) (fun _ => usage)
     (fun _ => ∅) (fun _ _ h => absurd h (notMem_empty _)) (fun _ _ => some .tc) (fun _ _ => ()) rfl ((), true)
@@ -687,10 +704,10 @@ theorem bandwidth_witness (ω : Unit × Unit × Unit) :
       rcases hy with hy | hy
       · simp [Hardware.ofLeaves] at hy
         simp [← hy]
-      · simp [Hardware.ofLeaves] at hy) (fun _ => feasible) audit_bandwidth_sound recipe (1 / 4) (by norm_num)
-    (by norm_num) (by rw [hu]; norm_num) (by
+      · simp [Hardware.ofLeaves] at hy) (fun _ => feasible) audit_bandwidth_sound fitted (fit_holds recipe) apart
+    (1 / 4) ⟨by norm_num, by norm_num, Nat.cast_nonneg _, by rw [hu]; norm_num⟩ (by
       unfold Frame.bound
-      rw [hu]
+      rw [fit_bound, hu]
       norm_num [wholeCuts])
   have h1 := Pouw.pr_eq_one (P := fun ω => audit.accepts .bandwidth ω ∧ _) fun x =>
     (⟨trivial, Subsingleton.elim ω x ▸ hB⟩ : _ ∧ _)
@@ -727,7 +744,7 @@ training algorithm of more than `5/4` counted multiplications. -/
 theorem capacity_witness (ω : Unit × Unit × Unit) :
     computation (auditOn ∅ {true}) (fun _ => actual) (fun _ => usage) (fun _ => ∅)
       (fun _ _ h => absurd h (notMem_empty _)) (fun _ _ => ()) .capacity ω ∉
-        B (cutFrame (hw 1 1 1) ∅ {true} (Set.mem_univ _) 0 1 le_rfl) recipe (5 / 4) := fun hB => by
+        B (cutFrame (hw 1 1 1) ∅ {true} (Set.mem_univ _) 0 1 le_rfl) fitted apart (5 / 4) := fun hB => by
   have hm : (cutFrame (hw 1 1 1) ∅ {true} (Set.mem_univ _) 0 1 le_rfl).m = 1 :=
     (single_m _ _ _ 1 _ _).trans (by simp [Hardware.ofLeaves])
   have hb : (cutFrame (hw 1 1 1) ∅ {true} (Set.mem_univ _) 0 1 le_rfl).b = 1 :=
@@ -739,12 +756,12 @@ theorem capacity_witness (ω : Unit × Unit × Unit) :
     decide
   have hu : (cutFrame (hw 1 1 1) ∅ {true} (Set.mem_univ _) 0 1 le_rfl).unaccounted ⌈(1 : ℝ)⌉₊ 0
       ((cutFrame (hw 1 1 1) ∅ {true} (Set.mem_univ _) 0 1 le_rfl).b *
-        (cutFrame (hw 1 1 1) ∅ {true} (Set.mem_univ _) 0 1 le_rfl).ω) recipe = 1 := by
+        (cutFrame (hw 1 1 1) ∅ {true} (Set.mem_univ _) 0 1 le_rfl).ω) apart = 1 := by
     simp [Frame.unaccounted, hm, hb, hω]
   have hmiss : ∑ u ∈ (cutFrame (hw 1 1 1) ∅ {true} (Set.mem_univ _) 0 1 le_rfl).missed,
       ((cutFrame (hw 1 1 1) ∅ {true} (Set.mem_univ _) 0 1 le_rfl).Φ *
         (cutFrame (hw 1 1 1) ∅ {true} (Set.mem_univ _) 0 1 le_rfl).len (finProdFinEquiv.symm u).2 - 0 +
-          recipe.o_w) = 1 := by
+          apart.o_w) = 1 := by
     rw [hΦ]
     change ∑ u ∈ (cutFrame (hw 0 0 0) ∅ {true} (Set.mem_univ _) 0 1 le_rfl).missed,
       (1 * (cutFrame (hw 0 0 0) ∅ {true} (Set.mem_univ _) 0 1 le_rfl).len (finProdFinEquiv.symm u).2 - 0 + 0) = 1
@@ -755,10 +772,10 @@ theorem capacity_witness (ω : Unit × Unit × Unit) :
     decide
   have h := secure_capacity (hw 1 1 1) ∅ {true} (Set.mem_univ _) 0 1 le_rfl (auditOn ∅ {true}) (fun _ => actual)
     (fun _ => usage) (fun _ => ∅) (fun _ _ h => absurd h (notMem_empty _)) (fun _ _ => some .tc) (fun _ _ => ())
-    rfl ((), true) Empty.elim (fun _ => rfl) (fun _ => feasible) audit_capacity_sound recipe (5 / 4) (by norm_num)
-    (by norm_num) (by rw [hu]; norm_num) (by
+    rfl ((), true) Empty.elim (fun _ => rfl) (fun _ => feasible) audit_capacity_sound fitted (fit_holds recipe) apart
+    (5 / 4) ⟨by norm_num, by norm_num, Nat.cast_nonneg _, by rw [hu]; norm_num⟩ (by
       unfold Frame.bound
-      rw [hu, hmiss, hcov]
+      rw [fit_bound, hu, hmiss, hcov]
       norm_num)
   have h1 := Pouw.pr_eq_one (P := fun ω => (auditOn ∅ {true}).accepts .capacity ω ∧ _) fun x =>
     (⟨trivial, Subsingleton.elim ω x ▸ hB⟩ : _ ∧ _)
@@ -772,7 +789,7 @@ fit bound's `1/4` counted multiplications. -/
 theorem device_witness (ω : Unit × Unit × Unit) :
     computation (auditOn ∅ {true}) (fun _ => actual) (fun _ => usage) (fun _ => ∅)
       (fun _ _ h => absurd h (notMem_empty _)) (fun _ _ => ()) .capacity ω ∉
-        B (cutFrame (hw 1 1 1) ∅ {true} (Set.mem_univ _) 0 1 le_rfl) recipe (1 / 4) := by
+        B (cutFrame (hw 1 1 1) ∅ {true} (Set.mem_univ _) 0 1 le_rfl) fitted apart (1 / 4) := by
   rintro ⟨c, emb, T, start, hT, hlt⟩
   have hm : (cutFrame (hw 1 1 1) ∅ {true} (Set.mem_univ _) 0 1 le_rfl).m = 1 :=
     (single_m _ _ _ 1 _ _).trans (by simp [Hardware.ofLeaves])
@@ -785,12 +802,12 @@ theorem device_witness (ω : Unit × Unit × Unit) :
     decide
   have hu : (cutFrame (hw 1 1 1) ∅ {true} (Set.mem_univ _) 0 1 le_rfl).unaccounted ⌈(1 : ℝ)⌉₊ 0
       ((cutFrame (hw 1 1 1) ∅ {true} (Set.mem_univ _) 0 1 le_rfl).b *
-        (cutFrame (hw 1 1 1) ∅ {true} (Set.mem_univ _) 0 1 le_rfl).ω) recipe = 1 := by
+        (cutFrame (hw 1 1 1) ∅ {true} (Set.mem_univ _) 0 1 le_rfl).ω) apart = 1 := by
     simp [Frame.unaccounted, hm, hb, hω]
   have hmiss : ∑ u ∈ (cutFrame (hw 1 1 1) ∅ {true} (Set.mem_univ _) 0 1 le_rfl).missed,
       ((cutFrame (hw 1 1 1) ∅ {true} (Set.mem_univ _) 0 1 le_rfl).Φ *
         (cutFrame (hw 1 1 1) ∅ {true} (Set.mem_univ _) 0 1 le_rfl).len (finProdFinEquiv.symm u).2 - 1 +
-          recipe.o_w) = 0 := by
+          apart.o_w) = 0 := by
     rw [hΦ]
     change ∑ u ∈ (cutFrame (hw 0 0 0) ∅ {true} (Set.mem_univ _) 0 1 le_rfl).missed,
       (1 * (cutFrame (hw 0 0 0) ∅ {true} (Set.mem_univ _) 0 1 le_rfl).len (finProdFinEquiv.symm u).2 - 1 + 0) = 0
@@ -802,10 +819,10 @@ theorem device_witness (ω : Unit × Unit × Unit) :
   have hY : ∀ x : Unit × Unit × Unit, (cutFrame (hw 1 1 1) ∅ {true} (Set.mem_univ _) 0 1 le_rfl).bound ⌈(1 : ℝ)⌉₊ 0
       ⌈(1 : ℝ) - 0 * (auditOn ∅ {true}).pouwRead x⌉₊
       ((cutFrame (hw 1 1 1) ∅ {true} (Set.mem_univ _) 0 1 le_rfl).b *
-        (cutFrame (hw 1 1 1) ∅ {true} (Set.mem_univ _) 0 1 le_rfl).ω) recipe ≤ 1 / 4 := fun x => by
+        (cutFrame (hw 1 1 1) ∅ {true} (Set.mem_univ _) 0 1 le_rfl).ω) fitted apart ≤ 1 / 4 := fun x => by
     have hx : ⌈(1 : ℝ) - 0 * (auditOn ∅ {true}).pouwRead x⌉₊ = 1 := by simp
     unfold Frame.bound
-    rw [hu, hx, hmiss, hcov]
+    rw [fit_bound, hu, hx, hmiss, hcov]
     norm_num
   have h := secure_device (hw 1 1 1) ∅ {true} (Set.mem_univ _) 0 1 le_rfl (auditOn ∅ {true}) (fun _ => actual)
     (fun _ => usage) (fun _ => ∅) (fun _ _ h => absurd h (notMem_empty _)) (fun _ _ => some .tc) (fun _ _ => ())
@@ -813,8 +830,7 @@ theorem device_witness (ω : Unit × Unit × Unit) :
     (audit_sound ∅ {true} (empty_union _)) audit_capacity_sound (fun _ => True) _
     (fun _ i j _ _ =>
       delivered_le_capacity (cutFrame (hw 1 1 1) ∅ {true} (Set.mem_univ _) 0 1 le_rfl) _ feasible i j)
-    recipe (by norm_num) (by norm_num)
-    (by rw [hu]; norm_num)
+    fitted (fit_holds recipe) apart ⟨by norm_num, by norm_num, Nat.cast_nonneg _, by rw [hu]; norm_num⟩
   refine absurd ((le_of_eq (Pouw.pr_eq_one fun x => ?_).symm).trans h) (by norm_num)
   exact ⟨trivial, trivial, trivial, c, emb, T, start, hT, lt_of_le_of_lt (hY x) hlt⟩
 
@@ -827,20 +843,28 @@ namespace Slowdown.SecurityProofs
 open Slowdown.Security Slowdown.Security.Witness SecureWitness
 
 theorem Secure_honest : Guarantees.Secure_honest :=
-  ⟨actual.faithful, actual.holding, Set.mem_univ _, params ∅, (served_mem ∅).1, (served_mem ∅).2⟩
+  ⟨actual.faithful, actual.holding, Set.mem_univ _, fit_holds recipe, params ∅, (served_mem ∅).1,
+    (served_mem ∅).2⟩
 
 theorem Secure_nontrivial : Guarantees.Secure_nontrivial := by
   obtain ⟨hb, hA, hB⟩ := memory_needed.2.2.2
-  exact ⟨actual.faithful, actual.holding, Set.mem_univ _, hb, hA,
-    fun hH => Secure _ 0 0 0 1 recipe (1 / 4) hb trained hH hA hB, fun h => h hB⟩
+  exact ⟨actual.faithful, actual.holding, Set.mem_univ _, fit_holds recipe, hb, hA,
+    fun hH => Secure _ 0 0 0 1 fitted apart (1 / 4) (fit_holds recipe) hb trained hH hA hB, fun h => h hB⟩
 
 theorem Secure_nontrivial_accounted : Guarantees.Secure_nontrivial_accounted :=
-  ⟨actual.faithful, actual.holding, Set.mem_univ _, params ∅, (trained_mem ∅).1, trained_not_accounted ∅,
-    fun h => h (trained_mem ∅).2⟩
+  ⟨actual.faithful, actual.holding, Set.mem_univ _, fit_holds recipe, params ∅, (trained_mem ∅).1,
+    trained_not_accounted ∅, fun h => h (trained_mem ∅).2⟩
 
 theorem Secure_nontrivial_bound : Guarantees.Secure_nontrivial_bound :=
-  have hB : trained ∈ B (frame 1 1 1 ∅) recipe 0 := trained_prohibited 1 1 1 ∅ (by norm_num)
-  ⟨actual.faithful, actual.holding, Set.mem_univ _, feasible, accounted_covered 1 1 1,
-    fun hb => Secure _ 0 0 0 1 recipe 0 hb trained feasible (accounted_covered 1 1 1) hB, fun h => h hB⟩
+  have hB : trained ∈ B (frame 1 1 1 ∅) fitted apart 0 := trained_prohibited 1 1 1 ∅ (by norm_num)
+  ⟨actual.faithful, actual.holding, Set.mem_univ _, fit_holds recipe, feasible, accounted_covered 1 1 1,
+    fun hb => Secure _ 0 0 0 1 fitted apart 0 (fit_holds recipe) hb trained feasible (accounted_covered 1 1 1) hB,
+    fun h => h hB⟩
+
+theorem Secure_nontrivial_holds : Guarantees.Secure_nontrivial_holds :=
+  have hB : trained ∈ B (frame 1 1 1 ∅) free apart 0 := trained_free 1 1 1 ∅ (by norm_num)
+  have hb : (frame 1 1 1 ∅).BoundAtMost 0 0 0 1 free apart 0 := ⟨fun _ => trivial, by simp [Frame.bound]⟩
+  ⟨actual.faithful, actual.holding, Set.mem_univ _, hb, feasible, accounted_covered 1 1 1,
+    fun hs => Secure _ 0 0 0 1 free apart 0 hs hb trained feasible (accounted_covered 1 1 1) hB, fun h => h hB⟩
 
 end Slowdown.SecurityProofs

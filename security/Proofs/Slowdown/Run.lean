@@ -43,14 +43,15 @@ theorem trained_not_held (I : Finset (Fin (1 * cuts.J))) (i : Fin (frame 1 1 1 I
   simp [Circuit.width] at h1
 
 theorem RunSecure_honest : Guarantees.RunSecure_honest :=
-  ⟨actual.faithful, actual.holding, Set.mem_univ _, fun _ => params ∅, fun _ => (served_mem ∅).1,
+  ⟨actual.faithful, actual.holding, Set.mem_univ _, fit_holds recipe, fun _ => params ∅,
+    fun _ => (served_mem ∅).1,
     fun i j h => sound_still (((served_mem ∅).2 i j).1 h).1 0,
     fun i j h => sound_still (((served_mem ∅).2 i j).1 h).2.1 0,
     fun i j h => sound_still (((served_mem ∅).2 i j).1 h).2.2 0⟩
 
 theorem RunSecure_nontrivial : Guarantees.RunSecure_nontrivial :=
-  ⟨actual.faithful, actual.holding, Set.mem_univ _, fun _ => params ∅, fun _ => (trained_mem ∅).1,
-    fun _ hδ i j => not_sound_still trivial (trained_not_held ∅ i j) hδ,
+  ⟨actual.faithful, actual.holding, Set.mem_univ _, fit_holds recipe, fun _ => params ∅,
+    fun _ => (trained_mem ∅).1, fun _ hδ i j => not_sound_still trivial (trained_not_held ∅ i j) hδ,
     fun _ hδ => not_sound_still trivial (fun h => h (trained_mem ∅).2) hδ⟩
 
 end Slowdown.SecurityProofs
