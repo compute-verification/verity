@@ -16,8 +16,8 @@ prohibited. Each set is a predicate on a computation `M` alone, at public parame
   actual circuit, its gates' values and what each leaf holds at each tick) with what each gate uses of its location's
   compute and the link each wire runs on, the registered inputs, and the gates of the declared circuit (`declared`),
   which the audits' amounts are about.
-* **`H F`**, the feasible computations: `ResourceAccounting.Feasible` on the frame's hardware, with memory read on
-  what the run holds (`Actual.Run.Memory`).
+* **`H F`**, the feasible computations, four clauses of the frame's hardware: a gate reads no gate placed after it,
+  the compute rate, memory on what the run holds, and the links.
 * **`A F x_s x_b x_w y_b`**, what the audits account for: at each window they cover, the window's server holds at
   least `x_s` bits of the declared circuit's gates at the cut that opens it, and during the window the links deliver
   to it at least `x_b` bits of them and at most `y_b` bits in all; at each window they miss, the declared circuit's
@@ -135,12 +135,15 @@ end Computation
 
 variable {L E : Type*}
 
-/-- **`𝓗`, the feasible computations** on the frame's hardware: causality, the compute rate and the links
-(`ResourceAccounting.Feasible`), and memory on what the run holds: each location's state, what its leaves hold and
-what is in flight between them, is within the location's limit at every tick (`Actual.Run.Memory`). `Feasible`'s own
-memory clause, on the bits read later alone, follows from it. -/
+/-- **`𝓗`, the feasible computations** on the frame's hardware, four clauses: a gate reads only gates placed no
+later than the latency between their leaves allows (`Placed.Causal`); the gates at a location over an interval of
+ticks use at most the location's compute a tick (`Placed.ComputeRate`); each location's state, what its leaves hold
+and what is in flight between them, is within the location's memory at every tick (`Actual.Run.Memory`); and each
+link delivers at most its capacity a tick (`Placed.Links`). These are `ResourceAccounting.Feasible`'s clauses less
+its sequential speed, with memory on what is held, not on the bits read later alone. -/
 def H (F : Frame L E) : Set (Computation L E) :=
-  {M | Feasible F.hw M.run.A M.usage ∧ M.run.Memory F.hw.units F.hw.M}
+  {M | M.run.A.Causal F.hw.ℓ ∧ M.run.A.ComputeRate F.hw.units M.usage.π F.hw.compute ∧
+    M.run.Memory F.hw.units F.hw.M ∧ M.run.A.Links F.hw.ends F.hw.β M.usage.link}
 
 /-- **`𝒜`, the computations consistent with what the audits account for**, at the amounts `x_s`, `x_b`, `x_w` and
 `y_b`. At each window the memory and bandwidth audits cover, the window's server holds at least `x_s` bits of the

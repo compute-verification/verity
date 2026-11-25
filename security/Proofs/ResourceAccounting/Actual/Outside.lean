@@ -19,11 +19,8 @@ physical constraints then leave the rest of the run at most the limit less `x`:
 * `delivered_outside`: under `Links`, where the links deliver to `X` over `[a, b)` at least `x` bits of `S` and at most
   `y` in all, `A[X, [a, b))` reads at most `min (β_X (b − a)) y − x` bits outside `S` from outside `X`.
 
-A capacity certificate is in bit-ticks over a window, an average: `card_short_ticks_mul_le` bounds the ticks at which
-the account holds fewer than `x` bits.
-
-`feasible_ofLeaves_iff` is the feasible set at limits per leaf and per link (`Hardware.ofLeaves`), and
-`server_compute`, `server_memory` and `server_link` are a server's limits: its work a tick, the bits it carries and
+`computeRate_of_leaves`: at limits per leaf (`Hardware.ofLeaves`) the compute rate at every leaf is the compute rate
+at every location. `server_compute`, `server_memory` and `server_link` are a server's limits: its work a tick, the bits it carries and
 the bits a tick across its boundary. `server_gpu_fits`: each GPU of a server is a device of the device model,
 its die the chip, its device memory the memory, and its links to the host and the switch the side channels, so the
 joint audit's guarantees hold of each GPU.
@@ -77,32 +74,6 @@ theorem state_outside {R : Actual.Run L} {X : Finset L} {t M x : ℕ} (hM : R.me
   have h2 := width_inter_add_compl R.A (R.state X t) S
   unfold Actual.Run.mem at hM
   omega
-
-/-- **From a capacity certificate to the ticks that fall short**: if account `a` holds at most `m` bits of device memory
-at each tick of the window `w` and at least `C` bit-ticks over it, the ticks at which it holds fewer than `x ≤ m` bits
-number at most `(m · len − C) / (m − x)`. -/
-theorem card_short_ticks_mul_le {ι α : Type} (sc : Schedule ι α) (w : Window) (a : α) {m x C : ℕ}
-    (hm : ∀ t ∈ w.ticks, (sc t).mem a ≤ m) (hx : x ≤ m) (hC : C ≤ sc.held w a) :
-    (w.ticks.filter fun t => (sc t).mem a < x).card * (m - x) ≤ m * w.len - C := by
-  unfold Schedule.held at hC
-  have hsplit := sum_filter_add_sum_filter_not w.ticks (fun t => (sc t).mem a < x) fun t => (sc t).mem a
-  have hbad : ∑ t ∈ w.ticks.filter (fun t => (sc t).mem a < x), (sc t).mem a ≤
-      (w.ticks.filter fun t => (sc t).mem a < x).card * x :=
-    (sum_le_card_nsmul _ _ x fun t ht => (mem_filter.1 ht).2.le).trans (by rw [smul_eq_mul])
-  have hgood : ∑ t ∈ w.ticks.filter (fun t => ¬ (sc t).mem a < x), (sc t).mem a ≤
-      (w.ticks.filter fun t => ¬ (sc t).mem a < x).card * m :=
-    (sum_le_card_nsmul _ _ m fun t ht => hm t (mem_filter.1 ht).1).trans (by rw [smul_eq_mul])
-  have hcard := card_filter_add_card_filter_not (s := w.ticks) fun t => (sc t).mem a < x
-  have hlen : w.ticks.card = w.len := by simp [Window.ticks]
-  have h1 : (w.ticks.filter fun t => (sc t).mem a < x).card * (m - x) +
-      (w.ticks.filter fun t => (sc t).mem a < x).card * x =
-      (w.ticks.filter fun t => (sc t).mem a < x).card * m := by
-    rw [← Nat.mul_add, Nat.sub_add_cancel hx]
-  have h2 : m * w.len = (w.ticks.filter fun t => (sc t).mem a < x).card * m +
-      (w.ticks.filter fun t => ¬ (sc t).mem a < x).card * m := by
-    rw [← hlen, ← hcard]
-    ring
-  exact Nat.le_sub_of_add_le (by linarith)
 
 open Classical in
 /-- **What the links deliver**: under `Links`, over the ticks of `[a, b)` the links deliver at most `β_X (b − a)` bits
@@ -193,22 +164,6 @@ theorem computeRate_of_leaves [DecidableEq L] {π : Fin A.N → ℕ} {c : L → 
       exact ⟨⟨hi, hp, ht⟩, rfl⟩
   rw [hfib]
   exact h p a b
-
-/-- **The feasible set at limits per leaf and per link is four clauses**: a gate reads gates placed no later than
-itself, each leaf does at most its work a tick, every set of leaves carries at most its leaves' bits, and the links
-hold. `Feasible`'s sequential-speed clause holds of every run there. -/
-theorem feasible_ofLeaves_iff [DecidableEq L] {E : Type*} (c M : L → ℕ) (ends : E → L × L) (β : E → ℕ) (u : Usage A E) :
-    Feasible (Hardware.ofLeaves c M ends β) A u ↔
-      (A.Causal fun _ _ => 0) ∧ (∀ p a b, A.work u.π (A.region {p} (Set.Ico a b)) ≤ c p * (b - a)) ∧
-        (∀ X t, A.state X t ≤ ∑ p ∈ X, M p) ∧ A.Links ends β u.link := by
-  constructor
-  · rintro ⟨hc, hw, -, hm, hl⟩
-    refine ⟨hc, fun p a b => ?_, fun X t => hm X (Set.mem_univ _) t, hl⟩
-    have h := hw {p} (Set.mem_univ _) a b
-    simpa [Hardware.ofLeaves] using h
-  · rintro ⟨hc, hw, hm, hl⟩
-    refine ⟨hc, computeRate_of_leaves A hw, fun k p _ hD => ?_, fun X _ t => hm X t, hl⟩
-    simp [Hardware.ofLeaves] at hD
 
 section Server
 

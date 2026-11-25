@@ -13,7 +13,7 @@ import Proofs.Pouw.Prob
 # An accepted audit's run is not prohibited
 
 `secure` over an audit's coins, with `A`'s amount from the audit's own guarantee and not a hypothesis. The frame is
-one server over one window, the audit's `[0, t)` (`wholeCuts`). At each coin the computation is a run of the
+one server over the ticks `[0, t)`, one window (`wholeCuts`) or two (`cutAt`). At each coin the computation is a run of the
 actual-circuit model, its declared circuit's gates those charged to the audit's account, and the joint audit's
 schedule is the one the run induces on the device (`Actual.Run.schedule`).
 
@@ -45,6 +45,16 @@ window after it is covered.
   The schedule charges the capacity account what the device holds at the end of the tick (`mem_le_state`), which is
   `A`'s memory clause at the cut.
 * `secure_pous`: the same at PoUS's period, from `periodCapacity`.
+* `secure_device`: work, memory and a count of ingress in one bound, on that frame. The compute audit's window is
+  the ticks before the cut and the capacity audit's the last of them, both charging one account, and a verdict
+  `counted` bounds what the device's links deliver after the cut by `y`. The probability that both audits accept, the
+  count holds and the run holds a reference training algorithm of more counted multiplications than the fit bound at
+  `S' = (m − ⌈S⌉ + o_s) + (min (b ω) y + o_b)` plus `Φ (c + 1) − ⌈W − pRead · read⌉ + o_w` is at most the two
+  audits' errors together.
+
+`work_le_window` and `held_le_state` take the schedule's charges to the run: the compute account's work over its
+window is work its gates do on the device, and the capacity account's charge over one tick is held on the device at
+the end of it.
 -/
 
 @[expose] public section
@@ -96,6 +106,34 @@ gates those charged to the account of the resource `res`. -/
 abbrev computation (res : Resource) (ω : ΩW × ΩQ × ΩS) : Computation L E :=
   ⟨ρ ω, usage ω, θ ω, hθ ω, univ.filter fun g => acct ω g = r.acct res⟩
 
+variable [DecidableEq L] (chip mem : Finset L) (cls : ∀ ω, Fin (ρ ω).A.N → Option OpClass) (hbm : E × L)
+  (side : ι → E × L)
+
+/-- The work the compute audit charges its account over its window `[a, a + n)` is work the account's gates do on the
+device in those ticks, at a pricing that is the audit's price on each op class. -/
+theorem work_le_window {a n : ℕ} (hwin : r.win .compute = ⟨a, n⟩) (ω : ΩW × ΩQ × ΩS)
+    (hsched : r.schedule ω = (ρ ω).schedule chip mem (cls ω) (acct ω) (usage ω).link hbm side) (pc : Price)
+    (hπ : ∀ g, (ρ ω).A.x g ∈ chip ∪ mem → (usage ω).π g = (cls ω g).elim 0 pc) :
+    r.work pc ω ≤ (ρ ω).A.work (usage ω).π ((ρ ω).A.region (chip ∪ mem) (Set.Ico a (a + n)) ∩
+      univ.filter fun g => acct ω g = r.acct .compute) := by
+  have hwork := covers_work (ρ ω) chip mem (cls ω) (acct ω) (usage ω).link hbm side
+    (fun g hg => hπ g (by convert hg)) ⟨a, n⟩ (r.acct .compute)
+  rw [Run.work, hsched, hwin, ← hwork]
+  refine sum_le_sum_of_subset fun g hg => ?_
+  obtain ⟨hg, ha⟩ := mem_filter.1 hg
+  exact mem_inter.2 ⟨by convert hg, mem_filter.2 ⟨mem_univ _, ha⟩⟩
+
+/-- What the capacity audit charges its account over the one tick `c` is held on the device at the end of that tick
+(`mem_le_state`). -/
+theorem held_le_state {c : ℕ} (hwin : r.win .capacity = ⟨c, 1⟩) (ω : ΩW × ΩQ × ΩS)
+    (hsched : r.schedule ω = (ρ ω).schedule chip mem (cls ω) (acct ω) (usage ω).link hbm side) :
+    r.held ω ≤ (ρ ω).A.width ((ρ ω).state (chip ∪ mem) (c + 1) ∩
+      univ.filter fun g => acct ω g = r.acct .capacity) := by
+  rw [Run.held, hsched, hwin, Schedule.held]
+  change ∑ τ ∈ Finset.Ico c (c + 1), _ ≤ _
+  rw [Nat.Ico_succ_singleton, sum_singleton]
+  convert mem_le_state (ρ ω) chip mem (cls ω) (acct ω) (usage ω).link hbm side c (r.acct .capacity)
+
 end Audit
 
 section Compute
@@ -128,7 +166,8 @@ memory on that run. -/
 theorem secure_compute (hwin : r.win .compute = ⟨0, t⟩) (hbm : E × L) (side : ι → E × L)
     (hsched : ∀ ω, r.schedule ω = (ρ ω).schedule chip mem (cls ω) (acct ω) (usage ω).link hbm side) (pc : Price)
     (hπ : ∀ ω g, (ρ ω).A.x g ∈ chip ∪ mem → (usage ω).π g = (cls ω g).elim 0 pc)
-    (hH : ∀ ω, Feasible hw (ρ ω).A (usage ω) ∧ (ρ ω).Memory hw.units hw.M) {pRead W ε : ℝ} (hsound : r.ComputeSoundPerRunPriced pc pRead W ε)
+    (hH : ∀ ω, computation r ρ usage θ hθ acct .compute ω ∈ H (deviceFrame hw chip mem hX t)) {pRead W ε : ℝ}
+    (hsound : r.ComputeSoundPerRunPriced pc pRead W ε)
     (p : Recipe) :
     Pouw.pr (fun ω => r.accepts .compute ω ∧
       computation r ρ usage θ hθ acct .compute ω ∈ B (deviceFrame hw chip mem hX t) p
@@ -141,15 +180,9 @@ theorem secure_compute (hwin : r.win .compute = ⟨0, t⟩) (hbm : E × L) (side
     simp only [whole_len]
     rw [sum_const, card_univ, Fintype.card_fin]
     exact le_of_eq (by simp [wholeCuts])
-  · have hwork := covers_work (ρ ω) chip mem (cls ω) (acct ω) (usage ω).link hbm side
-      (fun g hg => hπ ω g (by convert hg)) ⟨0, t⟩ (r.acct .compute)
-    rw [Run.work, hsched, hwin, ← hwork]
-    refine sum_le_sum_of_subset fun g hg => ?_
-    obtain ⟨hg, ha⟩ := mem_filter.1 hg
-    refine mem_inter.2 ⟨?_, mem_filter.2 ⟨mem_univ _, ha⟩⟩
-    change g ∈ (ρ ω).A.region (chip ∪ mem) ((deviceFrame hw chip mem hX t).span j)
+  · refine (work_le_window r ρ usage acct chip mem cls hbm side hwin ω (hsched ω) pc (hπ ω)).trans (le_of_eq ?_)
+    change _ = (ρ ω).A.work (usage ω).π ((ρ ω).A.region (chip ∪ mem) ((deviceFrame hw chip mem hX t).span j) ∩ _)
     rw [deviceFrame_span]
-    convert hg
 
 /-- **At Pearl-C's audit, W1 priced**: `secure_compute` with the compute audit's guarantee from the gap property per
 coin over `w1Priced`, for a run that realizes `W1.w1Stop`. The certificate is `(1 − g) (1 − ε_s) ∑ W_ref` and the
@@ -166,7 +199,7 @@ theorem secure_w1 {Q O S : Type} [Fintype Q] [DecidableEq Q] [Fintype O] [Fintyp
     (acct : ∀ ω, Fin (ρ ω).A.N → α) (hwin : r.win .compute = ⟨0, t⟩) (hbm : E × L) (side : ι → E × L)
     (hsched : ∀ ω, r.schedule ω = (ρ ω).schedule chip mem (cls ω) (acct ω) (usage ω).link hbm side) (pc : Price)
     (hπ : ∀ ω g, (ρ ω).A.x g ∈ chip ∪ mem → (usage ω).π g = (cls ω g).elim 0 pc)
-    (hH : ∀ ω, Feasible hw (ρ ω).A (usage ω) ∧ (ρ ω).Memory hw.units hw.M) {pRead : ℝ}
+    (hH : ∀ ω, computation r ρ usage θ hθ acct .compute ω ∈ H (deviceFrame hw chip mem hX t)) {pRead : ℝ}
     (hq : d.rate .oracle * (r.win .compute).len ≤ 2 ^ 64)
     (real : RealizesPearlCPriced (Pouw.PearlC.W1.w1Stop dv salt) P U w r pc pRead) (p : Recipe) :
     Pouw.pr (fun ω => r.accepts .compute ω ∧
@@ -205,7 +238,8 @@ theorem secure_bandwidth (hwin : r.win .bandwidth = ⟨0, t⟩) (hbm : E × L) (
     (hsched : ∀ ω, r.schedule ω = (ρ ω).schedule chip mem (cls ω) (acct ω) (usage ω).link hbm side)
     (hchip : hbm.2 ∈ chip)
     (hfar : ∀ y, hw.ends hbm.1 = (y, hbm.2) ∨ hw.ends hbm.1 = (hbm.2, y) → y ∉ chip)
-    (hH : ∀ ω, Feasible hw (ρ ω).A (usage ω) ∧ (ρ ω).Memory hw.units hw.M) {Q ε : ℝ} (hsound : r.BandwidthSoundPerRun Q ε) (p : Recipe) (Y : ℝ)
+    (hH : ∀ ω, computation r ρ usage θ hθ acct .bandwidth ω ∈ H (chipFrame hw chip hX t)) {Q ε : ℝ}
+    (hsound : r.BandwidthSoundPerRun Q ε) (p : Recipe) (Y : ℝ)
     (hbw : 0 ≤ p.b_w) (hwe : 0 < p.w_e)
     (hgap : ((chipFrame hw chip hX t).unaccounted 0 ⌈Q⌉₊
       ((chipFrame hw chip hX t).b * (chipFrame hw chip hX t).ω) p : ℝ) < p.Nstar * p.b_w)
@@ -223,7 +257,7 @@ theorem secure_bandwidth (hwin : r.win .bandwidth = ⟨0, t⟩) (hbm : E × L) (
   refine sum_le_sum fun τ _ => ?_
   have h := read_le_delivered (ρ ω) chip mem (cls ω) (acct ω) (usage ω).link hbm side hchip
     (fun g s hs hne hl hy => hfar _ (by
-      have he := ((hH ω).1.2.2.2.2.1 g s hs hne).2
+      have he := ((hH ω).2.2.2.1 g s hs hne).2
       rwa [hl, hy] at he)) τ (r.acct .bandwidth)
   convert h
 
@@ -238,7 +272,8 @@ theorem secure_poub [Fintype ι] {N b h s G : ℕ} (k lam : ℕ) (r : Run d α �
     (hsched : ∀ ω, r.schedule ω = (ρ ω).schedule chip mem (cls ω) (acct ω) (usage ω).link hbm side)
     (hchip : hbm.2 ∈ chip)
     (hfar : ∀ y, hw.ends hbm.1 = (y, hbm.2) ∨ hw.ends hbm.1 = (hbm.2, y) → y ∉ chip)
-    (hH : ∀ ω, Feasible hw (ρ ω).A (usage ω) ∧ (ρ ω).Memory hw.units hw.M) (hN : 0 < N) (real : RealizesBandwidth G r) (p : Recipe) (Y : ℝ)
+    (hH : ∀ ω, computation r ρ usage θ hθ acct .bandwidth ω ∈ H (chipFrame hw chip hX t)) (hN : 0 < N)
+    (real : RealizesBandwidth G r) (p : Recipe) (Y : ℝ)
     (hbw : 0 ≤ p.b_w) (hwe : 0 < p.w_e)
     (hgap : ((chipFrame hw chip hX t).unaccounted 0
       ⌈((k * b : ℕ) : ℝ) - d.chip - ((∑ i, d.cap i * (r.win .bandwidth).len : ℕ) : ℝ) - ((G * b : ℕ) : ℝ) - lam⌉₊
@@ -291,7 +326,7 @@ reference training algorithm of more than `Y` counted multiplications is at most
 before the cut the device's whole work. -/
 theorem secure_capacity (hwin : r.win .capacity = ⟨c, 1⟩) (hbm : E × L) (side : ι → E × L)
     (hsched : ∀ ω, r.schedule ω = (ρ ω).schedule chip mem (cls ω) (acct ω) (usage ω).link hbm side)
-    (hH : ∀ ω, Feasible hw (ρ ω).A (usage ω) ∧ (ρ ω).Memory hw.units hw.M) {S ε : ℝ}
+    (hH : ∀ ω, computation r ρ usage θ hθ acct .capacity ω ∈ H (cutFrame hw chip mem hX c t hc)) {S ε : ℝ}
     (hsound : r.CapacitySoundPerRun S ε) (p : Recipe) (Y : ℝ) (hbw : 0 ≤ p.b_w) (hwe : 0 < p.w_e)
     (hgap : ((cutFrame hw chip mem hX c t hc).unaccounted ⌈S⌉₊ 0
       ((cutFrame hw chip mem hX c t hc).b * (cutFrame hw chip mem hX c t hc).ω) p : ℝ) < p.Nstar * p.b_w)
@@ -311,11 +346,7 @@ theorem secure_capacity (hwin : r.win .capacity = ⟨c, 1⟩) (hbm : E × L) (si
     have h2 : (j : ℕ) < 2 := j.isLt
     exact Fin.ext (by simp only [Fin.val_one]; omega)
   subst hj1
-  unfold Computation.holds
-  rw [Run.held, hsched, hwin, Schedule.held]
-  change ∑ τ ∈ Finset.Ico c (c + 1), _ ≤ (ρ ω).A.width ((ρ ω).state (chip ∪ mem) (c + 1) ∩ _)
-  rw [Nat.Ico_succ_singleton, sum_singleton]
-  convert mem_le_state (ρ ω) chip mem (cls ω) (acct ω) (usage ω).link hbm side c (r.acct .capacity)
+  exact held_le_state r ρ usage acct chip mem cls hbm side hwin ω (hsched ω)
 
 open Pous Pous.EndToEnd PousVerifier PousVerifier.Properties Pous.Period in
 set_option exponentiation.threshold 20000 in
@@ -334,8 +365,8 @@ theorem secure_pous [Fintype ι] {D K R : ℕ} (hP : Pous.P2.Assumptions.P2RingA
     (hv : ∀ ω, r.accepts .capacity ω → P.Accepts ω ∧ ¬ P.Break ω)
     (hwin : r.win .capacity = ⟨c, 1⟩) (hbm : E × L) (side : ι → E × L)
     (hsched : ∀ ω, r.schedule ω = (ρ ω).schedule chip mem (cls ω) (acct ω) (usage ω).link hbm side)
-    (hH : ∀ ω, Feasible hw (ρ ω).A (usage ω) ∧ (ρ ω).Memory hw.units hw.M) (p : Recipe) (Y : ℝ)
-    (hbw : 0 ≤ p.b_w) (hwe : 0 < p.w_e)
+    (hH : ∀ ω, computation r ρ usage θ hθ acct .capacity ω ∈ H (cutFrame hw chip mem hX c t hc)) (p : Recipe)
+    (Y : ℝ) (hbw : 0 ≤ p.b_w) (hwe : 0 < p.w_e)
     (hgap : ((cutFrame hw chip mem hX c t hc).unaccounted ⌈S⌉₊ 0
       ((cutFrame hw chip mem hX c t hc).b * (cutFrame hw chip mem hX c t hc).ω) p : ℝ) < p.Nstar * p.b_w)
     (hY : (cutFrame hw chip mem hX c t hc).bound ⌈S⌉₊ 0 0
@@ -347,6 +378,53 @@ theorem secure_pous [Fintype ι] {D K R : ℕ} (hP : Pous.P2.Assumptions.P2RingA
     (Pous.Period.SecurityProofs.periodCapacity D K R hP ι α ΩW ΩQ d r P τ round S hdev hinst (by
       rw [hwin]
       simpa using hS) hv).1 p Y hbw hwe hgap hY
+
+/-- **Work, memory and a count of ingress in one bound.** The compute audit's window is the ticks `[0, c + 1)` before
+the cut, the capacity audit's the tick `c`, and both charge one account, whose gates are the declared circuit's; each
+has its per-run guarantee, at certificates `W` and `S` and errors `ε_W` and `ε_S`. `counted` is any verdict under
+which the device's links deliver at most `y` bits in the window after the cut. Then the probability that both audits
+accept, the count holds, and the run holds a reference training algorithm of more counted multiplications than the
+fit bound at `S' = (m − ⌈S⌉ + o_s) + (min (b ω) y + o_b)` after the cut plus
+`Φ (c + 1) − ⌈W − pRead · read⌉ + o_w` before it, is at most `ε_W + ε_S`. With no count, `counted` is `True` and `y`
+the links' capacity `b ω` (`delivered_le_capacity`). -/
+theorem secure_device [Nonempty ΩS] (hwinW : r.win .compute = ⟨0, c + 1⟩) (hwinS : r.win .capacity = ⟨c, 1⟩)
+    (hacct : r.acct .compute = r.acct .capacity) (hbm : E × L) (side : ι → E × L)
+    (hsched : ∀ ω, r.schedule ω = (ρ ω).schedule chip mem (cls ω) (acct ω) (usage ω).link hbm side) (pc : Price)
+    (hπ : ∀ ω g, (ρ ω).A.x g ∈ chip ∪ mem → (usage ω).π g = (cls ω g).elim 0 pc)
+    (hH : ∀ ω, computation r ρ usage θ hθ acct .capacity ω ∈ H (cutFrame hw chip mem hX c t hc))
+    {pRead W S εW εS : ℝ} (hW : r.ComputeSoundPerRunPriced pc pRead W εW) (hS : r.CapacitySoundPerRun S εS)
+    (counted : ΩW × ΩQ × ΩS → Prop) (y : ℕ)
+    (hy : ∀ ω i j, counted ω → finProdFinEquiv (i, j) ∉ (cutFrame hw chip mem hX c t hc).missed →
+      (computation r ρ usage θ hθ acct .capacity ω).delivered (cutFrame hw chip mem hX c t hc) i j univ ≤ y)
+    (p : Recipe) (hbw : 0 ≤ p.b_w) (hwe : 0 < p.w_e)
+    (hgap : ((cutFrame hw chip mem hX c t hc).unaccounted ⌈S⌉₊ 0 y p : ℝ) < p.Nstar * p.b_w) :
+    Pouw.pr (fun ω => r.accepts .compute ω ∧ r.accepts .capacity ω ∧ counted ω ∧
+      computation r ρ usage θ hθ acct .capacity ω ∈ B (cutFrame hw chip mem hX c t hc) p
+        ((cutFrame hw chip mem hX c t hc).bound ⌈S⌉₊ 0 ⌈W - pRead * r.pouwRead ω⌉₊ y p)) ≤ εW + εS := by
+  refine (Pouw.pr_mono fun ω hω => ?_).trans ((Pouw.pr_or_le _ _).trans
+    (add_le_add (r.pr_computePricedLt_le hW) (r.pr_capacityLt_le hS)))
+  by_contra hno
+  obtain ⟨hnw, hns⟩ := not_or.1 hno
+  have hxw : ⌈W - pRead * r.pouwRead ω⌉₊ ≤ r.work pc ω :=
+    Nat.ceil_le.2 (by linarith [not_lt.1 fun h => hnw ⟨hω.1, h⟩])
+  have hxs : ⌈S⌉₊ ≤ r.held ω := Nat.ceil_le.2 (by
+    have h := not_lt.1 fun h => hns ⟨hω.2.1, h⟩
+    rw [hwinS] at h
+    simpa using h)
+  refine secure (cutFrame hw chip mem hX c t hc) ⌈S⌉₊ 0 _ y p _ hbw hwe hgap le_rfl _ (hH ω)
+    (fun i j => ⟨fun hj => ⟨hxs.trans ?_, Nat.zero_le _, hy ω i j hω.2.2.1 hj⟩, fun hj => hxw.trans ?_⟩) hω.2.2.2
+  · have hj1 : j = (1 : Fin 2) := by
+      have h0 : (j : ℕ) ≠ 0 := fun h => hj (mem_filter.2 ⟨mem_univ _, by simpa using h⟩)
+      have h2 : (j : ℕ) < 2 := j.isLt
+      exact Fin.ext (by simp only [Fin.val_one]; omega)
+    subst hj1
+    exact held_le_state r ρ usage acct chip mem cls hbm side hwinS ω (hsched ω)
+  · have hj0 : j = (0 : Fin 2) := Fin.ext (by simpa using (mem_filter.1 hj).2)
+    subst hj0
+    refine (work_le_window r ρ usage acct chip mem cls hbm side hwinW ω (hsched ω) pc (hπ ω)).trans (le_of_eq ?_)
+    change _ = (ρ ω).A.work (usage ω).π ((ρ ω).A.region (chip ∪ mem) (Set.Ico 0 (c + 1)) ∩
+      univ.filter fun g => acct ω g = r.acct .capacity)
+    rw [hacct, Nat.zero_add]
 
 end Capacity
 

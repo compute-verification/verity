@@ -4,7 +4,6 @@ public import Definitions.Slowdown.Security
 public import Proofs.Slowdown.FitRate
 public import Proofs.ResourceAccounting.Actual.Outside
 public import Definitions.ResourceAccounting.BlockProperties
-import Proofs.ResourceAccounting.Actual.Localization
 
 /-!
 # No computation is feasible, accounted for and prohibited
@@ -119,7 +118,7 @@ theorem secure {L E : Type*} [Fintype E] [DecidableEq L] (F : Frame L E) (x_s x_
     (hbw : 0 ≤ p.b_w) (hwe : 0 < p.w_e) (hgap : (F.unaccounted x_s x_b y_b p : ℝ) < p.Nstar * p.b_w)
     (hY : F.bound x_s x_b x_w y_b p ≤ Y) (M : Computation L E) :
     M ∈ H F → M ∈ A F x_s x_b x_w y_b → M ∉ B F p Y := by
-  rintro ⟨⟨hC, hW, -, -, hL⟩, hMem⟩ hA ⟨c, emb, T, start, hT, hlt⟩
+  rintro ⟨hC, hW, hMem, hL⟩ hA ⟨c, emb, T, start, hT, hlt⟩
   have hω : ∀ j : Fin F.cuts.J, F.cuts.τ j.succ - F.cuts.τ j.castSucc ≤ F.ω := fun j =>
     le_sup (f := F.len) (mem_univ j)
   have hm : ∀ i, F.hw.M (F.server i) ≤ F.m := fun i => le_sup (f := fun i => F.hw.M (F.server i)) (mem_univ i)
@@ -166,22 +165,18 @@ theorem secure {L E : Type*} [Fintype E] [DecidableEq L] (F : Frame L E) (x_s x_
     linarith
   exact absurd (h2.trans hY) (not_le.2 hlt)
 
-/-- **`H` is five clauses**: a gate reads gates placed no later than the latency allows, the compute rate, the
-sequential speed, the links, and memory on what the run holds. `Feasible`'s memory clause is not among them: it
-follows from the last (`memory_of_mem`). -/
-theorem mem_H_iff {L E : Type*} (F : Frame L E) (M : Computation L E) :
-    M ∈ H F ↔ M.run.A.Causal F.hw.ℓ ∧ M.run.A.ComputeRate F.hw.units M.usage.π F.hw.compute ∧
-      M.run.A.SequentialSpeed F.hw.ring F.hw.D F.hw.span ∧ M.run.Memory F.hw.units F.hw.M ∧
-        M.run.A.Links F.hw.ends F.hw.β M.usage.link :=
-  ⟨fun ⟨⟨hC, hW, hS, _, hL⟩, hM⟩ => ⟨hC, hW, hS, hM, hL⟩,
-    fun ⟨hC, hW, hS, hM, hL⟩ => ⟨⟨hC, hW, hS, memory_of_mem hM, hL⟩, hM⟩⟩
+/-- **A computation the tree's feasible set holds is in `H`**, where its memory limit holds of what the run holds:
+`H` asks less of the circuit than `ResourceAccounting.Feasible` (no sequential speed) and more of memory. -/
+theorem mem_H_of_feasible {L E : Type*} (F : Frame L E) (M : Computation L E)
+    (hF : Feasible F.hw M.run.A M.usage) (hM : M.run.Memory F.hw.units F.hw.M) : M ∈ H F :=
+  ⟨hF.1, hF.2.1, hM, hF.2.2.2.2⟩
 
 /-- The links of a feasible computation deliver to a window's server at most `b ω` bits. -/
 theorem delivered_le_capacity {L E : Type*} [Fintype E] [DecidableEq L] (F : Frame L E) (M : Computation L E)
     (hM : M ∈ H F) (i : Fin F.n) (j : Fin F.cuts.J) : M.delivered F i j univ ≤ F.b * F.ω := by
   unfold Computation.delivered
   simp only [inter_univ]
-  refine (le_of_eq (sum_congr rfl fun τ _ => ?_)).trans ((delivered_le M.run.A hM.1.2.2.2.2 (F.server i) _ _).trans
+  refine (le_of_eq (sum_congr rfl fun τ _ => ?_)).trans ((delivered_le M.run.A hM.2.2.2 (F.server i) _ _).trans
     (Nat.mul_le_mul (le_sup (f := fun i => linkCapacity F.hw.ends F.hw.β (F.server i)) (mem_univ i))
       (le_sup (f := F.len) (mem_univ j))))
   congr
@@ -197,7 +192,7 @@ theorem secure_work {L E : Type*} [Fintype E] [DecidableEq L] (F : Frame L E) (h
     (M : Computation L E) :
     M ∈ H F → M ∈ A F x_s x_b x_w y_b → M ∉ B F p Y := by
   classical
-  rintro ⟨⟨hC, hW, -, -, hL⟩, -⟩ hA ⟨c, emb, T, start, hT, hlt⟩
+  rintro ⟨hC, hW, -, hL⟩ hA ⟨c, emb, T, start, hT, hlt⟩
   have hΦ : ∀ i, F.hw.compute (F.server i) ≤ F.Φ := fun i =>
     le_sup (f := fun i => F.hw.compute (F.server i)) (mem_univ i)
   have hin : ∀ i j, finProdFinEquiv (i, j) ∈ F.missed := fun i j => hF ▸ mem_univ _

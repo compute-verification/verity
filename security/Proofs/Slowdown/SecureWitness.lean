@@ -2,7 +2,6 @@ module
 
 public import Proofs.Slowdown.SecureAudit
 import Proofs.Pouw.Prob
-import Proofs.ResourceAccounting.Actual.Localization
 
 /-!
 # The three sets meet two by two
@@ -29,8 +28,8 @@ declared circuit's: the audits account for the bit carried and the bit read. In 
 one counted multiplication of a reference training algorithm, of the weight `0` by the activation `2`, which reads
 two fresh bits for the one weight it uses (`b_w = 2`). `trained_not_accounted` is `secure` at it.
 
-**Each clause of the feasible set is needed.** At limits per leaf the feasible set is four clauses
-(`feasible_iff`), memory read on what the leaves hold. With one limit set to 0 the run meets the other three clauses, and `trained` is accounted for and
+**Each clause of the feasible set is needed.** The feasible set is four clauses, at limits per leaf each a
+statement about a leaf or the link (`feasible_iff`). With one limit set to 0 the run meets the other three clauses, and `trained` is accounted for and
 prohibited at the fit bound (`Escapes`): `memory_needed` (the server carries nothing), `bandwidth_needed` (the link
 carries nothing) and `work_needed` (the server does no work, the window missed). For the order clause the run is
 another, `late`: the counted multiplication at tick 0 reads its weight and its activation from gates the server
@@ -44,7 +43,7 @@ server (`audit`): the compute account does one unit of work (`audit_work`), so t
 (`bandwidth_witness`): the same audit's bandwidth account reads the one bit the memory link delivers (`audit_read`),
 so it is sound at the certificate 1 (`audit_bandwidth_sound`). And `secure_capacity`'s (`capacity_witness`): on the
 device whose memory is the server, the capacity account holds the one bit the server holds at the end of the tick
-(`audit_held`).
+(`audit_held`). `secure_device`'s hold together at that audit's compute and capacity accounts (`device_witness`).
 -/
 
 @[expose] public section
@@ -141,13 +140,12 @@ def Bandwidth (M : Computation Bool Unit) : Prop :=
 theorem feasible_iff (M : Computation Bool Unit) :
     M ∈ H (frame c m β I) ↔ Order M ∧ Work c M ∧ Memory m M ∧ Bandwidth β M := by
   constructor
-  · rintro ⟨hF, hM⟩
-    obtain ⟨ho, hw, -, hl⟩ := (feasible_ofLeaves_iff M.run.A _ _ _ _ M.usage).1 hF
-    exact ⟨ho, hw, fun X t => hM X (Set.mem_univ _) t, hl⟩
   · rintro ⟨ho, hw, hm, hl⟩
-    exact ⟨(feasible_ofLeaves_iff M.run.A _ _ _ _ M.usage).2 ⟨ho, hw, fun X t =>
-      memory_of_mem (R := M.run) (𝒳 := Set.univ) (M := fun X => ∑ _p ∈ X, m) (fun X _ t => hm X t) X
-        (Set.mem_univ _) t, hl⟩, fun X _ t => hm X t⟩
+    refine ⟨ho, fun p a b => ?_, fun X t => hm X (Set.mem_univ _) t, hl⟩
+    have h := hw {p} (Set.mem_univ _) a b
+    simpa [Hardware.ofLeaves] using h
+  · rintro ⟨ho, hw, hm, hl⟩
+    exact ⟨ho, computeRate_of_leaves M.run.A hw, fun X _ t => hm X t, hl⟩
 
 theorem order : Order trained := fun _ _ _ => le_rfl
 
@@ -205,8 +203,8 @@ theorem bandwidth (hβ : 1 ≤ β) : Bandwidth β trained := by
     rw [he]
     simp [Circuit.width]
 
-theorem feasible : Feasible (hw 1 1 1) run usage ∧ actual.Memory (hw 1 1 1).units (hw 1 1 1).M :=
-  (feasible_iff 1 1 1 ∅ trained).2 ⟨order, work 1 le_rfl, memory 1 le_rfl, bandwidth 1 le_rfl⟩
+theorem feasible : trained ∈ H (frame 1 1 1 I) :=
+  (feasible_iff 1 1 1 I trained).2 ⟨order, work 1 le_rfl, memory 1 le_rfl, bandwidth 1 le_rfl⟩
 
 theorem window_eq (i : Fin (frame c m β I).n) (j : Fin (frame c m β I).cuts.J) :
     run.region ((frame c m β I).server i) ((frame c m β I).span j) = {3} := by
@@ -233,7 +231,7 @@ theorem delivered_univ (i : Fin (frame c m β I).n) (j : Fin (frame c m β I).cu
 circuit's gates hold the one bit the server carries, the window reads the one bit its link delivers and no other, and
 they do the one unit of work the server does. -/
 theorem served_mem : served ∈ H (frame 1 1 1 I) ∧ served ∈ A (frame 1 1 1 I) 1 1 1 1 := by
-  refine ⟨feasible, fun i j => ?_⟩
+  refine ⟨feasible I, fun i j => ?_⟩
   have hj : j = (0 : Fin 1) := Subsingleton.elim _ _
   subst hj
   refine ⟨fun _ => ⟨?_, (delivered_univ 1 1 1 I i 0).ge, (delivered_univ 1 1 1 I i 0).le⟩, fun _ => ?_⟩
@@ -404,7 +402,7 @@ theorem trained_prohibited {Y : ℝ} (hY : Y < 1) : trained ∈ B (frame c m β 
 
 /-- **A computation that is feasible and prohibited**, at the count `0`. -/
 theorem trained_mem : trained ∈ H (frame 1 1 1 I) ∧ trained ∈ B (frame 1 1 1 I) recipe 0 :=
-  ⟨feasible, trained_prohibited 1 1 1 I (by norm_num)⟩
+  ⟨feasible I, trained_prohibited 1 1 1 I (by norm_num)⟩
 
 /-- `secure` at the witness: the run with no gate the declared circuit's is not accounted for. -/
 theorem trained_not_accounted : trained ∉ A (frame 1 1 1 I) 1 1 1 1 := fun hA =>
@@ -673,19 +671,24 @@ noncomputable def auditOn (chip mem : Finset Bool) : ResourceAccounting.Run dev 
 /-- The audit on the device whose chip is the server. -/
 noncomputable abbrev audit : ResourceAccounting.Run dev Unit Unit Unit Unit := auditOn {true} ∅
 
-/-- The compute account does one unit of work on every run, the server's whole compute over the tick. -/
-theorem audit_work (ω : Unit × Unit × Unit) : audit.work price ω = 1 := by
-  have h := covers_work actual {true} ∅ (fun _ => some .tc) (fun _ : Fin actual.A.N => ()) usage.link ((), true)
+/-- On a device that is the server, the compute account does one unit of work on every run, the server's whole
+compute over the tick. -/
+theorem audit_work (chip mem : Finset Bool) (h : chip ∪ mem = {true}) (ω : Unit × Unit × Unit) :
+    (auditOn chip mem).work price ω = 1 := by
+  have hc := covers_work actual chip mem (fun _ => some .tc) (fun _ : Fin actual.A.N => ()) usage.link ((), true)
     Empty.elim (p := price) (π := usage.π) (fun _ _ => rfl) ⟨0, 1⟩ ()
-  change _ = audit.work price ω at h
-  rw [← h]
-  change run.work usage.π ((run.region _ (Set.Ico 0 (0 + 1))).filter fun _ => () = ()) = 1
-  rw [region_eq _ (by simp)]
-  decide
+  change _ = (auditOn chip mem).work price ω at hc
+  rw [← hc]
+  have key : run.work usage.π ((run.region {true} (Set.Ico 0 (0 + 1))).filter fun _ => () = ()) = 1 := by
+    rw [region_eq _ (by simp)]
+    decide
+  convert key using 4
+  convert h
 
 /-- The always-accepting audit is sound at the certificate 1 with no error. -/
-theorem audit_sound : audit.ComputeSoundPerRunPriced price 0 1 0 := fun o =>
-  (Pouw.pr_eq_zero fun x hx => absurd hx.2 (by rw [audit_work]; norm_num)).le
+theorem audit_sound (chip mem : Finset Bool) (h : chip ∪ mem = {true}) :
+    (auditOn chip mem).ComputeSoundPerRunPriced price 0 1 0 := fun o =>
+  (Pouw.pr_eq_zero fun x hx => absurd hx.2 (by rw [audit_work chip mem h]; norm_num)).le
 
 /-- **`secure_compute` is not vacuous**: its hypotheses hold together at an audit that accepts every run, at the
 certificate 1, which is all the work the server does in the tick. So the run holds no reference training algorithm
@@ -695,7 +698,7 @@ theorem compute_witness (p : Recipe) (ω : Unit × Unit × Unit) :
       (fun _ _ => ()) .compute ω ∉ B (deviceFrame (hw 1 1 1) {true} ∅ (Set.mem_univ _) 1) p (p.o_w : ℕ) := fun hB => by
   have h := secure_compute (hw 1 1 1) {true} ∅ (Set.mem_univ _) 1 audit (fun _ => actual) (fun _ => usage) (fun _ => ∅)
     (fun _ _ h => absurd h (notMem_empty _)) (fun _ _ => some .tc) (fun _ _ => ()) rfl ((), true) Empty.elim
-    (fun _ => rfl) price (fun _ _ _ => rfl) (fun _ => feasible) audit_sound p
+    (fun _ => rfl) price (fun _ _ _ => rfl) (fun _ => feasible ∅) (audit_sound {true} ∅ (union_empty _)) p
   have hY : ∀ x, (hw 1 1 1).compute ({true} ∪ ∅) * 1 - ⌈(1 : ℝ) - 0 * audit.pouwRead x⌉₊ + p.o_w = p.o_w :=
     fun _ => by simp [Hardware.ofLeaves]
   simp only [hY] at h
@@ -741,7 +744,7 @@ theorem bandwidth_witness (ω : Unit × Unit × Unit) :
       rcases hy with hy | hy
       · simp [Hardware.ofLeaves] at hy
         simp [← hy]
-      · simp [Hardware.ofLeaves] at hy) (fun _ => feasible) audit_bandwidth_sound recipe (1 / 4) (by norm_num)
+      · simp [Hardware.ofLeaves] at hy) (fun _ => feasible ∅) audit_bandwidth_sound recipe (1 / 4) (by norm_num)
     (by norm_num) (by rw [hu]; norm_num) (by
       unfold Frame.bound
       rw [hu]
@@ -805,7 +808,7 @@ theorem capacity_witness (ω : Unit × Unit × Unit) :
     decide
   have h := secure_capacity (hw 1 1 1) ∅ {true} (Set.mem_univ _) 0 1 le_rfl (auditOn ∅ {true}) (fun _ => actual)
     (fun _ => usage) (fun _ => ∅) (fun _ _ h => absurd h (notMem_empty _)) (fun _ _ => some .tc) (fun _ _ => ())
-    rfl ((), true) Empty.elim (fun _ => rfl) (fun _ => feasible) audit_capacity_sound recipe (3 / 2) (by norm_num)
+    rfl ((), true) Empty.elim (fun _ => rfl) (fun _ => feasible ∅) audit_capacity_sound recipe (3 / 2) (by norm_num)
     (by norm_num) (by rw [hu]; norm_num) (by
       unfold Frame.bound
       rw [hu, hmiss]
@@ -814,6 +817,54 @@ theorem capacity_witness (ω : Unit × Unit × Unit) :
     (⟨trivial, Subsingleton.elim ω x ▸ hB⟩ : _ ∧ _)
   rw [h1] at h
   exact absurd h (by norm_num)
+
+/-- **`secure_device`'s hypotheses hold together**, at the audit of `capacity_witness` with its compute audit over
+the same tick, both at the certificate 1, and no count of ingress. The compute certificate is the server's whole
+work before the cut, so nothing is charged there, and the run holds no reference training algorithm of more than the
+fit bound's `1/2` counted multiplications. -/
+theorem device_witness (ω : Unit × Unit × Unit) :
+    computation (auditOn ∅ {true}) (fun _ => actual) (fun _ => usage) (fun _ => ∅)
+      (fun _ _ h => absurd h (notMem_empty _)) (fun _ _ => ()) .capacity ω ∉
+        B (cutFrame (hw 1 1 1) ∅ {true} (Set.mem_univ _) 0 1 le_rfl) recipe (1 / 2) := by
+  rintro ⟨c, emb, T, start, hT, hlt⟩
+  have hm : (cutFrame (hw 1 1 1) ∅ {true} (Set.mem_univ _) 0 1 le_rfl).m = 1 :=
+    (single_m _ _ _ 1 _ _).trans (by simp [Hardware.ofLeaves])
+  have hb : (cutFrame (hw 1 1 1) ∅ {true} (Set.mem_univ _) 0 1 le_rfl).b = 1 :=
+    (single_b _ _ _ 1 _ _).trans (by simp [linkCapacity, boundary, Hardware.ofLeaves])
+  have hΦ : (cutFrame (hw 1 1 1) ∅ {true} (Set.mem_univ _) 0 1 le_rfl).Φ = 1 :=
+    (single_Φ _ _ _ 1 _ _).trans (by simp [Hardware.ofLeaves])
+  have hω : (cutFrame (hw 1 1 1) ∅ {true} (Set.mem_univ _) 0 1 le_rfl).ω = 1 := by
+    change (cutFrame (hw 0 0 0) ∅ {true} (Set.mem_univ _) 0 1 le_rfl).ω = 1
+    decide
+  have hu : (cutFrame (hw 1 1 1) ∅ {true} (Set.mem_univ _) 0 1 le_rfl).unaccounted ⌈(1 : ℝ)⌉₊ 0
+      ((cutFrame (hw 1 1 1) ∅ {true} (Set.mem_univ _) 0 1 le_rfl).b *
+        (cutFrame (hw 1 1 1) ∅ {true} (Set.mem_univ _) 0 1 le_rfl).ω) recipe = 1 := by
+    simp [Frame.unaccounted, hm, hb, hω]
+  have hmiss : ∑ u ∈ (cutFrame (hw 1 1 1) ∅ {true} (Set.mem_univ _) 0 1 le_rfl).missed,
+      ((cutFrame (hw 1 1 1) ∅ {true} (Set.mem_univ _) 0 1 le_rfl).Φ *
+        (cutFrame (hw 1 1 1) ∅ {true} (Set.mem_univ _) 0 1 le_rfl).len (finProdFinEquiv.symm u).2 - 1 +
+          recipe.o_w) = 0 := by
+    rw [hΦ]
+    change ∑ u ∈ (cutFrame (hw 0 0 0) ∅ {true} (Set.mem_univ _) 0 1 le_rfl).missed,
+      (1 * (cutFrame (hw 0 0 0) ∅ {true} (Set.mem_univ _) 0 1 le_rfl).len (finProdFinEquiv.symm u).2 - 1 + 0) = 0
+    decide
+  have hY : ∀ x : Unit × Unit × Unit, (cutFrame (hw 1 1 1) ∅ {true} (Set.mem_univ _) 0 1 le_rfl).bound ⌈(1 : ℝ)⌉₊ 0
+      ⌈(1 : ℝ) - 0 * (auditOn ∅ {true}).pouwRead x⌉₊
+      ((cutFrame (hw 1 1 1) ∅ {true} (Set.mem_univ _) 0 1 le_rfl).b *
+        (cutFrame (hw 1 1 1) ∅ {true} (Set.mem_univ _) 0 1 le_rfl).ω) recipe ≤ 1 / 2 := fun x => by
+    have hx : ⌈(1 : ℝ) - 0 * (auditOn ∅ {true}).pouwRead x⌉₊ = 1 := by simp
+    unfold Frame.bound
+    rw [hu, hx, hmiss]
+    norm_num [cutAt]
+  have h := secure_device (hw 1 1 1) ∅ {true} (Set.mem_univ _) 0 1 le_rfl (auditOn ∅ {true}) (fun _ => actual)
+    (fun _ => usage) (fun _ => ∅) (fun _ _ h => absurd h (notMem_empty _)) (fun _ _ => some .tc) (fun _ _ => ())
+    rfl rfl rfl ((), true) Empty.elim (fun _ => rfl) price (fun _ _ _ => rfl) (fun _ => feasible ∅)
+    (audit_sound ∅ {true} (empty_union _)) audit_capacity_sound (fun _ => True) _
+    (fun _ i j _ _ =>
+      delivered_le_capacity (cutFrame (hw 1 1 1) ∅ {true} (Set.mem_univ _) 0 1 le_rfl) _ (feasible ∅) i j) recipe (by norm_num) (by norm_num)
+    (by rw [hu]; norm_num)
+  refine absurd ((le_of_eq (Pouw.pr_eq_one fun x => ?_).symm).trans h) (by norm_num)
+  exact ⟨trivial, trivial, trivial, c, emb, T, start, hT, lt_of_le_of_lt (hY x) hlt⟩
 
 end Compute
 
