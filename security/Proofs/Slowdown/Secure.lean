@@ -24,6 +24,9 @@ is at least the fit bound (`Frame.bound`) and the bits a covered window can read
   those placed in the missed windows, which number at most the work the limits leave there plus those shared with the
   declared circuit (`card_missed_le`).
 
+`secure_work` is the claim from work alone: at a frame whose every window the memory and bandwidth audits miss, `Y` at
+least `n J (Φ ω − x_w + o_w)`, with no premise on the recipe's other parameters.
+
 Over the audits' runs, with `ExceptWith` the tree's "fails on an accepted run with probability at most `ε`":
 `accounted_of_windows` adds the audits' errors over the windows (an accepted run is in `A` outside
 `|missed| δ_w + (n J − |missed|) (δ_s + δ_b + δ_y)`), and `secure_pr` is `secure` there (where every run is feasible and an
@@ -170,6 +173,38 @@ theorem secure {L E : Type*} [Fintype E] [DecidableEq L] (F : Frame L E) (x_s x_
     rw [← sub_le_iff_le_add, le_div_iff₀' hc, mul_sub]
     linarith
   exact absurd (h2.trans hY) (not_le.2 hlt)
+
+/-- **Work alone.** At a frame whose every window the memory and bandwidth audits miss, a feasible computation in
+`A` holds no reference training algorithm of more than `Y` counted multiplications, for every `Y` at least
+`n J (Φ ω − x_w + o_w)`: what the compute rate leaves beside the `x_w` work the declared circuit does in each window.
+No premise on the recipe's other parameters. -/
+theorem secure_work {L E : Type*} [Fintype E] [DecidableEq L] (F : Frame L E) (hF : F.missed = univ)
+    (x_s x_b x_w y_b : ℕ) (p : Recipe) (Y : ℝ)
+    (hY : ((F.n * F.cuts.J * (F.Φ * F.ω - x_w + p.o_w) : ℕ) : ℝ) ≤ Y) (M : Computation L E) :
+    M ∈ H F → M ∈ A F x_s x_b x_w y_b → M ∉ B F p Y := by
+  classical
+  rintro ⟨hC, hW, -, -, hL⟩ hA ⟨c, emb, T, start, hT, hlt⟩
+  have hω : ∀ j : Fin F.cuts.J, F.cuts.τ j.succ - F.cuts.τ j.castSucc ≤ F.ω := fun j =>
+    le_sup (f := fun j : Fin F.cuts.J => F.cuts.τ j.succ - F.cuts.τ j.castSucc) (mem_univ j)
+  have hΦ : ∀ i, F.hw.compute (F.server i) ≤ F.Φ := fun i =>
+    le_sup (f := fun i => F.hw.compute (F.server i)) (mem_univ i)
+  have hin : ∀ i j, finProdFinEquiv (i, j) ∈ F.missed := fun i j => hF ▸ mem_univ _
+  obtain ⟨P, hP⟩ := ResourceAccounting.SecurityProofs.Actual.ServerBlocksAt M.run F.hw.ℓ (fun _ => M.run.N) F.hw.ends
+    F.hw.β M.usage.link F.n F.server M.registered M.registered_input F.t F.cuts ∅ F.disjoint hC
+    (computeRate_N M.run _) hL
+  have hcount := card_missed_le M.run F.n F.server M.registered M.registered_input F.t F.cuts F.ω F.hw.compute
+    M.usage.π F.Φ x_w p.o_w M.declared c emb T F.missed hW F.unit hω hΦ hT.load (fun i j hu => (hA i j).2 hu)
+    hT.shared_work
+  have hall : T.M.card ≤ F.missed.card * (F.Φ * F.ω - x_w + p.o_w) := by
+    refine (card_le_card fun g hg => mem_filter.2 ⟨hg, ?_⟩).trans hcount
+    have hne : (pull emb P).unit g ≠ none := fun h =>
+      absurd (((pull emb P).input_iff g).1 h) (by simp [(mem_filter.1 (T.M_computed hg)).2])
+    obtain ⟨u, hu⟩ := Option.ne_none_iff_exists'.1 hne
+    obtain ⟨⟨i, j⟩, rfl⟩ := finProdFinEquiv.surjective u
+    have h2 := mem_pull_gates.1 ((Partition.mem_gates _).2 hu)
+    exact ⟨i, j, hin i j, (Iff.of_eq (congrArg (fun s => emb.emb g ∈ s) (hP i j).1)).1 h2⟩
+  rw [hF, card_univ, Fintype.card_fin] at hall
+  exact absurd ((Nat.cast_le.2 hall).trans hY) (not_le.2 hlt)
 
 section Runs
 
