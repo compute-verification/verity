@@ -15,7 +15,9 @@ physical constraints then leave the rest of the run at most the limit less `x`:
 * `work_outside`: under `ComputeRate`, the gates of `A[X, [a, b))` outside `S` do at most `Φ_X (b − a) − x` work;
 * `state_outside`: under `MemoryAt`, `X` carries at most `M_X − x` bits outside `S` across the tick
   (`state_outside_of_held`: the same from a run's state, with `S` counted where it is held);
-* `ingress_outside`: under `Links`, `A[X, [a, b))` reads at most `β_X (b − a) − x` bits outside `S` from outside `X`.
+* `delivered_le`: under `Links`, over `[a, b)` the links deliver at most `β_X (b − a)` bits to `X`;
+* `delivered_outside`: under `Links`, where the links deliver to `X` over `[a, b)` at least `x` bits of `S` and at most
+  `y` in all, `A[X, [a, b))` reads at most `min (β_X (b − a)) y − x` bits outside `S` from outside `X`.
 
 A capacity certificate is in bit-ticks over a window, an average: `card_short_ticks_mul_le` bounds the ticks at which
 the account holds fewer than `x` bits.
@@ -111,18 +113,55 @@ theorem card_short_ticks_mul_le {ι α : Type} (sc : Schedule ι α) (w : Window
     ring
   exact Nat.le_sub_of_add_le (by linarith)
 
-/-- **Ingress outside `S`**: if `A[X, [a, b))` reads at least `x` bits of `S` from outside `X`, it reads at most
-`β_X (b − a) − x` bits outside `S` from there. -/
-theorem ingress_outside {E : Type*} [Fintype E] {ends : E → L × L} {β : E → ℕ} {link : Fin A.N → Fin A.N → E}
-    (h : A.Links ends β link) (X : Finset L) [DecidablePred fun g => A.x g ∉ X] (a b : ℕ) (S : Finset (Fin A.N)) {x : ℕ}
-    (hx : x ≤ A.width (((A.into (A.region X (Set.Ico a b))).filter fun g => A.x g ∉ X) ∩ S)) :
+open Classical in
+/-- **What the links deliver**: under `Links`, over the ticks of `[a, b)` the links deliver at most `β_X (b − a)` bits
+to `X`, a bit counted at each tick `X` reads it. -/
+theorem delivered_le {E : Type*} [Fintype E] {ends : E → L × L} {β : E → ℕ} {link : Fin A.N → Fin A.N → E}
+    (h : A.Links ends β link) (X : Finset L) (a b : ℕ) :
+    ∑ t ∈ Finset.Ico a b, A.width ((A.into (A.region X (Set.Ico t (t + 1)))).filter fun g => A.x g ∉ X) ≤
+      linkCapacity ends β X * (b - a) := by
+  refine (sum_le_sum fun t _ => ?_).trans (by rw [sum_const, Nat.card_Ico, smul_eq_mul, Nat.mul_comm])
+  have h4 := ingress_le A h X t (t + 1)
+  unfold Placed.ingress at h4
+  rw [Finset.filter_congr_decidable, Nat.add_sub_cancel_left, Nat.mul_one] at h4
+  exact h4
+
+open Classical in
+/-- **What a window reads outside `S`, by what the links deliver**: if over the ticks of `[a, b)` the links deliver
+to `X` at least `x` bits of `S` and at most `y` bits in all, a bit counted at each tick `X` reads it, then
+`A[X, [a, b))` reads at most `min (β_X (b − a)) y − x` bits outside `S` from outside `X`. -/
+theorem delivered_outside {E : Type*} [Fintype E] {ends : E → L × L} {β : E → ℕ} {link : Fin A.N → Fin A.N → E}
+    (h : A.Links ends β link) (X : Finset L) (a b : ℕ) (S : Finset (Fin A.N)) {x y : ℕ}
+    (hx : x ≤ ∑ t ∈ Finset.Ico a b,
+      A.width (((A.into (A.region X (Set.Ico t (t + 1)))).filter fun g => A.x g ∉ X) ∩ S))
+    (hy : ∑ t ∈ Finset.Ico a b,
+      A.width (((A.into (A.region X (Set.Ico t (t + 1)))).filter fun g => A.x g ∉ X) ∩ univ) ≤ y) :
     A.width (((A.into (A.region X (Set.Ico a b))).filter fun g => A.x g ∉ X) ∩ Sᶜ) ≤
-      linkCapacity ends β X * (b - a) - x := by
-  have h1 := ingress_le A h X a b
-  unfold Placed.ingress at h1
-  rw [Finset.filter_congr_decidable] at h1
-  have h2 := width_inter_add_compl A ((A.into (A.region X (Set.Ico a b))).filter fun g => A.x g ∉ X) S
-  omega
+      min (linkCapacity ends β X * (b - a)) y - x := by
+  set D : ℕ → Finset (Fin A.N) := fun t => (A.into (A.region X (Set.Ico t (t + 1)))).filter fun g => A.x g ∉ X
+  have hsub : ((A.into (A.region X (Set.Ico a b))).filter fun g => A.x g ∉ X) ∩ Sᶜ ⊆
+      (Finset.Ico a b).biUnion fun t => D t ∩ Sᶜ := by
+    intro s hs
+    obtain ⟨hs1, hsS⟩ := mem_inter.1 hs
+    obtain ⟨hin, hsx⟩ := mem_filter.1 hs1
+    obtain ⟨-, g, hg, hsg⟩ := (mem_into A).1 hin
+    obtain ⟨hc, hgx, hgt⟩ := (mem_region A).1 hg
+    exact mem_biUnion.2 ⟨A.t g, Finset.mem_Ico.2 hgt, mem_inter.2 ⟨mem_filter.2 ⟨(mem_into A).2
+      ⟨fun hr => hsx ((mem_region A).1 hr).2.1, g, (mem_region A).2 ⟨hc, hgx, le_rfl, Nat.lt_succ_self _⟩, hsg⟩,
+      hsx⟩, hsS⟩⟩
+  have h1 := (width_mono A hsub).trans (width_biUnion_le A _ _)
+  have h2 : ∑ t ∈ Finset.Ico a b, A.width (D t) =
+      ∑ t ∈ Finset.Ico a b, A.width (D t ∩ S) + ∑ t ∈ Finset.Ico a b, A.width (D t ∩ Sᶜ) := by
+    rw [← sum_add_distrib]
+    exact sum_congr rfl fun t _ => width_inter_add_compl A (D t) S
+  have h3 : ∑ t ∈ Finset.Ico a b, A.width (D t) ≤ linkCapacity ends β X * (b - a) := delivered_le A h X a b
+  have h5 : ∑ t ∈ Finset.Ico a b, A.width (D t) ≤ y := by
+    simpa only [inter_univ] using hy
+  have h6 : ∑ t ∈ Finset.Ico a b, A.width (D t) ≤ min (linkCapacity ends β X * (b - a)) y := le_min h3 h5
+  have h7 : x ≤ ∑ t ∈ Finset.Ico a b, A.width (D t ∩ S) := hx
+  have h8 : ∑ t ∈ Finset.Ico a b, A.width (D t ∩ Sᶜ) ≤ min (linkCapacity ends β X * (b - a)) y - x :=
+    Nat.le_sub_of_add_le (by rw [Nat.add_comm]; exact (Nat.add_le_add_right h7 _).trans (h2 ▸ h6))
+  exact h1.trans h8
 
 /-- What `X` carries across `t` in `G` is at most what it carries outside `S` plus what it carries in `S ∩ G`. -/
 theorem stateIn_le_split (X : Finset L) (t : ℕ) (S G : Finset (Fin A.N)) :

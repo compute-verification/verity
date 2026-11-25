@@ -13,10 +13,10 @@ is at least the fit bound (`Frame.bound`) and the bits a covered window can read
 (`Frame.unaccounted`) are fewer than `N* b_w`. Its steps:
 
 * What the limits leave. In a feasible computation whose declared circuit holds `x_s` bits on a server at a cut, the
-  server carries at most `m − x_s` bits outside the declared circuit across it (`state_outside`); one whose window reads
-  `x_b` bits of the declared circuit from outside its server reads at most `b ω − x_b` others from there
-  (`ingress_outside`), and at most `y_b − x_b` when it reads `y_b` in all; and one whose declared circuit does `x_w` work in a window does at most `Φ ω − x_w` outside it
-  there (`work_outside`).
+  server carries at most `m − x_s` bits outside the declared circuit across it (`state_outside`); one whose links
+  deliver to a window's server `x_b` bits of the declared circuit and `y_b` bits in all reads at most
+  `min (b ω) y_b − x_b` others from outside the server (`delivered_outside`); and one whose declared circuit does `x_w`
+  work in a window does at most `Φ ω − x_w` outside it there (`work_outside`).
 * What a covered window reads of the reference training algorithm's novel gates: what its server carries across the
   cut that opens it plus what crosses the server's boundary, each split into the part outside the declared circuit,
   which the limits leave, and the part the algorithm shares with it (`window_reads_le`).
@@ -141,18 +141,11 @@ theorem secure {L E : Type*} [Fintype E] [DecidableEq L] (F : Frame L E) (x_s x_
     have hrb : M.run.width (((M.run.into (M.run.region (F.server i)
         (Set.Ico (F.cuts.τ j.castSucc) (F.cuts.τ j.succ)))).filter fun g => M.run.x g ∉ F.server i) ∩
         M.declaredᶜ) ≤ min (F.b * F.ω) y_b - x_b := by
-      have h1 := (ingress_outside M.run hL (F.server i) _ _ M.declared hxb).trans
-        (Nat.sub_le_sub_right (Nat.mul_le_mul (hb i) (hω j)) _)
-      have h2 := width_inter_add_compl M.run ((M.run.into (M.run.region (F.server i)
-        (Set.Ico (F.cuts.τ j.castSucc) (F.cuts.τ j.succ)))).filter fun g => M.run.x g ∉ F.server i) M.declared
-      unfold Placed.ingress at hyb
-      rw [Finset.filter_congr_decidable] at hyb
-      have hxb' : x_b ≤ M.run.width (((M.run.into (M.run.region (F.server i)
-        (Set.Ico (F.cuts.τ j.castSucc) (F.cuts.τ j.succ)))).filter fun g => M.run.x g ∉ F.server i) ∩ M.declared) :=
-        hxb
-      have hyb' : M.run.width ((M.run.into (M.run.region (F.server i)
-        (Set.Ico (F.cuts.τ j.castSucc) (F.cuts.τ j.succ)))).filter fun g => M.run.x g ∉ F.server i) ≤ y_b := hyb
-      omega
+      unfold Computation.delivered at hxb hyb
+      have h1 := delivered_outside M.run hL (F.server i) (F.cuts.τ j.castSucc) (F.cuts.τ j.succ) M.declared
+        (x := x_b) (y := y_b) (by convert hxb) (by convert hyb)
+      exact (le_of_eq (by congr)).trans (h1.trans (Nat.sub_le_sub_right
+        (min_le_min_right _ (Nat.mul_le_mul (hb i) (hω j))) _))
     exact Nat.cast_le.2 (window_reads_le M.run hC (subset_biUnion_of_mem F.server (mem_univ i)) M.registered_input
       hτ M.declared _ hrs hrb (hT.shared_carried i j hu) (hT.shared_read i j hu))
   have hk := fitRate_of_reads_but M.run F.hw.ℓ F.hw.ends F.hw.β M.usage.link F.n F.server M.registered
@@ -173,6 +166,16 @@ theorem secure {L E : Type*} [Fintype E] [DecidableEq L] (F : Frame L E) (x_s x_
     rw [← sub_le_iff_le_add, le_div_iff₀' hc, mul_sub]
     linarith
   exact absurd (h2.trans hY) (not_le.2 hlt)
+
+/-- The links of a feasible computation deliver to a window's server at most `b ω` bits. -/
+theorem delivered_le_capacity {L E : Type*} [Fintype E] [DecidableEq L] (F : Frame L E) (M : Computation L E)
+    (hM : M ∈ H F) (i : Fin F.n) (j : Fin F.cuts.J) : M.delivered F i j univ ≤ F.b * F.ω := by
+  unfold Computation.delivered
+  simp only [inter_univ]
+  refine (le_of_eq (sum_congr rfl fun τ _ => ?_)).trans ((delivered_le M.run hM.2.2.2.2 (F.server i) _ _).trans
+    (Nat.mul_le_mul (le_sup (f := fun i => linkCapacity F.hw.ends F.hw.β (F.server i)) (mem_univ i))
+      (le_sup (f := fun j : Fin F.cuts.J => F.cuts.τ j.succ - F.cuts.τ j.castSucc) (mem_univ j))))
+  congr
 
 /-- **Work alone.** At a frame whose every window the memory and bandwidth audits miss, a feasible computation in
 `A` holds no reference training algorithm of more than `Y` counted multiplications, for every `Y` at least
@@ -226,8 +229,8 @@ theorem secure_pr [Fintype E] (F : Frame L E) (x_s x_b x_w y_b : ℕ) (p : Recip
   (mono _ _ fun ω h => ⟨h.1, fun hin => h.2 (secure F x_s x_b x_w y_b p Y hbw hwe hgap hY (M ω) (hH ω) hin)⟩).trans hA
 
 /-- **The audits' errors add over the windows.** If at each covered window an accepted run's declared circuit holds
-`x_s` bits at the cut outside probability `δ_s` and reads `x_b` bits from outside its server outside `δ_b`, and the
-window reads at most `y_b` bits from there outside `δ_y`, and at each missed window the declared circuit does `x_w`
+`x_s` bits at the cut outside probability `δ_s` and the links deliver `x_b` bits of it to the window's server outside
+`δ_b` and at most `y_b` bits in all outside `δ_y`, and at each missed window the declared circuit does `x_w`
 work outside `δ_w`, then an accepted run's computation is in `A` outside
 `|missed| δ_w + (n J − |missed|) (δ_s + δ_b + δ_y)`. `pr` is any monotone probability on the runs with the union
 bound. -/
@@ -237,9 +240,9 @@ theorem accounted_of_windows
     (hs : ∀ i j, finProdFinEquiv (i, j) ∉ F.missed →
       ExceptWith pr accepts (fun ω => x_s ≤ (M ω).carries F i j (M ω).declared) δ_s)
     (hb : ∀ i j, finProdFinEquiv (i, j) ∉ F.missed →
-      ExceptWith pr accepts (fun ω => x_b ≤ (M ω).reads F i j (M ω).declared) δ_b)
+      ExceptWith pr accepts (fun ω => x_b ≤ (M ω).delivered F i j (M ω).declared) δ_b)
     (hy : ∀ i j, finProdFinEquiv (i, j) ∉ F.missed →
-      ExceptWith pr accepts (fun ω => (M ω).run.ingress (F.server i) (F.span j) ≤ y_b) δ_y)
+      ExceptWith pr accepts (fun ω => (M ω).delivered F i j univ ≤ y_b) δ_y)
     (hw : ∀ i j, finProdFinEquiv (i, j) ∈ F.missed →
       ExceptWith pr accepts
         (fun ω => x_w ≤ (M ω).run.work (M ω).usage.π ((M ω).window F i j ∩ (M ω).declared)) δ_w) :
@@ -249,8 +252,8 @@ theorem accounted_of_windows
   let good : Option Bool → Fin F.n → Fin F.cuts.J → Ω → Prop := fun k i j ω =>
     match k with
     | none => x_s ≤ (M ω).carries F i j (M ω).declared
-    | some true => x_b ≤ (M ω).reads F i j (M ω).declared
-    | some false => (M ω).run.ingress (F.server i) (F.span j) ≤ y_b
+    | some true => x_b ≤ (M ω).delivered F i j (M ω).declared
+    | some false => (M ω).delivered F i j univ ≤ y_b
   let bad : Fin (F.n * F.cuts.J) → Ω → Prop := fun u ω => accepts ω ∧
     ¬ ((u ∉ F.missed → ∀ k, good k (finProdFinEquiv.symm u).1 (finProdFinEquiv.symm u).2 ω) ∧
       (u ∈ F.missed → x_w ≤ (M ω).run.work (M ω).usage.π

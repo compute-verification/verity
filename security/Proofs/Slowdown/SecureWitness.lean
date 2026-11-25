@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Slowdown.SecureCompute
+public import Proofs.Slowdown.SecureAudit
 import Proofs.Pouw.Prob
 
 /-!
@@ -40,7 +40,9 @@ the work, memory and bandwidth clauses on a server that carries nothing over a l
 **`secure_compute`'s hypotheses hold together** (`compute_witness`). The same run as an actual-circuit run (`actual`),
 with a compute audit that accepts every run over the one tick and whose schedule is the one the run induces on the
 server (`audit`): the compute account does one unit of work (`audit_work`), so the audit is sound at the certificate
-1 with no error (`audit_sound`), and `secure_compute` applies.
+1 with no error (`audit_sound`), and `secure_compute` applies. `secure_bandwidth`'s hold together too
+(`bandwidth_witness`): the same audit's bandwidth account reads the one bit the memory link delivers (`audit_read`),
+so it is sound at the certificate 1 (`audit_bandwidth_sound`).
 -/
 
 @[expose] public section
@@ -189,11 +191,17 @@ theorem window_eq (i : Fin (frame c m β I).n) (j : Fin (frame c m β I).cuts.J)
   rw [region_eq _ (show (0 : ℕ) ∈ Set.Ico 0 1 from ⟨le_rfl, Nat.one_pos⟩)]
   decide
 
-theorem ingress_le (i : Fin (frame c m β I).n) (j : Fin (frame c m β I).cuts.J) :
-    run.ingress ((frame c m β I).server i) ((frame c m β I).span j) ≤ 1 := by
-  unfold Placed.ingress
-  rw [window_eq, Finset.filter_congr_decidable]
-  change run.width ((run.into {3}).filter fun g => run.x g ∉ ({true} : Finset Bool)) ≤ 1
+/-- The link delivers one bit to the server in the window. -/
+theorem delivered_univ (i : Fin (frame c m β I).n) (j : Fin (frame c m β I).cuts.J) :
+    ∑ t ∈ Finset.Ico ((frame c m β I).cuts.τ j.castSucc) ((frame c m β I).cuts.τ j.succ),
+      run.width (((run.into (run.region ((frame c m β I).server i) (Set.Ico t (t + 1)))).filter
+        fun g => run.x g ∉ (frame c m β I).server i) ∩ univ) = 1 := by
+  have hj : j = (0 : Fin 1) := Subsingleton.elim _ _
+  subst hj
+  change ∑ t ∈ Finset.Ico 0 1, run.width (((run.into (run.region {true} (Set.Ico t (t + 1)))).filter
+    fun g => run.x g ∉ ({true} : Finset Bool)) ∩ univ) = 1
+  rw [show Finset.Ico 0 1 = {0} from rfl, sum_singleton,
+    region_eq _ (show (0 : ℕ) ∈ Set.Ico 0 (0 + 1) from ⟨le_rfl, Nat.one_pos⟩)]
   decide
 
 /-- **A computation that is feasible and accounted for**, at the amounts `1`, `1`, `1` and `1`: the declared
@@ -203,14 +211,10 @@ theorem served_mem : served ∈ H (frame 1 1 1 I) ∧ served ∈ A (frame 1 1 1 
   refine ⟨feasible, fun i j => ?_⟩
   have hj : j = (0 : Fin 1) := Subsingleton.elim _ _
   subst hj
-  refine ⟨fun _ => ⟨?_, ?_, ingress_le 1 1 1 I i 0⟩, fun _ => ?_⟩
+  refine ⟨fun _ => ⟨?_, (delivered_univ 1 1 1 I i 0).ge, (delivered_univ 1 1 1 I i 0).le⟩, fun _ => ?_⟩
   · change 1 ≤ run.stateIn {true} 0 univ
     unfold Placed.stateIn
     rw [region_eq _ (Set.mem_Ici.2 (le_refl 0)), Finset.filter_congr_decidable]
-    decide
-  · change 1 ≤ run.width (((run.into (run.region ((frame 1 1 1 I).server i) ((frame 1 1 1 I).span 0))).filter
-      fun g => run.x g ∉ ({true} : Finset Bool)) ∩ univ)
-    rw [window_eq]
     decide
   · change 1 ≤ run.work usage.π (run.region ((frame 1 1 1 I).server i) ((frame 1 1 1 I).span 0) ∩ univ)
     rw [window_eq]
@@ -388,7 +392,7 @@ def Escapes (M : Computation Bool Unit) (F : Frame Bool Unit) (x_s x_b x_w y_b :
     M ∈ A F x_s x_b x_w y_b ∧ M ∈ B F recipe Y
 
 theorem accounted_covered : trained ∈ A (frame c m β ∅) 0 0 0 1 := fun i j =>
-  ⟨fun _ => ⟨Nat.zero_le _, Nat.zero_le _, ingress_le c m β ∅ i j⟩, fun h => absurd h (notMem_empty _)⟩
+  ⟨fun _ => ⟨Nat.zero_le _, Nat.zero_le _, (delivered_univ c m β ∅ i j).le⟩, fun h => absurd h (notMem_empty _)⟩
 
 theorem accounted_missed : trained ∈ A (frame c m β univ) 1 1 0 1 := fun _ _ =>
   ⟨fun h => absurd (mem_univ _) h, fun _ => Nat.zero_le _⟩
@@ -577,10 +581,11 @@ theorem order_needed :
   · unfold Frame.bound
     rw [hu]
     simp
-  · change lateRun.ingress ((frame 1 0 0 ∅).server i) ((frame 1 0 0 ∅).span j) ≤ 0
-    unfold Placed.ingress
-    rw [late_window, Finset.filter_congr_decidable]
-    change lateRun.width ((lateRun.into {3}).filter fun g => lateRun.x g ∉ ({true} : Finset Bool)) ≤ 0
+  · have hj : j = (0 : Fin 1) := Subsingleton.elim _ _
+    subst hj
+    change ∑ t ∈ Finset.Ico 0 1, lateRun.width (((lateRun.into (lateRun.region {true} (Set.Ico t (t + 1)))).filter
+      fun g => lateRun.x g ∉ ({true} : Finset Bool)) ∩ univ) ≤ 0
+    rw [show Finset.Ico 0 1 = {0} from rfl, sum_singleton, late_region (by simp) (by simp)]
     decide
 
 section Compute
@@ -644,7 +649,7 @@ certificate 1, which is all the work the server does in the tick. So the run hol
 of more counted multiplications than it shares with the compute account's gates. -/
 theorem compute_witness (p : Recipe) (ω : Unit × Unit × Unit) :
     computation audit (fun _ => actual) (fun _ => usage) (fun _ => ∅) (fun _ _ h => absurd h (notMem_empty _))
-      (fun _ _ => ()) ω ∉ B (deviceFrame (hw 1 1 1) {true} ∅ (Set.mem_univ _) 1) p (p.o_w : ℕ) := fun hB => by
+      (fun _ _ => ()) .compute ω ∉ B (deviceFrame (hw 1 1 1) {true} ∅ (Set.mem_univ _) 1) p (p.o_w : ℕ) := fun hB => by
   have h := secure_compute (hw 1 1 1) {true} ∅ (Set.mem_univ _) 1 audit (fun _ => actual) (fun _ => usage) (fun _ => ∅)
     (fun _ _ h => absurd h (notMem_empty _)) (fun _ _ => some .tc) (fun _ _ => ()) rfl ((), true) Empty.elim
     (fun _ => rfl) price (fun _ _ _ => rfl) (fun _ => feasible) audit_sound p
@@ -652,6 +657,53 @@ theorem compute_witness (p : Recipe) (ω : Unit × Unit × Unit) :
     fun _ => by simp [Hardware.ofLeaves]
   simp only [hY] at h
   have h1 := Pouw.pr_eq_one (P := fun ω => audit.accepts .compute ω ∧ _) fun x =>
+    (⟨trivial, Subsingleton.elim ω x ▸ hB⟩ : _ ∧ _)
+  rw [h1] at h
+  exact absurd h (by norm_num)
+
+open Classical in
+/-- The bandwidth account reads the one bit the memory link delivers. -/
+theorem audit_read (ω : Unit × Unit × Unit) : 1 ≤ audit.read ω := by
+  unfold Run.read Schedule.read
+  refine le_trans ?_ (Finset.single_le_sum (f := fun t => (audit.schedule ω t).read (audit.acct .bandwidth))
+    (fun _ _ => Nat.zero_le _) (show 0 ∈ (audit.win .bandwidth).ticks from Finset.mem_Ico.2 ⟨le_rfl, Nat.one_pos⟩))
+  have h2 : (2 : Fin run.N) ∈ run.readOn usage.link () true (Set.Ico 0 (0 + 1)) := by
+    simp only [Placed.readOn, Finset.mem_filter, Finset.mem_univ, true_and]
+    exact ⟨3, by decide, by decide, by decide, ⟨le_rfl, Nat.one_pos⟩⟩
+  exact le_trans (by decide : 1 ≤ run.w 2)
+    (width_le_read actual {true} ∅ (fun _ => some .tc) (fun _ => ()) usage.link ((), true) Empty.elim h2)
+
+/-- The always-accepting bandwidth audit is sound at the certificate 1 with no error. -/
+theorem audit_bandwidth_sound : audit.BandwidthSoundPerRun 1 0 := fun _ _ =>
+  (Pouw.pr_eq_zero fun q hq => absurd hq.2 (not_lt.2 (by exact_mod_cast audit_read _))).le
+
+/-- **`secure_bandwidth` is not vacuous**: its hypotheses hold together at an audit that accepts every run, at the
+certificate 1, which is all the memory link delivers in the tick. The chip carries one bit, so a window reads one
+bit of a reference training algorithm, and the run holds none of more than `1/4` counted multiplications. -/
+theorem bandwidth_witness (ω : Unit × Unit × Unit) :
+    computation audit (fun _ => actual) (fun _ => usage) (fun _ => ∅) (fun _ _ h => absurd h (notMem_empty _))
+      (fun _ _ => ()) .bandwidth ω ∉ B (chipFrame (hw 1 1 1) {true} (Set.mem_univ _) 1) recipe (1 / 4) := fun hB => by
+  have hm : (chipFrame (hw 1 1 1) {true} (Set.mem_univ _) 1).m = 1 :=
+    (single_m _ _ _ 1 _ _).trans (by simp [Hardware.ofLeaves])
+  have hb : (chipFrame (hw 1 1 1) {true} (Set.mem_univ _) 1).b = 1 :=
+    (single_b _ _ _ 1 _ _).trans (by simp [linkCapacity, boundary, Hardware.ofLeaves])
+  have hω : (chipFrame (hw 1 1 1) {true} (Set.mem_univ _) 1).ω = 1 := whole_ω _ _ _ _ _
+  have hu : (chipFrame (hw 1 1 1) {true} (Set.mem_univ _) 1).unaccounted 0 ⌈(1 : ℝ)⌉₊
+      ((chipFrame (hw 1 1 1) {true} (Set.mem_univ _) 1).b * (chipFrame (hw 1 1 1) {true} (Set.mem_univ _) 1).ω)
+      recipe = 1 := by
+    simp [Frame.unaccounted, hm, hb, hω]
+  have h := secure_bandwidth (hw 1 1 1) {true} ∅ (Set.mem_univ _) 1 audit (fun _ => actual) (fun _ => usage)
+    (fun _ => ∅) (fun _ _ h => absurd h (notMem_empty _)) (fun _ _ => some .tc) (fun _ _ => ()) rfl ((), true)
+    Empty.elim (fun _ => rfl) (mem_singleton_self _) (fun y hy => by
+      rcases hy with hy | hy
+      · simp [Hardware.ofLeaves] at hy
+        simp [← hy]
+      · simp [Hardware.ofLeaves] at hy) (fun _ => feasible) audit_bandwidth_sound recipe (1 / 4) (by norm_num)
+    (by norm_num) (by rw [hu]; norm_num) (by
+      unfold Frame.bound
+      rw [hu]
+      norm_num [wholeCuts])
+  have h1 := Pouw.pr_eq_one (P := fun ω => audit.accepts .bandwidth ω ∧ _) fun x =>
     (⟨trivial, Subsingleton.elim ω x ▸ hB⟩ : _ ∧ _)
   rw [h1] at h
   exact absurd h (by norm_num)

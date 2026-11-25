@@ -107,6 +107,13 @@ noncomputable def carries (i : Fin F.n) (j : Fin F.cuts.J) (G : Finset (Fin M.ru
 noncomputable def reads (i : Fin F.n) (j : Fin F.cuts.J) (G : Finset (Fin M.run.N)) : ℕ :=
   M.run.width (((M.run.into (M.window F i j)).filter fun g => M.run.x g ∉ F.server i) ∩ G)
 
+/-- The bits of `G` the links deliver to server `i` during window `j`: at each of the window's ticks, the bits of `G`
+the server's gates placed at that tick read from outside it. A bit read at two ticks is delivered twice. -/
+noncomputable def delivered (i : Fin F.n) (j : Fin F.cuts.J) (G : Finset (Fin M.run.N)) : ℕ :=
+  ∑ t ∈ Finset.Ico (F.cuts.τ j.castSucc) (F.cuts.τ j.succ),
+    M.run.width (((M.run.into (M.run.region (F.server i) (Set.Ico t (t + 1)))).filter
+      fun g => M.run.x g ∉ F.server i) ∩ G)
+
 /-- What the developer's servers did over `[0, t)`, as a circuit whose inputs are what it reads, with the registered
 inputs its baseline (`Placed.declaration`). -/
 noncomputable def circuit : RegisteredCircuit :=
@@ -122,14 +129,14 @@ def H (F : Frame L E) : Set (Computation L E) := {M | Feasible F.hw M.run M.usag
 
 /-- **`𝒜`, the computations consistent with what the audits account for**, at the amounts `x_s`, `x_b`, `x_w` and
 `y_b`. At each window the memory and bandwidth audits cover, the declared circuit's gates hold at least `x_s` bits on
-the window's server at the cut that opens it, and the window reads at least `x_b` bits of them from outside its
-server and at most `y_b` bits in all from there (the network attester's count; every feasible computation reads at
-most what the server's links carry). At each window they miss, the declared circuit's gates do at least `x_w` work. -/
+the window's server at the cut that opens it, and during the window the links deliver to its server at least `x_b`
+bits of them and at most `y_b` bits in all (the network attester's count; every feasible computation is delivered at
+most what the server's links carry), a bit counted at each tick it is read (`Computation.delivered`). At each window
+they miss, the declared circuit's gates do at least `x_w` work. -/
 def A [DecidableEq L] (F : Frame L E) (x_s x_b x_w y_b : ℕ) : Set (Computation L E) :=
   {M | ∀ i j,
     (finProdFinEquiv (i, j) ∉ F.missed →
-      x_s ≤ M.carries F i j M.declared ∧ x_b ≤ M.reads F i j M.declared ∧
-        M.run.ingress (F.server i) (F.span j) ≤ y_b) ∧
+      x_s ≤ M.carries F i j M.declared ∧ x_b ≤ M.delivered F i j M.declared ∧ M.delivered F i j univ ≤ y_b) ∧
     (finProdFinEquiv (i, j) ∈ F.missed → x_w ≤ M.run.work M.usage.π (M.window F i j ∩ M.declared))}
 
 /-- **A recipe**: the parameters of the premises on a reference training algorithm. `Nstar` is the fewest weights that
