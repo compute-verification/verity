@@ -466,7 +466,7 @@ None of these is assumed silently; each would restate the conclusion:
 | The floor | not in Lean | Open |
 | Slowdown | not in Lean | Open |
 | The bounds | `Slowdown.Guarantees.SlowdownRemote`, `Slowdown.Guarantees.SlowdownThreaded` | Proved as arithmetic over inline hypotheses, not over the definition above |
-| Feasible, accounted for, not prohibited | `Slowdown.Security.H`, `Slowdown.Security.A`, `Slowdown.Security.B`, `Slowdown.SecurityProofs.secure`, `Slowdown.SecurityProofs.secure_pr` | Proved over the actual circuit, by the fit bound, and not in the lock; that the audits put an accepted run in `A` and that training puts a run in `B` are premises |
+| Feasible, accounted for, not prohibited | `Slowdown.Security.H`, `Slowdown.Security.A`, `Slowdown.Security.B`, `Slowdown.SecurityProofs.secure`, `Slowdown.SecurityProofs.secure_pr`, `Slowdown.SecurityProofs.secure_work`, `Slowdown.SecurityProofs.secure_compute`, `Slowdown.SecurityProofs.secure_w1` | Proved over the actual circuit, by the fit bound, and not in the lock; that the memory and bandwidth audits put an accepted run in `A` and that training puts a run in `B` are premises. The work term alone needs neither: `secure_compute` takes `A`'s work from the compute audit's per-run guarantee, and `secure_w1` from Pearl-C's gap property at W1 priced, where the audit's schedule is the one the run induces on the device |
 
 ## Three trees
 
