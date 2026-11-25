@@ -37,6 +37,7 @@ public import Proofs.Core.SamplingGeneric.FirstHitClass
 public import Proofs.Core.Game.Unambiguous
 public import Proofs.Core.Game.TwoRun
 public import Proofs.Core.Game.Tape
+public import Proofs.Core.Game.Draw
 public import Proofs.Core.Game.InterleaveBridge
 public import Proofs.Core.Challenger
 public import Proofs.Core.Draw
