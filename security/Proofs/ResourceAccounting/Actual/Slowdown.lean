@@ -40,7 +40,7 @@ import Proofs.Slowdown.Threads
 # The slowdown's windows from the memory cap over threads
 
 `ThreadedRuntimeSlots` at `r = αF`, with `M_r + M_d ≤ |T.M|`, `⌈t/ω⌉₊ = (t + ω − 1)/ω` (`ceil_div_eq_pred_div`), and
-`Λ`, which is `Threading.bound` by definition; `SlowdownServerBlocksCap` is its instance at one slot per weight gate.
+`Λ`, which is `Threading.bound` by definition.
 -/
 
 @[expose] public section
@@ -75,13 +75,5 @@ theorem SlowdownServerBlocksCapSlots : Guarantees.Actual.SlowdownServerBlocksCap
     _ ≤ ((n * ((t + ω - 1) / ω) : ℕ) : ℝ) * ((R + α * F * ω) * T.bound (R + α * F * ω) b_w d e) := h
     _ = n * ⌈(t : ℝ) / ω⌉₊ * ((R + α * F * ω) * Lambda T.reuse e d b_w (R + α * F * ω)) := by
         rw [ceil_div_eq_pred_div hω, Nat.cast_mul, hb]
-
-/-- `SlowdownServerBlocksCapSlots` at one slot per weight gate. -/
-theorem SlowdownServerBlocksCap : Guarantees.Actual.SlowdownServerBlocksCap := by
-  intro L E _ _ A ℓ Φ ends β link n X θ hθ t ω Γ R F α b_w b_a c T d e Mr Md hω hX hC hΦ hL hbw hba hd hΓ hr hR
-    hcont hT hW hM
-  exact SlowdownServerBlocksCapSlots A ℓ Φ ends β link n X θ hθ t ω Γ R F α b_w b_a c T (Slowdown.SecurityProofs.Fit.idSlots T)
-    d e Mr Md hω hX hC hΦ hL hbw hba hd hΓ hr hR hcont hT
-    (Slowdown.SecurityProofs.weightsIncompressibleSlots_of (Slowdown.SecurityProofs.Fit.idSlots T) hbw.le hW) hM
 
 end ResourceAccounting.SecurityProofs.Actual

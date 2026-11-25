@@ -33,15 +33,15 @@ The model of `security/Definitions/ResourceAccounting/Actual.lean`:
   the developer's region into inference blocks of at most `Φ_X (τ (j + 1) − τ j)` gates, each reading in a set `G` at
   most the state's part in `G` at its cut plus `β_X (τ (j + 1) − τ j)`; `Windows`, its instance at the cuts `kω` and
   `G = univ`, inference blocks of at most `Φ_X ω` gates, each reading at most `M_X + β_X ω` fresh input bits.
-* `Actual/Threaded.lean`: `ThreadedRuntime`, the memory cap over threads: when the developer's region over `[0, t)`
-  contains a threaded reference training algorithm, `b_a |M| ≤ n ⌈t/ω⌉ K Λ(K)` with `K = R + r ω` the state at a window's start
-  plus its ingress, from `ServerBlocksAt` pulled back through the containment and the inference-only policy's `ThreadedReads` per window;
-  `ThreadedRate`, at the window `ω = R/r` in the quadratic regime, at most `reuse · n R r / (d b_w b_a)` counted
-  multiplications a tick; `ThreadedRuntimeDark`, the cap through a partial containment, with every counted
-  multiplication the declaration doesn't compute a dark gate.
-* `Actual/Slowdown.lean`: `SlowdownServerBlocksCap`, the slowdown's windows hypothesis
-  (`Slowdown.Guarantees.SlowdownExecutionPhases`) from `ThreadedRuntime` at a whole-tick window, when one threading counts the
-  residual and the declared computation together.
+* `Actual/Threaded.lean`: `ThreadedRuntimeSlots`, the memory cap over threads: when the developer's region over `[0, t)`
+  contains a threaded reference training algorithm, `b_a |M| ≤ n ⌈t/ω⌉ K Λ(K)` with `K = R + r ω` the state at a
+  window's start plus its ingress, from `ServerBlocksAt` pulled back through the containment and the inference-only
+  policy's `ThreadedReadsSlots` per window; `ThreadedRateSlots`, at the window `ω = R/r` in the quadratic regime, at
+  most `reuse · n R r / (d b_w b_a)` counted multiplications a tick; `ThreadedRuntimeDarkSlots`, the cap through a
+  partial containment, with every counted multiplication the declaration doesn't compute a dark gate.
+* `Actual/Slowdown.lean`: `SlowdownServerBlocksCapSlots`, the slowdown's windows hypothesis
+  (`Slowdown.Guarantees.SlowdownExecutionPhases`) from `ThreadedRuntimeSlots` at a whole-tick window, when one threading
+  counts the residual and the declared computation together.
 * `Actual/Localization.lean`: `Localization`, over strategies causal from every tick: with what the rest can tell at
   the window's start and what it hears from the verifier fixed, what the rest does is a prefix-causal table keyed by
   what `X` sent it, of at most `2^e` entries; `localization_wires`, the per-run lemma on wires; memory per run on the

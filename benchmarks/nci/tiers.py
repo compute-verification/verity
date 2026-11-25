@@ -13,7 +13,7 @@ steps are proved.
   peak. It trains at full efficiency unless the memory cap binds: at peak in the counted share, at MFU_0 in the slowdown (``evaluate``'s
   ``free_mfu``, the reference-efficiency assumption: free compute runs no better than the reference). A
   spatial unit's window reads its starting state plus its novel intake, K_w = state + lambda_in L, and contains at most
-  K_w Lambda(K_w) / b_a counted multiplications (``ThreadedRuntime``, reads counted by width; counting them by
+  K_w Lambda(K_w) / b_a counted multiplications (``ThreadedRuntimeSlots``, reads counted by width; counting them by
   information, which a wipe would bound, is open: its two support forms were falsified), declared or not.
   The state is all memory,
   disks included unless they're unplugged; after a wipe, the wipe residual R_wipe: memory the fill doesn't reach, the proof of
@@ -195,7 +195,7 @@ STATUS = [
      "unattested) and host CPUs at INT8 AMX peak 0.126. eps' = 1e-4 is a chosen slack: the theorem's delta is "
      "p/eps' (Markov over the windows), 2.7e-8 if PoUW's per-window failure p were 3 x 2^-40, which has no value "
      "yet."),
-    ("Memory cap", "ThreadedRuntime and ThreadedRate give the closed form's shape; its value needs Threaded "
+    ("Memory cap", "ThreadedRuntimeSlots and ThreadedRateSlots give the closed form's shape; its value needs Threaded "
      "at window scale, which fails. The fit bound (FitBoundSlots under ReachSlots and FitsSlots, adopted for dense "
      "recipes) replaces it at token threads, conditional on F1 and F4 per parameter slot, F3, intake "
      "held to alpha F, WipeFullUse (not yet stated) and an information form; it charges each server's first window "
