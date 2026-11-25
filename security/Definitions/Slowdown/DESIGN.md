@@ -2,9 +2,12 @@
 
 `security/Definitions/Slowdown/Security.lean` holds the three sets of the security argument, and
 `security/Definitions/Slowdown/Guarantees/Secure.lean` its one statement, `Slowdown.Guarantees.Secure`: at a frame
-`F`, no computation is in `H F.hw`, in `A F x_s x_b x_w y_b` and in `B F tb sh Y`, for every training bound `tb` that
-holds and every count `Y` at least its count on the frame (`Frame.bound`).
-`security/Definitions/Slowdown/Guarantees/Run.lean` holds the two statements over a run's coins that stand on it, `RunSecure` and `RunComplete`. This file says why the hardware model `H` has the clauses it
+`F`, `M ∈ H hw ∧ M ∈ A F x_s x_b x_w y_b → M ∉ B F tb sh Y`, for every hardware `hw` the frame's servers are locations
+of, every training bound `tb` that holds and every count `Y` at least its count on the frame and that hardware
+(`Frame.bound`). `A` and `B` read the frame and nothing of the hardware, so a run establishes `M ∈ A` once, and
+`Secure` is applied to it afterwards at each hardware and each training bound one asks about.
+`security/Definitions/Slowdown/Guarantees/Run.lean` holds the statements over a run's coins, `RunAccounted`, which is
+what a run establishes, `RunSecure`, which is `Secure` applied to it, and `RunComplete`. This file says why the hardware model `H` has the clauses it
 has, what it takes from an H100's card, what the statements over a run say, and what they do not give.
 
 ## The computation and the hardware
@@ -80,17 +83,20 @@ A run is a `Verity.Game`, the verifier's coins and the developer's messages, and
 computation behind it (`world`). Its probability is `Verity.Game.prob` and soundness is `Verity.Sound`, Core's, so a
 protocol's guarantee in that form composes with these with no translation.
 
-- **`RunSecure`.** Every outcome's computation is in `H`. The verifier accepts only when the four audits do, and each
-  audit is sound, at its own error, for one clause of `A` at each window it covers: bits held (`HeldAtLeast`), bits
-  delivered to the declared circuit (`DeliveredAtLeast`), bits delivered in all (`DeliveredAtMost`) and work
-  (`WorkAtLeast`). A clause's amount is what the audit certifies at the outcome, so it may read the outcome. Then
-  against every developer the verifier accepts a run whose computation is in `B`, at a training bound that holds and a
-  count at least its count at the outcome's amounts, with probability at most the errors added over the windows. `Secure` is the step from
-  `A` to `B` inside it.
+- **`RunAccounted`.** The verifier accepts only when the four audits do, and each audit is sound, at its own error,
+  for one clause of `A` at each window it covers: bits held (`HeldAtLeast`), bits delivered to the declared circuit
+  (`DeliveredAtLeast`), bits delivered in all (`DeliveredAtMost`) and work (`WorkAtLeast`). A clause's amount is what
+  the audit certifies at the outcome, so it may read the outcome. Then against every developer the verifier accepts a
+  run whose computation is outside `A` at the outcome's amounts with probability at most the errors added over the
+  windows. It names no hardware and no training bound.
+- **`RunSecure`.** `Secure` applied to `RunAccounted`: at a hardware every outcome's computation is feasible on (in
+  `H`), a training bound that holds and a count at least its count at the outcome's amounts, the verifier accepts a
+  run whose computation is in `B` with the same probability. Another hardware or another training bound is another
+  application of `Secure` to the same `RunAccounted`.
 - **`RunComplete`.** A developer whose strategy each audit rejects with probability at most its own error is
   rejected with probability at most their sum.
 
-The four soundness premises are the audits' slots: `RunSecure` takes them, and an audit fills one by proving that
+The four soundness premises are the audits' slots: `RunAccounted` takes them, and an audit fills one by proving that
 premise of its own acceptance. A slot's clause is in bits of wire width, the unit of `A`. Three are filled
 (`security/Proofs/Slowdown/SecureAudit.lean`), at the run of the audits' coins, one uniform coin, and at any frame
 with a window that is the audit's window on the audit's device:
@@ -101,6 +107,9 @@ with a window that is the audit's window on the audit's device:
 | Work (`WorkAtLeast`) | `work_slot` | the compute audit's per-run guarantee on the priced sum | `w1_slot`, Pearl-C at W1 priced |
 | Bandwidth (`DeliveredAtLeast`) | `delivered_slot` | the bandwidth audit's per-run guarantee | `poub_slot`, PoUB |
 | The count (`DeliveredAtMost`) | no audit | the links' capacity `b ω`, which every feasible run meets | |
+
+Bandwidth's is the one slot whose filler reads a hardware model, and of it only where each link ends: every run's
+wires run on links between their gates' leaves, and the memory link's other end is outside the chip.
 
 `secure_compute`, `secure_bandwidth`, `secure_capacity` and `secure_device` are `RunSecure` at these slots on a frame
 of one device, read back as a bound on the coins' probability.

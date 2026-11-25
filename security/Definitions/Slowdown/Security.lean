@@ -7,11 +7,13 @@ public import Definitions.Slowdown.Fit
 # The security argument's three sets (trusted)
 
 Security is `𝓗 ∩ 𝒜 ∩ ℬ = ∅`: no computation is physically feasible, consistent with what the audits account for, and
-prohibited. Each set is a predicate on a computation `M` alone, at public parameters, and none reads another:
+prohibited. Each set is a predicate on a computation `M` alone, at public parameters, and none reads another. `𝒜`
+and `ℬ` read the frame and nothing of the hardware, and `𝓗` the hardware and nothing of the frame, so what a run
+establishes, `M ∈ 𝒜`, stands before a hardware model or a training bound is chosen:
 
-* **The frame** (`Frame`), public: the hardware with its limits, the developer's servers, the run's ticks cut into
-  windows (one server, one interval between two cuts), and the windows the memory and bandwidth audits don't cover
-  (`missed`).
+* **The frame** (`Frame`), public: the developer's servers, the run's ticks cut into windows (one server, one
+  interval between two cuts), and the windows the memory and bandwidth audits don't cover (`missed`). It holds no
+  hardware; `Frame.On` says its servers are locations of one.
 * **A computation** (`Computation`): everything the machines did, as a run (`ResourceAccounting.Actual.Run`: the
   actual circuit, its gates' values and what each leaf holds at each tick) with what each gate uses of its location's
   compute and the link each wire runs on, the registered inputs, and the gates of the declared circuit (`declared`),
@@ -29,10 +31,11 @@ prohibited. Each set is a predicate on a computation `M` alone, at public parame
   that each read at most `S` bits of it. It is the one place a route to a bound on training enters: the fit bound is
   `Training.fit` at a recipe, and another route is another value, proved to hold (`Training.Holds`) once.
 
-`Slowdown.Guarantees.Secure` is the emptiness, at any training bound that holds and `Y` its count (`Frame.bound`) on
-what the limits less the amounts leave (`Frame.unaccounted`). `Slowdown.Guarantees.RunSecure` is the statement over a
-run's coins: the verifier accepts a run whose computation is prohibited with probability at most the audits' errors
-together.
+`Slowdown.Guarantees.RunAccounted` is what a run establishes: the verifier accepts a run whose computation is outside
+`𝒜` with probability at most the audits' errors together. `Slowdown.Guarantees.Secure` is the emptiness,
+`M ∈ 𝓗 ∧ M ∈ 𝒜 → M ∉ ℬ`, at any hardware the frame's servers are locations of, any training bound that holds and
+`Y` its count (`Frame.bound`) on what the hardware's limits less the amounts leave (`Frame.unaccounted`).
+`Slowdown.Guarantees.RunSecure` is the two together.
 -/
 
 @[expose] public section
@@ -43,34 +46,32 @@ namespace Slowdown.Security
 
 open Verity ResourceAccounting Finset
 
-/-- **The frame**, public: the hardware `hw`, the developer's `n` pairwise disjoint servers, each a location of the
-hardware, the ticks `[0, t)` cut into windows, and the windows `missed` that the memory and bandwidth audits don't
-cover. Window `(i, j)` is the server `i` over the ticks between cuts `j` and `j + 1`. -/
-structure Frame (L E : Type*) where
-  hw : Hardware L E
+/-- **The frame**, public: the developer's `n` pairwise disjoint servers, the ticks `[0, t)` cut into windows, and
+the windows `missed` that the memory and bandwidth audits don't cover. Window `(i, j)` is the server `i` over the
+ticks between cuts `j` and `j + 1`. -/
+structure Frame (L : Type*) where
   n : ℕ
   server : Fin n → Finset L
   disjoint : ∀ i j, i ≠ j → Disjoint (server i) (server j)
-  unit : ∀ i, server i ∈ hw.units
   t : ℕ
   cuts : Cuts t
   missed : Finset (Fin (n * cuts.J))
 
 namespace Frame
 
-/-- **The frame of one server** `X`, a location of the hardware. -/
-abbrev single {L E : Type*} (hw : Hardware L E) (X : Finset L) (hX : X ∈ hw.units) (t : ℕ) (cuts : Cuts t)
-    (missed : Finset (Fin (1 * cuts.J))) : Frame L E where
-  hw := hw
+/-- **The frame of one server** `X`. -/
+abbrev single {L : Type*} (X : Finset L) (t : ℕ) (cuts : Cuts t) (missed : Finset (Fin (1 * cuts.J))) : Frame L where
   n := 1
   server _ := X
   disjoint i j h := absurd (Subsingleton.elim i j) h
-  unit _ := hX
   t := t
   cuts := cuts
   missed := missed
 
-variable {L E : Type*} (F : Frame L E)
+variable {L E : Type*} (F : Frame L) (hw : Hardware L E)
+
+/-- **The frame is on the hardware** `hw`: each of its servers is a location of `hw`, one its limits are stated at. -/
+def On : Prop := ∀ i, F.server i ∈ hw.units
 
 /-- The ticks of window `j`: `[τ j, τ (j + 1))`. -/
 def span (j : Fin F.cuts.J) : Set ℕ := Set.Ico (F.cuts.τ j.castSucc) (F.cuts.τ j.succ)
@@ -81,14 +82,14 @@ def len (j : Fin F.cuts.J) : ℕ := F.cuts.τ j.succ - F.cuts.τ j.castSucc
 /-- `ω`: the longest window, in ticks. -/
 def ω : ℕ := univ.sup F.len
 
-/-- `m`: the most bits a server carries across a tick. -/
-def m : ℕ := univ.sup fun i => F.hw.M (F.server i)
+/-- `m`: the most bits a server carries across a tick, on the hardware `hw`. -/
+def m : ℕ := univ.sup fun i => hw.M (F.server i)
 
-/-- `b`: the most bits a server's links carry a tick. -/
-noncomputable def b [Fintype E] : ℕ := univ.sup fun i => linkCapacity F.hw.ends F.hw.β (F.server i)
+/-- `b`: the most bits a server's links carry a tick, on the hardware `hw`. -/
+noncomputable def b [Fintype E] : ℕ := univ.sup fun i => linkCapacity hw.ends hw.β (F.server i)
 
-/-- `Φ`: the most work a server does a tick. -/
-def Φ : ℕ := univ.sup fun i => F.hw.compute (F.server i)
+/-- `Φ`: the most work a server does a tick, on the hardware `hw`. -/
+def Φ : ℕ := univ.sup fun i => hw.compute (F.server i)
 
 end Frame
 
@@ -104,7 +105,7 @@ structure Computation (L E : Type*) where
 
 namespace Computation
 
-variable {L E : Type*} [DecidableEq L] (M : Computation L E) (F : Frame L E)
+variable {L E : Type*} [DecidableEq L] (M : Computation L E) (F : Frame L)
 
 /-- The gates of window `(i, j)`: the computed gates placed on server `i` during window `j`'s ticks. -/
 noncomputable def window (i : Fin F.n) (j : Fin F.cuts.J) : Finset (Fin M.run.A.N) :=
@@ -155,7 +156,7 @@ def H (hw : Hardware L E) : Set (Computation L E) :=
 
 section Clauses
 
-variable [DecidableEq L] (F : Frame L E) (i : Fin F.n) (j : Fin F.cuts.J)
+variable [DecidableEq L] (F : Frame L) (i : Fin F.n) (j : Fin F.cuts.J)
 
 /-- **Memory's clause of `𝒜`** at window `(i, j)`: the window's server holds at least `x_s` bits of the declared
 circuit's gates at the cut that opens it (`Computation.holds`). -/
@@ -180,8 +181,8 @@ end Clauses
 /-- **`𝒜`, the computations consistent with what the audits account for**, at the amounts `x_s`, `x_b`, `x_w` and
 `y_b`: at each window the memory and bandwidth audits cover, memory's clause, bandwidth's and the count's
 (`HeldAtLeast`, `DeliveredAtLeast`, `DeliveredAtMost`), and at each window they miss, work's (`WorkAtLeast`). Each
-clause is what one audit's guarantee concludes of an accepted run's computation. -/
-def A [DecidableEq L] (F : Frame L E) (x_s x_b x_w y_b : ℕ) : Set (Computation L E) :=
+clause is what one audit's guarantee concludes of an accepted run's computation, and none reads a hardware model. -/
+def A [DecidableEq L] (F : Frame L) (x_s x_b x_w y_b : ℕ) : Set (Computation L E) :=
   {M | ∀ i j,
     (finProdFinEquiv (i, j) ∉ F.missed →
       M ∈ HeldAtLeast F i j x_s ∧ M ∈ DeliveredAtLeast F i j x_b ∧ M ∈ DeliveredAtMost F i j y_b) ∧
@@ -252,7 +253,7 @@ noncomputable abbrev Training.fit (p : Recipe) : Training where
 
 section Trains
 
-variable [DecidableEq L] (F : Frame L E) (M : Computation L E)
+variable [DecidableEq L] (F : Frame L) (M : Computation L E)
 
 /-- `Q` divides `c` by the frame's windows: its unit `(i, j)` is the gates `emb` sends into window `(i, j)`. -/
 def Divides {c : RegisteredCircuit} (emb : Containment c.D (M.circuit F).D)
@@ -291,27 +292,27 @@ end Trains
 
 namespace Frame
 
-variable [Fintype E] (F : Frame L E)
+variable [Fintype E] (F : Frame L) (hw : Hardware L E)
 
-/-- **The bits of a reference training algorithm a covered window can read**: what the memory limit leaves beside the
-`x_s` bits accounted for, what the smaller of the links' capacity and the `y_b` bits that entered leaves beside the
-`x_b` bits accounted for, and what the algorithm shares with the declared circuit. -/
+/-- **The bits of a reference training algorithm a covered window can read** on the hardware `hw`: what the memory
+limit leaves beside the `x_s` bits accounted for, what the smaller of the links' capacity and the `y_b` bits that
+entered leaves beside the `x_b` bits accounted for, and what the algorithm shares with the declared circuit. -/
 noncomputable def unaccounted (x_s x_b y_b : ℕ) (sh : Shared) : ℕ :=
-  (F.m - x_s + sh.o_s) + (min (F.b * F.ω) y_b - x_b + sh.o_b)
+  (F.m hw - x_s + sh.o_s) + (min (F.b hw * F.ω) y_b - x_b + sh.o_b)
 
-/-- **The bound on training**: the counted multiplications a computation can hold of a reference training
-algorithm. The covered windows hold at most the training bound's count at `S' = unaccounted` bits read a window
+/-- **The bound on training** on the hardware `hw`: the counted multiplications a computation can hold of a reference
+training algorithm. The covered windows hold at most the training bound's count at `S' = unaccounted` bits read a window
 (`tb.bound`), and each missed window the work its server's limit leaves over the window's ticks beside the `x_w`
 accounted for, with the multiplications shared with the declared circuit. -/
 noncomputable def bound (x_s x_b x_w y_b : ℕ) (tb : Training) (sh : Shared) : ℝ :=
-  tb.bound (F.n * F.cuts.J - F.missed.card) (F.unaccounted x_s x_b y_b sh : ℕ) +
-    (∑ u ∈ F.missed, (F.Φ * F.len (finProdFinEquiv.symm u).2 - x_w + sh.o_w) : ℕ)
+  tb.bound (F.n * F.cuts.J - F.missed.card) (F.unaccounted hw x_s x_b y_b sh : ℕ) +
+    (∑ u ∈ F.missed, (F.Φ hw * F.len (finProdFinEquiv.symm u).2 - x_w + sh.o_w) : ℕ)
 
 /-- **The bound on training is defined and at most `Y`**: where the memory and bandwidth audits cover a window, the
 training bound is defined at what a covered window can read (`tb.Valid`); and the bound is at most `Y`. Where they
 miss every window the bound is the missed windows' sum alone, and nothing is asked of the training bound. -/
 def BoundAtMost (x_s x_b x_w y_b : ℕ) (tb : Training) (sh : Shared) (Y : ℝ) : Prop :=
-  (F.missed ≠ univ → tb.Valid (F.unaccounted x_s x_b y_b sh : ℕ)) ∧ F.bound x_s x_b x_w y_b tb sh ≤ Y
+  (F.missed ≠ univ → tb.Valid (F.unaccounted hw x_s x_b y_b sh : ℕ)) ∧ F.bound hw x_s x_b x_w y_b tb sh ≤ Y
 
 end Frame
 

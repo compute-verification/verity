@@ -10,10 +10,10 @@ public import Proofs.ResourceAccounting.Actual.Outside
 /-!
 # No computation is feasible, accounted for and prohibited
 
-`Secure` proves `Guarantees.Secure`: `M ∈ H F.hw → M ∈ A F x_s x_b x_w y_b → M ∉ B F tb sh Y`, the three sets of
-`Definitions.Slowdown.Security`, at a training bound `tb` that holds, when `Y` is at least the bound on training
-(`Frame.bound`) and `tb` is defined at the bits a covered window can read of a reference training algorithm
-(`Frame.unaccounted`, `Frame.BoundAtMost`). It is one path for every training bound: `fit_holds` is that the fit
+`Secure` proves `Guarantees.Secure`: `M ∈ H hw ∧ M ∈ A F x_s x_b x_w y_b → M ∉ B F tb sh Y`, the three sets of
+`Definitions.Slowdown.Security`, at a hardware `hw` the frame's servers are locations of and a training bound `tb`
+that holds, when `Y` is at least the bound on training (`Frame.bound`) and `tb` is defined at the bits a covered
+window can read of a reference training algorithm (`Frame.unaccounted`, `Frame.BoundAtMost`). It is one path for every training bound: `fit_holds` is that the fit
 bound holds (`Training.fit`), and another route to a bound on training is another `Training` with its proof. Its
 steps:
 
@@ -33,11 +33,11 @@ steps:
 Where the memory and bandwidth audits miss every window no counted multiplication is in a covered one, the bound is
 the missed windows' sum (`bound_of_missed`), and nothing is asked of the training bound.
 
-`RunSecure` proves `Guarantees.RunSecure` from `Secure`: with the probability of an event the run's value against an
-optimal developer (`Game.value`), which is monotone and has the union bound, each audit's soundness at its own
-acceptance is soundness at the verifier's, the errors add over the windows, and at an outcome where every window's
-clauses hold the computation is in `A`, so `Secure` takes it out of `B`. `RunComplete` is the union bound for an
-honest strategy.
+`RunAccounted` proves `Guarantees.RunAccounted`: with the probability of an event the run's value against an optimal
+developer (`Game.value`), which is monotone and has the union bound, each audit's soundness at its own acceptance is
+soundness at the verifier's, the errors add over the windows, and at an outcome where every window's clauses hold
+the computation is in `A`. `RunSecure` proves `Guarantees.RunSecure` from it: where the computation is in `A`,
+`Secure` takes it out of `B`. `RunComplete` is the union bound for an honest strategy.
 
 `single_m`, `single_b` and `single_Φ` are the limits of a frame of one server, and `server_m`, `server_b` and
 `server_Φ` those of a server of `n` GPUs with its host and switch.
@@ -117,10 +117,10 @@ theorem card_missed_le {L : Type*} [DecidableEq L] (A : Placed L) (n : ℕ) (X :
     hwin _ _ (by rwa [Prod.mk.eta, Equiv.apply_symm_apply])))
 
 /-- Where the memory and bandwidth audits miss every window, the bound on training is the missed windows' sum. -/
-theorem bound_of_missed {L E : Type*} [Fintype E] (F : Frame L E) (hF : F.missed = univ) (x_s x_b x_w y_b : ℕ)
-    (tb : Training) (sh : Shared) :
-    F.bound x_s x_b x_w y_b tb sh =
-      ((∑ u : Fin (F.n * F.cuts.J), (F.Φ * F.len (finProdFinEquiv.symm u).2 - x_w + sh.o_w) : ℕ) : ℝ) := by
+theorem bound_of_missed {L E : Type*} [Fintype E] (F : Frame L) (hw : Hardware L E) (hF : F.missed = univ)
+    (x_s x_b x_w y_b : ℕ) (tb : Training) (sh : Shared) :
+    F.bound hw x_s x_b x_w y_b tb sh =
+      ((∑ u : Fin (F.n * F.cuts.J), (F.Φ hw * F.len (finProdFinEquiv.symm u).2 - x_w + sh.o_w) : ℕ) : ℝ) := by
   unfold Frame.bound
   rw [hF, card_univ, Fintype.card_fin, Nat.sub_self, tb.bound_zero, zero_add]
 
@@ -167,27 +167,27 @@ theorem fit_holds (p : Recipe) : (Training.fit p).Holds := by
 
 theorem Secure : Guarantees.Secure := by
   classical
-  intro L E _ _ F x_s x_b x_w y_b tb sh Y htb ⟨hvalid, hY⟩ M
-  rintro ⟨hC, hW, hMem, hL⟩ hA ⟨c, emb, T, start, hT, hlt⟩
+  intro L E _ _ F x_s x_b x_w y_b hw tb sh Y hOn htb ⟨hvalid, hY⟩ M
+  rintro ⟨⟨hC, hW, hMem, hL⟩, hA⟩ ⟨c, emb, T, start, hT, hlt⟩
   have hω : ∀ j : Fin F.cuts.J, F.cuts.τ j.succ - F.cuts.τ j.castSucc ≤ F.ω := fun j =>
     le_sup (f := F.len) (mem_univ j)
-  have hm : ∀ i, F.hw.M (F.server i) ≤ F.m := fun i => le_sup (f := fun i => F.hw.M (F.server i)) (mem_univ i)
-  have hb : ∀ i, linkCapacity F.hw.ends F.hw.β (F.server i) ≤ F.b := fun i =>
-    le_sup (f := fun i => linkCapacity F.hw.ends F.hw.β (F.server i)) (mem_univ i)
-  have hΦ : ∀ i, F.hw.compute (F.server i) ≤ F.Φ := fun i =>
-    le_sup (f := fun i => F.hw.compute (F.server i)) (mem_univ i)
+  have hm : ∀ i, hw.M (F.server i) ≤ F.m hw := fun i => le_sup (f := fun i => hw.M (F.server i)) (mem_univ i)
+  have hb : ∀ i, linkCapacity hw.ends hw.β (F.server i) ≤ F.b hw := fun i =>
+    le_sup (f := fun i => linkCapacity hw.ends hw.β (F.server i)) (mem_univ i)
+  have hΦ : ∀ i, hw.compute (F.server i) ≤ F.Φ hw := fun i =>
+    le_sup (f := fun i => hw.compute (F.server i)) (mem_univ i)
   have hS : ∀ (i : Fin F.n) (j : Fin F.cuts.J), finProdFinEquiv (i, j) ∉ F.missed →
       (readsIn (M.run.A.declaration (univ.biUnion F.server) F.t M.registered M.registered_input)
         (M.run.A.region (F.server i) (Set.Ico (F.cuts.τ j.castSucc) (F.cuts.τ j.succ)))
-        ((c.θᶜ).map ⟨emb.emb, emb.emb_inj⟩) : ℝ) ≤ ((F.unaccounted x_s x_b y_b sh : ℕ) : ℝ) := by
+        ((c.θᶜ).map ⟨emb.emb, emb.emb_inj⟩) : ℝ) ≤ ((F.unaccounted hw x_s x_b y_b sh : ℕ) : ℝ) := by
     intro i j hu
     obtain ⟨hxs, hxb, hyb⟩ := (hA i j).1 hu
     have hτ : F.cuts.τ j.succ ≤ F.t := (F.cuts.mono (Fin.le_last _)).trans F.cuts.last.le
-    have hrs : M.run.A.stateIn (F.server i) (F.cuts.τ j.castSucc) M.declaredᶜ ≤ F.m - x_s :=
-      state_outside ((hMem _ (F.unit i) _).trans (hm i)) M.declared hxs
+    have hrs : M.run.A.stateIn (F.server i) (F.cuts.τ j.castSucc) M.declaredᶜ ≤ F.m hw - x_s :=
+      state_outside ((hMem _ (hOn i) _).trans (hm i)) M.declared hxs
     have hrb : M.run.A.width (((M.run.A.into (M.run.A.region (F.server i)
         (Set.Ico (F.cuts.τ j.castSucc) (F.cuts.τ j.succ)))).filter fun g => M.run.A.x g ∉ F.server i) ∩
-        M.declaredᶜ) ≤ min (F.b * F.ω) y_b - x_b := by
+        M.declaredᶜ) ≤ min (F.b hw * F.ω) y_b - x_b := by
       change x_b ≤ M.delivered F i j M.declared at hxb
       change M.delivered F i j univ ≤ y_b at hyb
       unfold Computation.delivered at hxb hyb
@@ -197,13 +197,13 @@ theorem Secure : Guarantees.Secure := by
         (min_le_min_right _ (Nat.mul_le_mul (hb i) (hω j))) _))
     exact Nat.cast_le.2 (window_reads_le M.run.A hC (subset_biUnion_of_mem F.server (mem_univ i)) M.registered_input
       hτ M.declared _ hrs hrb (hT.shared_carried i j hu) (hT.shared_read i j hu))
-  obtain ⟨P, hP⟩ := ResourceAccounting.SecurityProofs.Actual.ServerBlocksAt M.run.A F.hw.ℓ
-    (fun _ => M.run.A.N) F.hw.ends F.hw.β M.usage.link F.n F.server M.registered M.registered_input F.t F.cuts
+  obtain ⟨P, hP⟩ := ResourceAccounting.SecurityProofs.Actual.ServerBlocksAt M.run.A hw.ℓ
+    (fun _ => M.run.A.N) hw.ends hw.β M.usage.link F.n F.server M.registered M.registered_input F.t F.cuts
     ((c.θᶜ).map ⟨emb.emb, emb.emb_inj⟩) F.disjoint hC (computeRate_N M.run.A _) hL
   have hQ : Divides F M emb (pull emb P) := fun i j g =>
     mem_pull_gates.trans (Iff.of_eq (congrArg (fun s => emb.emb g ∈ s) (hP i j).1))
   have hread : ∀ u ∉ F.missed, (freshInput c ((pull emb P).gates u) : ℝ) ≤
-      ((F.unaccounted x_s x_b y_b sh : ℕ) : ℝ) := by
+      ((F.unaccounted hw x_s x_b y_b sh : ℕ) : ℝ) := by
     intro u hu
     obtain ⟨⟨i, j⟩, rfl⟩ := finProdFinEquiv.surjective u
     have h1 : freshInput c ((pull emb P).gates (finProdFinEquiv (i, j))) ≤
@@ -213,7 +213,7 @@ theorem Secure : Guarantees.Secure := by
     rw [(hP i j).1] at h1
     exact (Nat.cast_le.2 h1).trans (hS i j hu)
   have hcov : ((T.M.filter fun g => ∀ j ∈ F.missed, g ∉ (pull emb P).gates j).card : ℝ) ≤
-      tb.bound (F.n * F.cuts.J - F.missed.card) ((F.unaccounted x_s x_b y_b sh : ℕ) : ℝ) := by
+      tb.bound (F.n * F.cuts.J - F.missed.card) ((F.unaccounted hw x_s x_b y_b sh : ℕ) : ℝ) := by
     by_cases hF : F.missed = univ
     · have hempty : (T.M.filter fun g => ∀ j ∈ F.missed, g ∉ (pull emb P).gates j) = ∅ := by
         refine filter_eq_empty_iff.2 fun g hg hno => ?_
@@ -224,9 +224,9 @@ theorem Secure : Guarantees.Secure := by
       rw [hempty, hF, card_univ, Fintype.card_fin, Nat.sub_self, tb.bound_zero]
       simp
     · exact htb T (pull emb P) F.missed start _ (hvalid hF) (hT.prem _ hQ) hread
-  have hcount : _ ≤ ∑ u ∈ F.missed, (F.Φ * F.len (finProdFinEquiv.symm u).2 - x_w + sh.o_w) :=
-    card_missed_le M.run.A F.n F.server M.registered M.registered_input F.t F.cuts F.hw.compute
-      M.usage.π F.Φ x_w sh.o_w M.declared c emb T F.missed hW F.unit hΦ hT.load (fun i j hu => (hA i j).2 hu)
+  have hcount : _ ≤ ∑ u ∈ F.missed, (F.Φ hw * F.len (finProdFinEquiv.symm u).2 - x_w + sh.o_w) :=
+    card_missed_le M.run.A F.n F.server M.registered M.registered_input F.t F.cuts hw.compute
+      M.usage.π (F.Φ hw) x_w sh.o_w M.declared c emb T F.missed hW hOn hΦ hT.load (fun i j hu => (hA i j).2 hu)
       hT.shared_work
   have hsplit : T.M.card ≤ (T.M.filter fun g => ∀ j ∈ F.missed, g ∉ (pull emb P).gates j).card +
       (T.M.filter fun g => ∃ i j, finProdFinEquiv (i, j) ∈ F.missed ∧
@@ -238,19 +238,20 @@ theorem Secure : Guarantees.Secure := by
       obtain ⟨u, hu, hgu⟩ := h
       obtain ⟨⟨i, j⟩, rfl⟩ := finProdFinEquiv.surjective u
       exact mem_union_right _ (mem_filter.2 ⟨hg, i, j, hu, (hQ i j g).1 hgu⟩)
-  have h2 : (T.M.card : ℝ) ≤ F.bound x_s x_b x_w y_b tb sh := by
+  have h2 : (T.M.card : ℝ) ≤ F.bound hw x_s x_b x_w y_b tb sh := by
     unfold Frame.bound
     exact (Nat.cast_le.2 (hsplit.trans (Nat.add_le_add_left hcount _))).trans
       (by rw [Nat.cast_add]; exact add_le_add hcov le_rfl)
   exact absurd (h2.trans hY) (not_le.2 hlt)
 
 /-- The links of a feasible computation deliver to a window's server at most `b ω` bits. -/
-theorem delivered_le_capacity {L E : Type*} [Fintype E] [DecidableEq L] (F : Frame L E) (M : Computation L E)
-    (hM : M ∈ H F.hw) (i : Fin F.n) (j : Fin F.cuts.J) : M.delivered F i j univ ≤ F.b * F.ω := by
+theorem delivered_le_capacity {L E : Type*} [Fintype E] [DecidableEq L] (F : Frame L) (hw : Hardware L E)
+    (M : Computation L E) (hM : M ∈ H hw) (i : Fin F.n) (j : Fin F.cuts.J) :
+    M.delivered F i j univ ≤ F.b hw * F.ω := by
   unfold Computation.delivered
   simp only [inter_univ]
   refine (le_of_eq (sum_congr rfl fun τ _ => ?_)).trans ((delivered_le M.run.A hM.2.2.2 (F.server i) _ _).trans
-    (Nat.mul_le_mul (le_sup (f := fun i => linkCapacity F.hw.ends F.hw.β (F.server i)) (mem_univ i))
+    (Nat.mul_le_mul (le_sup (f := fun i => linkCapacity hw.ends hw.β (F.server i)) (mem_univ i))
       (le_sup (f := F.len) (mem_univ j))))
   congr
 
@@ -258,9 +259,9 @@ section Run
 
 open scoped ENNReal
 
-theorem RunSecure : Guarantees.RunSecure := by
+theorem RunAccounted : Guarantees.RunAccounted := by
   classical
-  intro L E _ _ α g world F x_s x_b x_w y_b tb sh Y acc_s acc_b acc_y acc_w δ_s δ_b δ_y δ_w htb hY hH hs hb hy hw
+  intro L E _ α g world F x_s x_b x_w y_b acc_s acc_b acc_y acc_w δ_s δ_b δ_y δ_w hs hb hy hw
   let acc : α → Prop := fun a => acc_s a ∧ acc_b a ∧ acc_y a ∧ acc_w a
   let good : Option Bool → Fin F.n → Fin F.cuts.J → α → Prop := fun k i j a =>
     match k with
@@ -296,7 +297,7 @@ theorem RunSecure : Guarantees.RunSecure := by
     (fun a ha => ?_) g).trans
     ((Game.value_exists_finset_le _ _ g).trans ((sum_le_sum fun u _ => hbad u).trans hsum.le))
   by_contra hno
-  refine ha.2 (Secure F _ _ _ _ tb sh (Y a) htb (hY a) (world a) (hH a) fun i j => ?_)
+  refine ha.2 fun i j => ?_
   by_contra hij
   refine hno ⟨finProdFinEquiv (i, j), mem_univ _, ha.1, fun hg => hij ⟨fun hn => ?_, fun hm => ?_⟩⟩
   · have h3 := hg.1 hn
@@ -305,6 +306,13 @@ theorem RunSecure : Guarantees.RunSecure := by
   · have h4 := hg.2 hm
     simp only [Equiv.symm_apply_apply] at h4
     exact h4
+
+theorem RunSecure : Guarantees.RunSecure := by
+  intro L E _ _ α g world F x_s x_b x_w y_b hw tb sh Y acc_s acc_b acc_y acc_w δ_s δ_b δ_y δ_w hOn htb hY hH hs hb hy
+    hwk
+  exact (Game.value_mono (fun a ha => ⟨ha.1, fun hA =>
+    ha.2 (Secure F _ _ _ _ hw tb sh (Y a) hOn htb (hY a) (world a) ⟨hH a, hA⟩)⟩) g).trans
+    (RunAccounted g world F x_s x_b x_w y_b acc_s acc_b acc_y acc_w δ_s δ_b δ_y δ_w hs hb hy hwk)
 
 /-- **An honest developer's run is accepted, outside the audits' errors**: where the verifier accepts whenever each
 of the four audits does, a strategy `honest` that memory's audit rejects with probability at most `η_s`, bandwidth's
@@ -329,16 +337,18 @@ end Run
 
 section Single
 
-variable {L E : Type*} (hw : Hardware L E) (X : Finset L) (hX : X ∈ hw.units) (t : ℕ) (cuts : Cuts t)
+variable {L E : Type*} (hw : Hardware L E) (X : Finset L) (t : ℕ) (cuts : Cuts t)
   (missed : Finset (Fin (1 * cuts.J)))
 
-theorem single_m : (Frame.single hw X hX t cuts missed).m = hw.M X :=
+theorem single_on (hX : X ∈ hw.units) : (Frame.single X t cuts missed).On hw := fun _ => hX
+
+theorem single_m : (Frame.single X t cuts missed).m hw = hw.M X :=
   sup_const (s := (univ : Finset (Fin 1))) univ_nonempty _
 
-theorem single_b [Fintype E] : (Frame.single hw X hX t cuts missed).b = linkCapacity hw.ends hw.β X :=
+theorem single_b [Fintype E] : (Frame.single X t cuts missed).b hw = linkCapacity hw.ends hw.β X :=
   sup_const (s := (univ : Finset (Fin 1))) univ_nonempty _
 
-theorem single_Φ : (Frame.single hw X hX t cuts missed).Φ = hw.compute X :=
+theorem single_Φ : (Frame.single X t cuts missed).Φ hw = hw.compute X :=
   sup_const (s := (univ : Finset (Fin 1))) univ_nonempty _
 
 end Single
@@ -350,21 +360,21 @@ variable (n die host fabric chip dram ram queue world store bus peer net : ℕ) 
 
 /-- A server of `n` GPUs carries `n (chip + dram) + ram + queue` bits across a tick. -/
 theorem server_m :
-    (Frame.single (server n die host fabric chip dram ram queue world store bus peer net) (Loc.inside n)
-      (Set.mem_univ _) t cuts missed).m = n * (chip + dram) + ram + queue :=
-  (single_m _ _ _ t cuts missed).trans (server_memory n die host fabric chip dram ram queue world store bus peer net)
+    (Frame.single (Loc.inside n) t cuts missed).m
+      (server n die host fabric chip dram ram queue world store bus peer net) = n * (chip + dram) + ram + queue :=
+  (single_m _ _ t cuts missed).trans (server_memory n die host fabric chip dram ram queue world store bus peer net)
 
 /-- A server of `n` GPUs reads `net` bits a tick from outside. -/
 theorem server_b :
-    (Frame.single (server n die host fabric chip dram ram queue world store bus peer net) (Loc.inside n)
-      (Set.mem_univ _) t cuts missed).b = net :=
-  (single_b _ _ _ t cuts missed).trans (server_link n die host fabric chip dram ram queue world store bus peer net)
+    (Frame.single (Loc.inside n) t cuts missed).b
+      (server n die host fabric chip dram ram queue world store bus peer net) = net :=
+  (single_b _ _ t cuts missed).trans (server_link n die host fabric chip dram ram queue world store bus peer net)
 
 /-- A server of `n` GPUs does `n die + host + fabric` work a tick. -/
 theorem server_Φ :
-    (Frame.single (server n die host fabric chip dram ram queue world store bus peer net) (Loc.inside n)
-      (Set.mem_univ _) t cuts missed).Φ = n * die + host + fabric :=
-  (single_Φ _ _ _ t cuts missed).trans (server_compute n die host fabric chip dram ram queue world store bus peer net)
+    (Frame.single (Loc.inside n) t cuts missed).Φ
+      (server n die host fabric chip dram ram queue world store bus peer net) = n * die + host + fabric :=
+  (single_Φ _ _ t cuts missed).trans (server_compute n die host fabric chip dram ram queue world store bus peer net)
 
 end Server
 

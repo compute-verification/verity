@@ -12,7 +12,7 @@ input the server holds; `1` an input outside; `2` is computed outside from `1`; 
 `2`. So the server carries one bit into the window, reads one bit from outside and does one unit of work.
 
 * `hw c m β`: the hardware, a leaf doing `c` units of work a tick and carrying `m` bits, the link `β` bits a tick;
-* `frame c m β I`: the server over the one window, missed when it is in `I`;
+* `frame I`: the server over the one window, missed when it is in `I`;
 * `served` and `trained`: the run with every gate the declared circuit's, and with none;
 * `recipe`: one weight reaches the target loss, and a window reads two bits for each weight it uses.
 -/
@@ -68,8 +68,7 @@ abbrev hw (c m β : ℕ) : Hardware Bool Unit :=
 abbrev cuts : Cuts 1 := ⟨1, fun j => j.val, fun _ _ h => h, rfl, rfl⟩
 
 /-- The frame: the server `{true}` over one window, missed when it is in `I`. -/
-abbrev frame (c m β : ℕ) (I : Finset (Fin (1 * cuts.J))) : Frame Bool Unit :=
-  Frame.single (hw c m β) {true} (Set.mem_univ _) 1 cuts I
+abbrev frame (I : Finset (Fin (1 * cuts.J))) : Frame Bool := Frame.single {true} 1 cuts I
 
 /-- The run with every gate the declared circuit's. -/
 abbrev served : Computation Bool Unit := ⟨actual, usage, ∅, fun _ h => absurd h (notMem_empty _), univ⟩

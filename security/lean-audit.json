@@ -344,11 +344,6 @@
    "digest": "cac063df365f7c845e896f15d04ac61e77ab0c59876e7f1a913d3fd4f2841858",
    "why": "The domain on which every unit has `W_ref(u) ≤ Ω_max·W_mm(u)`, the bound `EndToEnd` takes inline."
   },
-  "ResourceAccounting.Hardware.units": {
-   "owner": "@compute-research",
-   "digest": "8ebcf337efe7f169d57953cc12b436b0917d9c4a94ec6857265820f6a74de410",
-   "why": "The locations the hardware's limits are stated at; the frame's servers are among them."
-  },
   "ResourceAccounting.JointBridge.PhaseLeaks": {
    "owner": "@lean",
    "digest": "02a2bc85d0e6ee4433687875b8cbc3705cbb766ba5eb2bb1ac5e4aee362e68d6",
@@ -401,13 +396,18 @@
   },
   "Slowdown.Security.A": {
    "owner": "@compute-research",
-   "digest": "cf2d431bce1cbd29ce5238da013cbf5fa0be4def3b8dffb5a4b8ae6a611f96e7",
+   "digest": "e695ba64a8c5cb15c8321befd5e8729392184ff772cbe9703f18f143c731a795",
    "why": "The computations consistent with what the audits account for, the second of the three sets Secure says share no member; an audit's guarantee puts an accepted run's computation in it."
   },
   "Slowdown.Security.Frame.BoundAtMost": {
    "owner": "@compute-research",
-   "digest": "9d5f1eec7d08c3b803ec63adfd60457bc11b4518476d53d0c82df20163f338ae",
+   "digest": "e5b4b4e96af6361104548e0adc980d1e73d22ae2be525c380316be956b829caa",
    "why": "The count Y the statement is at: at least the training bound's count on the frame, at amounts where that bound is defined."
+  },
+  "Slowdown.Security.Frame.On": {
+   "owner": "@compute-research",
+   "digest": "29fa938db4e0767a33298d9eeec6f47f1cd9cc06cdbc06a19c47fb82d7bb4e07",
+   "why": "The frame's servers are locations of the hardware the statement is applied at, ones its limits are stated at."
   },
   "Slowdown.Security.H": {
    "owner": "@compute-research",
@@ -4588,6 +4588,11 @@
     "Slowdown.SecurityProofs.Secure_nontrivial_bound",
     "Slowdown.SecurityProofs.Secure_nontrivial_holds"
    ],
+   "kind": "exclusion"
+  },
+  "Slowdown.SecurityProofs.RunAccounted": {
+   "honest": ["Slowdown.SecurityProofs.RunAccounted_honest"],
+   "nontrivial": ["Slowdown.SecurityProofs.RunAccounted_nontrivial"],
    "kind": "exclusion"
   }
  },
@@ -22899,6 +22904,92 @@
    "type_hash": "1818bdeba041ed089562c62f1bdfca840e31d46eea7c3d7d1641b810be2e0a65",
    "unfolded_hash": "1e535fc6bd1fe03ebd96f63598ba952b0d5b07b7b2c443e780e6f525974dcb3d"
   },
+  "Slowdown.SecurityProofs.RunAccounted": {
+   "owner": "@compute-research",
+   "signature": ["Slowdown.SecurityProofs.RunAccounted.{u_1, u_2} : Slowdown.Guarantees.RunAccounted"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": ["Verity.Sound"],
+    "open": ["ResourceAccounting.Placed.Faithful", "ResourceAccounting.Placed.Holding"],
+    "reads": [
+     "ResourceAccounting.Cuts",
+     "ResourceAccounting.Cuts.J",
+     "ResourceAccounting.Cuts.mk",
+     "ResourceAccounting.Cuts.τ",
+     "ResourceAccounting.Placed",
+     "ResourceAccounting.Placed.mk",
+     "ResourceAccounting.Placed.region",
+     "ResourceAccounting.Placed.t",
+     "ResourceAccounting.Placed.toCircuit",
+     "ResourceAccounting.Placed.work",
+     "ResourceAccounting.Placed.x",
+     "ResourceAccounting.Usage",
+     "ResourceAccounting.Usage.mk",
+     "ResourceAccounting.Usage.π"
+    ]
+   },
+   "type_hash": "96f101dd46ce97f0a57020d4f975125caa92a6674f14e6eb17db4fb8b74cd6a9",
+   "unfolded_hash": "cd7f732c54a91047dbf19e9fb67f44886b4025e85241abdc6ecb10200784fe49"
+  },
+  "Slowdown.SecurityProofs.RunAccounted_honest": {
+   "owner": "@compute-research",
+   "signature": ["Slowdown.SecurityProofs.RunAccounted_honest : Slowdown.Guarantees.RunAccounted_honest"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": [
+     "ResourceAccounting.Cuts",
+     "ResourceAccounting.Cuts.J",
+     "ResourceAccounting.Cuts.mk",
+     "ResourceAccounting.Cuts.τ",
+     "ResourceAccounting.Placed",
+     "ResourceAccounting.Placed.Faithful",
+     "ResourceAccounting.Placed.Holding",
+     "ResourceAccounting.Placed.mk",
+     "ResourceAccounting.Placed.region",
+     "ResourceAccounting.Placed.t",
+     "ResourceAccounting.Placed.toCircuit",
+     "ResourceAccounting.Placed.x",
+     "ResourceAccounting.Usage",
+     "ResourceAccounting.Usage.mk"
+    ]
+   },
+   "type_hash": "3770bdef61daf7075efb13f288d4019eca6b3e8396313d22692949e520c28cdb",
+   "unfolded_hash": "eacd1699b38bc32326a64ed27a4966436aa8d914fd34dc40d0861eba9ed8a2a3"
+  },
+  "Slowdown.SecurityProofs.RunAccounted_nontrivial": {
+   "owner": "@compute-research",
+   "signature": ["Slowdown.SecurityProofs.RunAccounted_nontrivial : Slowdown.Guarantees.RunAccounted_nontrivial"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": [
+     "ResourceAccounting.Cuts",
+     "ResourceAccounting.Cuts.J",
+     "ResourceAccounting.Cuts.mk",
+     "ResourceAccounting.Cuts.τ",
+     "ResourceAccounting.Placed",
+     "ResourceAccounting.Placed.Faithful",
+     "ResourceAccounting.Placed.Holding",
+     "ResourceAccounting.Placed.mk",
+     "ResourceAccounting.Placed.region",
+     "ResourceAccounting.Placed.t",
+     "ResourceAccounting.Placed.toCircuit",
+     "ResourceAccounting.Placed.work",
+     "ResourceAccounting.Placed.x",
+     "ResourceAccounting.Usage",
+     "ResourceAccounting.Usage.mk",
+     "ResourceAccounting.Usage.π"
+    ]
+   },
+   "type_hash": "529addd5a4513d61b380d248b73ec3c52218da21e38a9c41b7d8630eecc18379",
+   "unfolded_hash": "530e505b9a69405e05001f37f6935585bf76f558e5b69bff2542fc623d56d632"
+  },
   "Slowdown.SecurityProofs.RunSecure": {
    "owner": "@compute-research",
    "signature": ["Slowdown.SecurityProofs.RunSecure.{u_1, u_2} : Slowdown.Guarantees.RunSecure"],
@@ -22906,8 +22997,8 @@
    "premises": {
     "assumptions": [],
     "domain": [
-     "ResourceAccounting.Hardware.units",
      "Slowdown.Security.Frame.BoundAtMost",
+     "Slowdown.Security.Frame.On",
      "Slowdown.Security.H",
      "Slowdown.Security.Training.Holds",
      "Verity.Sound"
@@ -22923,6 +23014,7 @@
      "ResourceAccounting.Hardware.compute",
      "ResourceAccounting.Hardware.ends",
      "ResourceAccounting.Hardware.mk",
+     "ResourceAccounting.Hardware.units",
      "ResourceAccounting.Hardware.β",
      "ResourceAccounting.Hardware.ℓ",
      "ResourceAccounting.Placed",
@@ -22948,7 +23040,7 @@
     ]
    },
    "type_hash": "a82e07e26df4fe234de962152fc2ed32a13828dfeeed442ed38464ccec4ec0eb",
-   "unfolded_hash": "2b44fc64b576e597c0966f233fe190d755345e31e5d118b4d9b99e0fba0c8442"
+   "unfolded_hash": "1908d019d98dda592cf56067c0f10d3b5f64e030157e938ca62e2066513ea132"
   },
   "Slowdown.SecurityProofs.RunSecure_honest": {
    "owner": "@compute-research",
@@ -22993,7 +23085,7 @@
     ]
    },
    "type_hash": "57ee70cf16d9821caed74980e94903c823011b3e08de1e53365a4eb1ee25f75d",
-   "unfolded_hash": "388aeae08f78b8e2d16aef4549ab93659b5906936b2ad90551030cb56effd41b"
+   "unfolded_hash": "0a808e930b4f553afcd0cd843c200b0a3760d464f169aeaf9b5bd1efdbf36e98"
   },
   "Slowdown.SecurityProofs.RunSecure_nontrivial": {
    "owner": "@compute-research",
@@ -23041,7 +23133,7 @@
     ]
    },
    "type_hash": "73ba1dc112bb3f5fec58aef0bc00b832fc3cdd1ed73be5c83426c36439f154e2",
-   "unfolded_hash": "4bfbb1bd6104e96f4a37b6ac3dab2f8b88b4cca46b7552932e40a355661dfce7"
+   "unfolded_hash": "8ac94fd6659f18e5f13d86ac302373e61373a86443c1b3ebc3ff3000419ddc1b"
   },
   "Slowdown.SecurityProofs.Secure": {
    "owner": "@compute-research",
@@ -23050,9 +23142,9 @@
    "premises": {
     "assumptions": [],
     "domain": [
-     "ResourceAccounting.Hardware.units",
      "Slowdown.Security.A",
      "Slowdown.Security.Frame.BoundAtMost",
+     "Slowdown.Security.Frame.On",
      "Slowdown.Security.H",
      "Slowdown.Security.Training.Holds"
     ],
@@ -23067,6 +23159,7 @@
      "ResourceAccounting.Hardware.compute",
      "ResourceAccounting.Hardware.ends",
      "ResourceAccounting.Hardware.mk",
+     "ResourceAccounting.Hardware.units",
      "ResourceAccounting.Hardware.β",
      "ResourceAccounting.Hardware.ℓ",
      "ResourceAccounting.Placed",
@@ -23092,7 +23185,7 @@
     ]
    },
    "type_hash": "0470ec0c3e54ca1a6340beef1bd40b4011b0c67244e89a0dc5bf54b33d99bc25",
-   "unfolded_hash": "0f2dc862a99846edbad2ed07d307a12b155c639eca47b62d5f1120af3b539b3e"
+   "unfolded_hash": "de853c0185155d4a83280fcb7fe142544a6d2c03b453b78df52366a004fe6ee2"
   },
   "Slowdown.SecurityProofs.Secure_honest": {
    "owner": "@compute-research",
@@ -23137,7 +23230,7 @@
     ]
    },
    "type_hash": "19e7efdf63e7b3ed4d05fd436c4509f21046ab42950c8d786d6ac413ac5c09c9",
-   "unfolded_hash": "4cfd32354df6711c1ef249ef37ae54f49f1182be9e3c7d7662eaa967bd03a4aa"
+   "unfolded_hash": "db4a8f81c0e4205e0cbad098b6bb9fe706680121b0bfb6ebdb7504a957fdbaaa"
   },
   "Slowdown.SecurityProofs.Secure_nontrivial": {
    "owner": "@compute-research",
@@ -23185,7 +23278,7 @@
     ]
    },
    "type_hash": "3476bcfad63882d21fcc51a09e804a6220bee073345468cf183dddabf0d505f8",
-   "unfolded_hash": "73155bc8aceecac0ece75037f5c5ffed09013679980e2339aeff91e27cc8a24d"
+   "unfolded_hash": "ff267e3b50f5f69930581299ae7e22f70f194eeb7ef8dd162c6b22e1d57715d7"
   },
   "Slowdown.SecurityProofs.Secure_nontrivial_accounted": {
    "owner": "@compute-research",
@@ -23233,7 +23326,7 @@
     ]
    },
    "type_hash": "fe5186ae070241494ca76ce07585552b2f4ffec72bf2eab01749fbe87c556fd1",
-   "unfolded_hash": "ff1f6a499fd24a0367a671f12f81a93b08d495e91afa7cd4d11c5eca86187c16"
+   "unfolded_hash": "cf8fc562e5c7ecb1b49e3196cded555f0c48d87cfe8ec57403598b559abb7b43"
   },
   "Slowdown.SecurityProofs.Secure_nontrivial_bound": {
    "owner": "@compute-research",
@@ -23281,7 +23374,7 @@
     ]
    },
    "type_hash": "3ed98bd6f14bba4f1fc2052460804f1d723e3cc85b6238241f1bd1a62091efb1",
-   "unfolded_hash": "4519bdae770e4735bdae652d77e225763508b9e53096f55a4ba8bba4adb8d6b1"
+   "unfolded_hash": "ae4d7b3bb7562bf3aa1049606555ea482cb7951b9972724d9688fba95b42d77d"
   },
   "Slowdown.SecurityProofs.Secure_nontrivial_holds": {
    "owner": "@compute-research",
@@ -23329,7 +23422,7 @@
     ]
    },
    "type_hash": "edb38da8ed18924dc5f4ff65b0ab87197075b0245613160f88f7fa303dc3166f",
-   "unfolded_hash": "90c6a8c8411c349259d30fb08f328240f525c694edda144cc92f7ea3fe527ce2"
+   "unfolded_hash": "8f32846757e64f21dcd761c09c4f9e6f27d6c8b0765e1f66413dd51414b24eef"
   },
   "Slowdown.SecurityProofs.Slowdown": {
    "owner": "@lean",
@@ -26816,8 +26909,9 @@
    "Spot.Sampling.Adaptive.life_harm_budget": "frozen (obligation,no-function): It takes KnowledgeSound and BindSound (security/Proofs/Spot/Sampling/OneStage.lean:85, :94), open obligations of the backend, as hypotheses, and it is about the abstract lifetime of one-stage audits rather than a Lean function.",
    "Spot.Sampling.audit_executionPhase_split_of_record": "frozen (obligation,no-function): It takes KnowledgeSound and BindSound (security/Proofs/Spot/Sampling/OneStage.lean:85, :94), open obligations of the backend, as hypotheses, and it is about the abstract one-stage audit rather than a Lean function.",
    "Pous.SecurityProofs.StreamedWipeResidual": "frozen (no-function): A bound in the streamed-label wipe's game (security/Definitions/Pous/Model/StreamedWipe.lean) at any fill of N labels of b bits and any k reads, at the wipe residual wipeResidual N k b s (security/Definitions/Pous/Model/StreamedWipeResidual.lean), whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryAttester.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict.",
-   "Slowdown.SecurityProofs.RunSecure": "frozen (no-function): It is about an arbitrary run (a Verity.Game whose outcomes each have a computation behind them) at a public frame, and its premises are the four audits' soundness for their clauses of the computations consistent with the audits' amounts, each at an acceptance taken as a predicate, rather than a function's acceptance: the premises are the slots an audit's guarantee fills, and no audit's verifier is named in it.",
-   "Slowdown.SecurityProofs.Secure": "frozen (no-function): It is about an arbitrary computation (Slowdown.Security.Computation: a run of the machines with what each gate uses and the declared circuit's gates) at a public frame, and its premises are two sets of computations, the feasible ones and those consistent with the audits' amounts, rather than a function's acceptance. The theorems that state it of an audit's acceptance (security/Proofs/Slowdown/SecureAudit.lean) take that audit's soundness as hypotheses and are not listed."
+   "Slowdown.SecurityProofs.RunSecure": "frozen (no-function): It is Slowdown.SecurityProofs.Secure applied to Slowdown.SecurityProofs.RunAccounted, at a hardware and a training bound: its premises are RunAccounted's slots, the four audits' soundness each at an acceptance taken as a predicate, and no audit's verifier is named in it.",
+   "Slowdown.SecurityProofs.Secure": "frozen (no-function): It is about an arbitrary computation (Slowdown.Security.Computation: a run of the machines with what each gate uses and the declared circuit's gates) at a public frame, and its premises are two sets of computations, the feasible ones and those consistent with the audits' amounts, rather than a function's acceptance. The theorems that state it of an audit's acceptance (security/Proofs/Slowdown/SecureAudit.lean) take that audit's soundness as hypotheses and are not listed.",
+   "Slowdown.SecurityProofs.RunAccounted": "frozen (no-function): It is about an arbitrary run (a Verity.Game whose outcomes each have a computation behind them) at a public frame, and its premises are the four audits' soundness for their clauses of the computations consistent with the audits' amounts, each at an acceptance taken as a predicate, rather than a function's acceptance: the premises are the slots an audit's guarantee fills, and no audit's verifier is named in it."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -39515,23 +39609,26 @@
    }
   },
   "Definitions.Slowdown.Guarantees.Run": {
-   "digest": "21785a11de201d747f3dfb505af03955b0e95312d28bc97784172d42473433fe",
+   "digest": "41c6eec63e26f9612cbc8179324978131e8d3d35682a59e2b7846950c16125da",
    "definitions": {
-    "Slowdown.Guarantees.RunSecure": "e2cf8de603712180e629088ae9393cbdacbb2e2e70165e6b956cdfc7c44d1751",
-    "Slowdown.Guarantees.RunSecure_honest": "2e1982abacf722e4687cb47acdbd407218c26b2c922c99d5fce6a203724f90fc",
-    "Slowdown.Guarantees.RunSecure_nontrivial": "93c7fd0ab2c57a78ef2a5a9c3ff70a633d2250a50d7f99d66d972a5718087983",
+    "Slowdown.Guarantees.RunAccounted": "d83abf842de33970b07a7b1b2c6b622da5983e8c230825a881575c76035a1253",
+    "Slowdown.Guarantees.RunAccounted_honest": "947951863c5d945af6292467907cf75278ba44b74689377ffe0aa757a03bf2e1",
+    "Slowdown.Guarantees.RunAccounted_nontrivial": "5305b9f467bc5b95e3b1ed5ef3f6f67a7a04b12e0849492b1230fcab00a090f3",
+    "Slowdown.Guarantees.RunSecure": "0c95f309a97c8a51941fea3b03b54740f35d5923a2a0c50643a820dfb2429084",
+    "Slowdown.Guarantees.RunSecure_honest": "5a0bc6530496fc5578be989b1e804a312503b436937bb5046ab55d3a43763e63",
+    "Slowdown.Guarantees.RunSecure_nontrivial": "8671759a5a693f98ab2934f7566b48d8e5640b43ebe2f1f608cb876c814b71c7",
     "Slowdown.Guarantees.still": "ef65aa2627ae4547e45920cce111ea8f286a4d4f4d44fa91ade3941866d47127"
    }
   },
   "Definitions.Slowdown.Guarantees.Secure": {
-   "digest": "3d85577120c57571490778414a7169ac8ba1cc1de39f937c55d613fb560f8cac",
+   "digest": "dd6e3c086dc9eca32907eec5d4f5bc958c0b4ccbafb1c3c4a782ff8b97883e56",
    "definitions": {
-    "Slowdown.Guarantees.Secure": "d030b4c492c34ff919323d07071731cb1502ac9a2ca4f95f42cf27d67bbce857",
-    "Slowdown.Guarantees.Secure_honest": "31a85a8d9087f32816c44ab1957b401139b6dbc7e7fb1dd5804d7da603bcc183",
-    "Slowdown.Guarantees.Secure_nontrivial": "d126434245bb194a9832435d51bece6c125c33ee0b7afe65a57199c576743baa",
-    "Slowdown.Guarantees.Secure_nontrivial_accounted": "57590fe162f958ec7c2ce0012b9a40a22254cebb72becd63988f5b901ccf9e0e",
-    "Slowdown.Guarantees.Secure_nontrivial_bound": "c2235c7f346c07fbd47fb560ac6f56ce410887830ccf7a7bc4cd6c9a8245df70",
-    "Slowdown.Guarantees.Secure_nontrivial_holds": "c383d8bd05f46d41e1ae095d9d015a5110d29456f03d86152a5a037aae0dfe1d"
+    "Slowdown.Guarantees.Secure": "e116f7ce6f025990d11262c9ee11b3f3419136ebb4cf402c158ca772705b6462",
+    "Slowdown.Guarantees.Secure_honest": "d64bc43c0f84dc32f7845d37007800f9562a51ef57328c73b0236fe98c6fea81",
+    "Slowdown.Guarantees.Secure_nontrivial": "7e3e7e38eb7708c6f9f187355d06663375781bf1a729529fbdf326bcd3f04191",
+    "Slowdown.Guarantees.Secure_nontrivial_accounted": "ab2e81d8615a5cf0ff51dbc9b8bb4f2a3f51825ae1b5dfcb827789ddae3e8725",
+    "Slowdown.Guarantees.Secure_nontrivial_bound": "c543f7280ed5091a655bd57e859cbf48f1ce4046ff7596604656468992f217cb",
+    "Slowdown.Guarantees.Secure_nontrivial_holds": "ab509c90b20f820817e46513de1a644491c659ea499c6a008ae5d3b6c1c71859"
    }
   },
   "Definitions.Slowdown.Guarantees.ServingBlocks": {
@@ -39613,43 +39710,43 @@
    }
   },
   "Definitions.Slowdown.Security": {
-   "digest": "28a08497cc9e7b44c62ac057ef7573ad93566d7525858b2f982aecb189698f6a",
+   "digest": "90335623613bd55e37183a1b8521d928ec58755bbc31c583a9ac661eb5696c6c",
    "definitions": {
-    "Slowdown.Security.A": "cf2d431bce1cbd29ce5238da013cbf5fa0be4def3b8dffb5a4b8ae6a611f96e7",
-    "Slowdown.Security.B": "e8980d122d8b51e58943159a3dc198ba5755a93893f3f730536923e5d092c9c2",
+    "Slowdown.Security.A": "e695ba64a8c5cb15c8321befd5e8729392184ff772cbe9703f18f143c731a795",
+    "Slowdown.Security.B": "b34a22635463ebf6f64444bf48578eb91ed1c7a6c5ad0b356f23870809c80a10",
     "Slowdown.Security.Computation": "0b44a3d9953aa43abaedf78a2ee48ec84253deb19405689a530b3f84bc743643",
-    "Slowdown.Security.Computation.carries": "e5008ff946e49914d0877e3b4776fd92b94166dd8738d9c2d4712a00e8b9c75b",
-    "Slowdown.Security.Computation.circuit": "e5dec103b2a3bb5d263a214ee125f001e90323ecbc94121995d106e6074c28ea",
+    "Slowdown.Security.Computation.carries": "e9787e8324f79a155052b87e353a00e9c7543cd5f0de11dfb756e20fbd25ac01",
+    "Slowdown.Security.Computation.circuit": "a4e3f3488e7c2c0486dbbbaa1347fac6368e13936975386626449287af0ffeb3",
     "Slowdown.Security.Computation.declared": "6c8075b8dae91ded87463ab3fb6a72d037165a6751589318f0d18c1909bbe955",
-    "Slowdown.Security.Computation.delivered": "585189353bfaa3231fdcd907914161c83298ce5029636f6de3aed75e0eac7d4e",
-    "Slowdown.Security.Computation.holds": "a89cfa10d8f4bae088b6deb8a6338eaf2e877276b5251786f217956ae46a3a0d",
-    "Slowdown.Security.Computation.reads": "feb255f329ed2232c0d42b3041ecf9156128169e767e410c1dc377b6de44c42f",
+    "Slowdown.Security.Computation.delivered": "fabb6b089fb24ba3f7211df7cdcb323f2b17ad16d9166d6c80bb2df4ee31d857",
+    "Slowdown.Security.Computation.holds": "90018b0900935f95e20a267e6c15a978087f3769f90abaad0979e630f2e300fe",
+    "Slowdown.Security.Computation.reads": "770b3db1e166a8f0e30c1228e1f6b828ef9a0897fdbd2560ff82c6ee83812a93",
     "Slowdown.Security.Computation.registered": "eba2b2dc78b8ec01c161215e9974eac7a3af3b16d8cfe60a5bb0ebc432ad01e5",
     "Slowdown.Security.Computation.run": "2e55867015638136dc6b01f8761ea138b316fb89b79af013d9e10ce3c1a2b7f3",
     "Slowdown.Security.Computation.usage": "63e40c58db83f3176c0265136345d320b5422777e8999f6e85ce5d4e64878ace",
-    "Slowdown.Security.Computation.window": "98db3afdc725da353ac04268a9f522dd27b5b19cc5aa04722d461bda8e8f4cbf",
-    "Slowdown.Security.DeliveredAtLeast": "95cf2fc96ef143d51cd97db369be8b6a14f3efc5a208a215af8fa3d83d17cda5",
-    "Slowdown.Security.DeliveredAtMost": "227bb382f880449df741f5542850b73fc93f9afd4c67a94e3658c3d84ecc25dd",
-    "Slowdown.Security.Divides": "a112745460cc66320c8434a466f69365f15533438f7c2f512163fd73e740c678",
-    "Slowdown.Security.Frame": "8e222d81c73f702ec3c0dbe716590b46f2b0613554d2a2ef4c422e6546bf9341",
-    "Slowdown.Security.Frame.BoundAtMost": "9d5f1eec7d08c3b803ec63adfd60457bc11b4518476d53d0c82df20163f338ae",
-    "Slowdown.Security.Frame.b": "68615d65205cb4ca7c481a9b10261a824c5ba3132b28b605d55b5fb7710bbd65",
-    "Slowdown.Security.Frame.bound": "3104f5ad954c4b2725934702f80668742cda835c5bd8574fc3899ead65b935ad",
-    "Slowdown.Security.Frame.cuts": "c4e48abcdcd27184bb535cc4b74eeec8438723ab226816e4747805a1f06559b8",
-    "Slowdown.Security.Frame.hw": "a7a3d9e40f53013034e5909555744f080b96a4e21aa0d48d0336bebf3fa703b6",
-    "Slowdown.Security.Frame.len": "00fa9776e2050132f13256edd86be9ea049b55cc77aaacd7a9f0fbd286ae8f38",
-    "Slowdown.Security.Frame.m": "8080aa3e369282b2983ada72372bf59257622f1f0813a0cdc2b8571df9997ae1",
-    "Slowdown.Security.Frame.missed": "ff19e3f668a4a23f69202775382cb53f74f841ad733a8314a6f76ba3b635b459",
-    "Slowdown.Security.Frame.n": "f87e8a305e1aa1f6b721842136d2be0898b96456f73c1077a7bf8d4fd465d5c4",
-    "Slowdown.Security.Frame.server": "484a3d984fe84aaf100f9f3b9d6c29a1f45e5360708180089b71490282a47849",
-    "Slowdown.Security.Frame.single": "4e1d4954b81f61f787a92974323e786d1c60b401f73913b0591460dde497d4cd",
-    "Slowdown.Security.Frame.span": "df193fe5d0b999f9243518c34ca016076d38ed07dc6447d52579ac3f7e37245e",
-    "Slowdown.Security.Frame.t": "ca492460f52a7de5099b461f531c1e624a4222ea3b8c543976cbd38b81624bed",
-    "Slowdown.Security.Frame.unaccounted": "2677d63e43909b407bd831ee4d99af807cd0290686ddb196eb7748f61911c8c5",
-    "Slowdown.Security.Frame.Φ": "100a32b99d60210bbf6931879814af8c575b05b201aaacf306b42152fb39970d",
-    "Slowdown.Security.Frame.ω": "addc5733fbc60cfb5f4edd4883079638b6d9bb1ef7acabcff869d4860775a9cb",
+    "Slowdown.Security.Computation.window": "b2ded2bd8bb7a9686a0aee26e8f64a289d4b6a8f3de6ecc6baf5db35eb0dfcba",
+    "Slowdown.Security.DeliveredAtLeast": "4ab0d0726abd60853fa170d2b2027989391f34f0ee0e2d4628ed28fe7f7fe677",
+    "Slowdown.Security.DeliveredAtMost": "4308a149ba8b0af8a670908addffdb2107a66b73e4e976333fbdf432c2414be1",
+    "Slowdown.Security.Divides": "00ae37a60102aee652f3ad20c11a3f524534ff777d46cd26a52f43b139101150",
+    "Slowdown.Security.Frame": "7433db3a0f105b37ba40ce53cf76a817f29c7a79c9746c0d8982f838579dec8d",
+    "Slowdown.Security.Frame.BoundAtMost": "e5b4b4e96af6361104548e0adc980d1e73d22ae2be525c380316be956b829caa",
+    "Slowdown.Security.Frame.On": "29fa938db4e0767a33298d9eeec6f47f1cd9cc06cdbc06a19c47fb82d7bb4e07",
+    "Slowdown.Security.Frame.b": "fbad769934a514c0b1dbe86dafb991ab0a7379d2d2b13841aed3441cb986b816",
+    "Slowdown.Security.Frame.bound": "bd5cc63c41038ffdcf274575256f3ef8b712446f763a9c87aacb262deb986f80",
+    "Slowdown.Security.Frame.cuts": "6fa60728dbcee54e83a2cc183c641663ac7e46f43048a6d40f5acf7a679ebbb9",
+    "Slowdown.Security.Frame.len": "f28db6acf3a177d97805b9fb6e2ca8c28824329f0d6481e5e5b2864a7ed79b76",
+    "Slowdown.Security.Frame.m": "6c01e0c1c61a2ab43f8f59b550ec979f5ccb177f8a7ac1e2a7212fc4443361ef",
+    "Slowdown.Security.Frame.missed": "4fa775b3f661dc26c483f6f5b83120d3a4b3c7e8488d235b68cea8e208bd58d7",
+    "Slowdown.Security.Frame.n": "9cc0b3f9b8e1b827f034c91e193efd1d36ad9ba5fa1da77795346977be4e9c08",
+    "Slowdown.Security.Frame.server": "55e750f376ed2193408c78598baba21acba458072e64608c24d80a6d7f2bd777",
+    "Slowdown.Security.Frame.single": "455764fc0d845e4aaa52d7f5edd8f22c33ce77edb7212df3ef061be234f4a0d3",
+    "Slowdown.Security.Frame.span": "ef93493dbca457a3ab7f1dd0cbc8fefcc4c9c808a10c2750cd0a5e4787602c14",
+    "Slowdown.Security.Frame.t": "517616b493c5cfda84286113810dbd3702ae71212df40dc02ae9c0d2650fe7e3",
+    "Slowdown.Security.Frame.unaccounted": "59b1de8312f250e2d19f03069c0c89d290f1acce34a06ac0e8ccafd668758504",
+    "Slowdown.Security.Frame.Φ": "cceb18d473a4f38345439bf29df52273d73daeec3ed4666f64120f677acc377b",
+    "Slowdown.Security.Frame.ω": "e3efedfcb1e07a98a98091b523fe79a8e2830d87150547e61154a425c2ce9678",
     "Slowdown.Security.H": "91170cd3e6f5e7219c8fae57d2b7711d3f54b2e39d2db2086c556574ea98d26e",
-    "Slowdown.Security.HeldAtLeast": "269c94dbe705342bbadfec8954ffcf826ac78878e20758e1d1ec1b122dc48d86",
+    "Slowdown.Security.HeldAtLeast": "790766a81a60441f3fe4daa2cd0fd13f1caf15fa0e1c7ff13f64d1c24df2621d",
     "Slowdown.Security.Recipe": "fe968732c5c38b3c2e0d8ec045ee982d6e5e598c45d7b932cce0d9dec867d1f4",
     "Slowdown.Security.Recipe.Nstar": "e33efec7a9e5c8e94e81b007733a79b4fc460ad277848aa623b414039d279b63",
     "Slowdown.Security.Recipe.b_w": "7845624f7b6f2b2a6a8ccf32729e54977ce4fd9a8c8b77021a810b814c3eb36a",
@@ -39665,19 +39762,19 @@
     "Slowdown.Security.Training.Valid": "73183f8d4356988e4ca29b558a5cbbe25c988993d60f0040877ea784cf688c5f",
     "Slowdown.Security.Training.bound": "b70a20a52bf8e41d777cf2ac154375d1b0ff99ebda2f04d76239936693fd7350",
     "Slowdown.Security.Training.fit": "d0330581e239ef961120fc50a4c41d51e1c5a07dce08459564c85bad9da952f5",
-    "Slowdown.Security.Trains": "6cf4d57aa2a4838e2af6a13a8825c3af12bf51b4aed6884841ed0ef11df3d8fb",
-    "Slowdown.Security.WorkAtLeast": "4b4bc77cc044dae33b61881ab3bc38a641811068afc79a520fb58d2da19e8b58"
+    "Slowdown.Security.Trains": "b51f13c01bf346a1b4478f82bd62cddb73169f18e87172d96e705ae0d346ba80",
+    "Slowdown.Security.WorkAtLeast": "7a064eb8ac6f7d4475d790158fa5972da7711e60999920f6cf58d8156f3c48af"
    }
   },
   "Definitions.Slowdown.SecurityWitness": {
-   "digest": "76fc80aac7a8c315a5128b43756fee6aee45ba6efc52420ad83946d2c4a00eb6",
+   "digest": "5ff3dc57113a36c85f7d7747baf5035f87b81aad1b2e161db8eb6542d824a1e8",
    "definitions": {
     "Slowdown.Security.Witness.actual": "869690f43291ca5d11e3399c8e51c5f49e60365a159f2dc85a7ade21f9fa8b21",
     "Slowdown.Security.Witness.apart": "ca3bce115790fb5c631526ca6d2e3efe6bec15bd8bda44141c5d91ab2bae7212",
     "Slowdown.Security.Witness.circuit": "0d946cceb4e76edae772ba93447be98819a5adc698338d4504c8782e6fb928d6",
     "Slowdown.Security.Witness.cuts": "5a7a17f6f4de50587b718922c6be5e1393e0134b44843bb7a3a9c7259e45cf19",
     "Slowdown.Security.Witness.fitted": "fd716a631c309bd8323b362edf91f12590fa0b8352bfbb8c203df1d22adfa4f1",
-    "Slowdown.Security.Witness.frame": "6a6fb424e66f236ba33d9f4d475edb341738b5c872ee24867dbb08c03c64065b",
+    "Slowdown.Security.Witness.frame": "cff014068dd30b98c539ae1d766278e559ec5659d8a3570a0394f4be3f017132",
     "Slowdown.Security.Witness.free": "b510a79def8750d64d5b87c3f62c9dc6dc1f71251d420bcd1d2e6ff3fae950b0",
     "Slowdown.Security.Witness.hw": "3ba9c48f35131075c0df6f876c20b9d8261098664735e96f3c4743729e772096",
     "Slowdown.Security.Witness.recipe": "f1c097fa2feae5d55d2354cb82f2704e2f758f99d6ddf5c31a977456854aecf0",
