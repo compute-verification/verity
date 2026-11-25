@@ -24,6 +24,8 @@ work's pricing is `p` on each op class and nothing on gates of none, an account'
 charge at a tick is at most the bits of its gates the chip reads at that tick from outside it; `mem_le_state`, an
 account's `mem` charge at a tick is at most the bits of its gates in the device's state at the end of the tick (a
 location's state is in the state of any location that contains it, `state_subset`).
+
+`computeRate_of_classes`: one cap on a priced sum follows from a cap on each op class, at the classes' caps priced.
 -/
 
 @[expose] public section
@@ -196,6 +198,25 @@ theorem covers_work {ι α E : Type} (R : Actual.Run L) (chip mem : Finset L) (c
     have : R.A.t g = u := by omega
     subst this
     exact ⟨⟨⟨⟨hc, hx, hu⟩, ha⟩, rfl⟩, ho⟩
+
+/-- **The priced cap is the functional units' caps, priced.** Where at each location of `𝒳` the gates of each op
+class number at most `rate X o` a tick (`classPrice`: one unit of class `o` does one op a tick), and the pricing `π`
+is `p` on each op class and nothing on gates of none, the compute rate holds at `π` with the cap `∑ o, p o · rate X o`
+(`Device.priced`). -/
+theorem computeRate_of_classes {𝒳 : Set (Finset L)} (cls : Fin A.N → Option OpClass) (p : Price)
+    (rate : Finset L → OpClass → ℕ) {π : Fin A.N → ℕ} (hπ : ∀ X ∈ 𝒳, ∀ g, A.x g ∈ X → π g = (cls g).elim 0 p)
+    (hΦ : ∀ o, A.ComputeRate 𝒳 (A.classPrice cls o) (fun X => rate X o)) :
+    A.ComputeRate 𝒳 π (fun X => ∑ o, p o * rate X o) := by
+  intro X hX a b
+  have split : ∀ g ∈ A.region X (Set.Ico a b), π g = ∑ o, p o * A.classPrice cls o g := fun g hg => by
+    rw [hπ X hX g ((mem_region A).1 hg).2.1]
+    unfold Placed.classPrice
+    cases cls g <;> simp
+  unfold Placed.work
+  rw [Finset.sum_congr rfl split, Finset.sum_comm, Finset.sum_mul]
+  refine Finset.sum_le_sum fun o _ => ?_
+  rw [← Finset.mul_sum, Nat.mul_assoc]
+  exact Nat.mul_le_mul_left _ (hΦ o X hX a b)
 
 /-- The state of a location is in the state of every location that contains it. -/
 theorem state_subset (R : Actual.Run L) {X Y : Finset L} (h : X ⊆ Y) (t : ℕ) : R.state X t ⊆ R.state Y t := by
