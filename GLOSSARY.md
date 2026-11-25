@@ -114,7 +114,7 @@ Current terms and notation, one line each, ``- **Term** (area): definition. Code
 - **Preflight** (landing): `research queue ready`'s checks of a head before the ready mark.
 - **Pricing argument**: unregistered-input bits per counted object, which give the yields. Code: `Slowdown.Guarantees.ThreadedReads`.
 - **Program**: the stored form of a declared circuit, or of any circuit a proof claims something about, compressed as circuit templates called from a root body. Code: `verity.circuits.Program`.
-- **Prohibited set** (training): ℬ, the computations that hold a reference training algorithm of more than Y counted multiplications meeting a recipe's premises; no computation is in the admissible set and in ℬ. Code: `Slowdown.Security.B`, `Slowdown.SecurityProofs.secure`.
+- **Prohibited set** (training): ℬ, the computations that hold a reference training algorithm of more than Y counted multiplications meeting a recipe's premises; no computation is in the admissible set and in ℬ. Code: `Slowdown.Security.B`, `Slowdown.Guarantees.Secure`.
 - **Proof block**: one part of a partition, proved on its own, a set of gates whose inputs and outputs are bit strings and whose outputs fit its circuit template's public size class (16 to 262,144 bits). Code: `verity.circuits.parts`, `sizeClasses`.
 - **Proof layer**: Flock, with SPOT and recursion on it (`verity/protocols/proof`), what the other protocols call to prove.
 - **Proof system**: the one system behind every protocol: Flock ZK on the workers behind the ZK server, with the auditor's challenger and verifier; a protocol states only its `Spec`. Code: `verity.protocols.proof.spot.verifier.service`.
