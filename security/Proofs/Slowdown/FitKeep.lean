@@ -13,8 +13,8 @@ it. `fitBoundSlots_keep` is `fitBoundSlots_start` at `keep T s`, with the counte
 the bound: a citation that leaves work out charges it.
 
 * `fitBoundSlots_but` and `fitBoundSlots_init` cut by window: `s` is every gate outside the windows in `I`. They ask
-  `FitsSlots` of the other windows only (`fitBoundSlots_but`, their fresh input bound too), and `ReachSlots`, counted
-  outside `I`, of the threads started outside `I`. A thread an initialization
+  `FitsSlots` of the other windows only (`fitBoundSlots_but`, their unregistered input's bound too), and
+  `ReachSlots`, counted outside `I`, of the threads started outside `I`. A thread an initialization
   window starts has every kept multiplication in a window it entered, whose entry fee pays for it, so it needs no
   `ReachSlots`. The charge is the counted multiplications inside `I` (`benchmarks/nci/fit.py`, `left_out`).
 * `fitBoundSlots_threads` cuts by thread: `s` is the counted multiplications of the threads in `K`, under `ReachSlots`
@@ -118,8 +118,8 @@ theorem keep_outside_mults {T : Threading c} {k : ℕ} (P : Partition c.D k) {I 
   exact hg.1.2 j hj hg.2
 
 /-- **The fit bound with windows left out and nothing asked of them**: at every window outside `I`, `FitsSlots` and
-at most `S ≥ 0` bits of fresh input; outside `I`, `ReachSlots` for the threads started outside `I` that do counted work
-in their start window. `T`'s counted multiplications are bounded by `FitBoundSlots`'s bound over the windows outside
+at most `S ≥ 0` bits of unregistered input; outside `I`, `ReachSlots` for the threads started outside `I` that do
+counted work in their start window. `T`'s counted multiplications are bounded by `FitBoundSlots`'s bound over the windows outside
 `I` plus those inside `I`. -/
 theorem fitBoundSlots_but (T : Threading c) (σ : T.Slots) {k : ℕ} (P : Partition c.D k) (I : Finset (Fin k))
     (start : Fin T.m → Fin k) (Nstar : ℕ) (S b_w w_e : ℝ) (hbw : 0 ≤ b_w) (hwe : 0 ≤ w_e) (hgap : S < Nstar * b_w)
@@ -173,8 +173,8 @@ theorem fitBoundSlots_but (T : Threading c) (σ : T.Slots) {k : ℕ} (P : Partit
 
 /-- **The fit bound with initialization windows left out**: `FitsSlots` at every window outside `I`, and `ReachSlots`
 outside `I` for the threads started outside `I` that do counted work in their start window, bound `T`'s counted
-multiplications by `FitBoundSlots`'s bound plus those inside `I`. It is `fitBoundSlots_but` with every window's fresh
-input at most `S`. -/
+multiplications by `FitBoundSlots`'s bound plus those inside `I`. It is `fitBoundSlots_but` with every window's
+unregistered input at most `S`. -/
 theorem fitBoundSlots_init (T : Threading c) (σ : T.Slots) {k : ℕ} (P : Partition c.D k) (I : Finset (Fin k))
     (start : Fin T.m → Fin k) (Nstar : ℕ) (S b_w w_e : ℝ) (hbw : 0 ≤ b_w) (hwe : 0 ≤ w_e) (hgap : S < Nstar * b_w)
     (hS : ∀ j, (freshInput c (P.gates j) : ℝ) ≤ S)

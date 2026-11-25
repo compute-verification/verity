@@ -353,7 +353,8 @@ set_option exponentiation.threshold 20000 in
 /-- **An accepted PoUS period's run is not prohibited, outside PoUS's error**: `secure_capacity` at PoUS's per-period
 guarantee (`Pous.Period.SecurityProofs.periodCapacity`), under P2's security in the ring model at `(D, K, R)`, for a
 prover strategy under the device model whose session is the tick `c`, a capacity verdict that is the verifier's whole
-decision outside a break, any certificate `S` with `S + S_chip + ∑ cap_i · round ≤ S₀`, and the error `δ + ε_max`. -/
+decision outside a break, any certificate `S` that with the chip's state and what the links carry in a round is at
+most `S₀`, and the error `δ + ε_max`. -/
 theorem secure_pous [Fintype ι] {D K R : ℕ} (hP : Pous.P2.Assumptions.P2RingAuditSecure D K R)
     (r : Run d α ΩW ΩQ ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
     (ρ : ΩW × ΩQ × ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams) → Actual.Run L)

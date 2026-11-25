@@ -328,7 +328,7 @@ theorem fitBoundSlots_core {c : RegisteredCircuit} {T : Threading c} (σ : T.Slo
   exact fit_ineq hwe.le hbw.le hN0 hr0 hgap0 hMr htok hB hwin
 
 /-- **The fit bound over parameter slots**, with `ReachSlots` asked only of the threads that have counted
-multiplications in their start window: `fitBoundSlots_core` at `FitsSlots` and the windows' fresh input. With no
+multiplications in their start window: `fitBoundSlots_core` at `FitsSlots` and the windows' unregistered input. With no
 counted multiplication the bound is `0 ≤ …`; otherwise some window exists, so `S ≥ 0`. -/
 theorem fitBoundSlots_start {c : RegisteredCircuit} {T : Threading c} (σ : T.Slots) {k : ℕ} (P : Partition c.D k)
     (start : Fin T.m → Fin k) (Nstar : ℕ) (S b_w w_e : ℝ) (hgap : S < Nstar * b_w)
