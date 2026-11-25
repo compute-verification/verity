@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Slowdown.Security
+public import Definitions.Slowdown.Guarantees.Secure
 public import Proofs.Slowdown.FitRate
 public import Proofs.ResourceAccounting.Actual.Outside
 public import Definitions.ResourceAccounting.BlockProperties
@@ -8,9 +8,9 @@ public import Definitions.ResourceAccounting.BlockProperties
 /-!
 # No computation is feasible, accounted for and prohibited
 
-`secure`: `M ∈ H F → M ∈ A F x_s x_b x_w y_b → M ∉ B F p Y`, the three sets of `Definitions.Slowdown.Security`, when `Y`
-is at least the fit bound (`Frame.bound`) and the bits a covered window can read of a reference training algorithm
-(`Frame.unaccounted`) are fewer than `N* b_w`. Its steps:
+`Secure` proves `Guarantees.Secure`: `M ∈ H F → M ∈ A F x_s x_b x_w y_b → M ∉ B F p Y`, the three sets of
+`Definitions.Slowdown.Security`, when `Y` is at least the fit bound (`Frame.bound`) and the bits a covered window can
+read of a reference training algorithm (`Frame.unaccounted`) are fewer than `N* b_w` (`Frame.BoundAtMost`). Its steps:
 
 * What the limits leave. In a feasible computation whose server holds `x_s` bits of the declared circuit at a cut,
   the server carries at most `m − x_s` bits outside the declared circuit across it (`state_outside`); one whose links
@@ -29,8 +29,8 @@ least the sum over the windows of `Φ len − x_w + o_w`, with no premise on the
 
 Over the audits' runs, with `ExceptWith` the tree's "fails on an accepted run with probability at most `ε`":
 `accounted_of_windows` adds the audits' errors over the windows (an accepted run is in `A` outside
-`|missed| δ_w + (n J − |missed|) (δ_s + δ_b + δ_y)`), and `secure_pr` is `secure` there (where every run is feasible and an
-accepted run is in `A` outside `δ`, an accepted run is not in `B` outside `δ`). `single_m`, `single_b` and `single_Φ`
+`|missed| δ_w + (n J − |missed|) (δ_s + δ_b + δ_y)`), and `secure_pr` is `Secure` there (where every run is feasible
+and an accepted run is in `A` outside `δ`, an accepted run is not in `B` outside `δ`). `single_m`, `single_b` and `single_Φ`
 are the limits of a frame of one server, and `server_m`, `server_b` and `server_Φ` those of a server of `n` GPUs with
 its host and switch.
 -/
@@ -108,16 +108,8 @@ theorem card_missed_le {L : Type*} [DecidableEq L] (A : Placed L) (n : ℕ) (X :
   exact (card_le_card hsub).trans (card_biUnion_le.trans (sum_le_sum fun u hu =>
     hwin _ _ (by rwa [Prod.mk.eta, Equiv.apply_symm_apply])))
 
-/-- **No computation is feasible, accounted for and prohibited.** At a frame `F`, amounts `x_s`, `x_b`, `x_w` and
-`y_b`, and a recipe `p` with `b_w ≥ 0`, `w_e > 0` and the bits a covered window can read of a reference training
-algorithm (`F.unaccounted x_s x_b y_b p`) fewer than `N* b_w`: a computation that is feasible on the frame's hardware
-(`H F`) and consistent with what the audits account for (`A F x_s x_b x_w y_b`) holds no reference training algorithm
-of more than `Y` counted multiplications that meets the recipe's premises (`B F p Y`), for every `Y` at least the fit
-bound (`F.bound x_s x_b x_w y_b p`). -/
-theorem secure {L E : Type*} [Fintype E] [DecidableEq L] (F : Frame L E) (x_s x_b x_w y_b : ℕ) (p : Recipe) (Y : ℝ)
-    (hbw : 0 ≤ p.b_w) (hwe : 0 < p.w_e) (hgap : (F.unaccounted x_s x_b y_b p : ℝ) < p.Nstar * p.b_w)
-    (hY : F.bound x_s x_b x_w y_b p ≤ Y) (M : Computation L E) :
-    M ∈ H F → M ∈ A F x_s x_b x_w y_b → M ∉ B F p Y := by
+theorem Secure : Guarantees.Secure := by
+  intro L E _ _ F x_s x_b x_w y_b p Y ⟨hbw, hwe, hgap, hY⟩ M
   rintro ⟨hC, hW, hMem, hL⟩ hA ⟨c, emb, T, start, hT, hlt⟩
   have hω : ∀ j : Fin F.cuts.J, F.cuts.τ j.succ - F.cuts.τ j.castSucc ≤ F.ω := fun j =>
     le_sup (f := F.len) (mem_univ j)
@@ -232,7 +224,8 @@ theorem secure_pr [Fintype E] (F : Frame L E) (x_s x_b x_w y_b : ℕ) (p : Recip
     (hY : F.bound x_s x_b x_w y_b p ≤ Y) (δ : ℝ≥0∞) (hH : ∀ ω, M ω ∈ H F)
     (hA : ExceptWith pr accepts (fun ω => M ω ∈ A F x_s x_b x_w y_b) δ) :
     ExceptWith pr accepts (fun ω => M ω ∉ B F p Y) δ :=
-  (mono _ _ fun ω h => ⟨h.1, fun hin => h.2 (secure F x_s x_b x_w y_b p Y hbw hwe hgap hY (M ω) (hH ω) hin)⟩).trans hA
+  (mono _ _ fun ω h =>
+    ⟨h.1, fun hin => h.2 (Secure F x_s x_b x_w y_b p Y ⟨hbw, hwe, hgap, hY⟩ (M ω) (hH ω) hin)⟩).trans hA
 
 /-- **The audits' errors add over the windows.** If at each covered window an accepted run's declared circuit holds
 `x_s` bits at the cut outside probability `δ_s` and the links deliver `x_b` bits of it to the window's server outside

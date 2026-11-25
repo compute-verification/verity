@@ -26,6 +26,7 @@ public import Definitions.Slowdown.Factor
 public import Definitions.Slowdown.Covering
 public import Definitions.Slowdown.Cut
 public import Definitions.Slowdown.Security
+public import Definitions.Slowdown.SecurityWitness
 public import Definitions.Pous
 public import Definitions.Pous.Guarantees.StreamedWipeFamily
 public import Definitions.Pous.Guarantees.StreamedWipeReads
@@ -80,6 +81,7 @@ public import Definitions.Slowdown.Guarantees.Threads
 public import Definitions.Slowdown.Guarantees.Layered
 public import Definitions.Slowdown.Guarantees.Fit
 public import Definitions.Slowdown.Guarantees.FitRate
+public import Definitions.Slowdown.Guarantees.Secure
 public import Definitions.Slowdown.Guarantees.Slowdown
 public import Definitions.Slowdown.Guarantees.Remote
 public import Definitions.Slowdown.Guarantees.RemoteMonitoringPeriod

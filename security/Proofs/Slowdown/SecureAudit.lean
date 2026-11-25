@@ -12,7 +12,7 @@ import Proofs.Pouw.Prob
 /-!
 # An accepted audit's run is not prohibited
 
-`secure` over an audit's coins, with `A`'s amount from the audit's own guarantee and not a hypothesis. The frame is
+`Secure` over an audit's coins, with `A`'s amount from the audit's own guarantee and not a hypothesis. The frame is
 one server over the ticks `[0, t)`, one window (`wholeCuts`) or two (`cutAt`). At each coin the computation is a run of the
 actual-circuit model, its declared circuit's gates those charged to the audit's account, and the joint audit's
 schedule is the one the run induces on the device (`Actual.Run.schedule`).
@@ -249,7 +249,7 @@ theorem secure_bandwidth (hwin : r.win .bandwidth = ⟨0, t⟩) (hbm : E × L) (
       computation r ρ usage θ hθ acct .bandwidth ω ∈ B (chipFrame hw chip hX t) p Y) ≤ ε := by
   refine (Pouw.pr_mono fun ω hω => ⟨hω.1, lt_of_not_ge fun hge => ?_⟩).trans (r.pr_bandwidthLt_le hsound)
   have hx : ⌈Q⌉₊ ≤ r.read ω := Nat.ceil_le.2 hge
-  refine secure (chipFrame hw chip hX t) 0 ⌈Q⌉₊ 0 _ p Y hbw hwe hgap hY _ (hH ω)
+  refine Secure (chipFrame hw chip hX t) 0 ⌈Q⌉₊ 0 _ p Y ⟨hbw, hwe, hgap, hY⟩ _ (hH ω)
     (fun i j => ⟨fun _ => ⟨Nat.zero_le _, hx.trans ?_, delivered_le_capacity _ _ (hH ω) i j⟩,
       fun h => absurd h (notMem_empty _)⟩) hω.2
   unfold Computation.delivered
@@ -338,7 +338,7 @@ theorem secure_capacity (hwin : r.win .capacity = ⟨c, 1⟩) (hbm : E × L) (si
   have hx : ⌈S⌉₊ ≤ r.held ω := Nat.ceil_le.2 (by
     rw [hwin] at hge
     simpa using hge)
-  refine secure (cutFrame hw chip mem hX c t hc) ⌈S⌉₊ 0 0 _ p Y hbw hwe hgap hY _ (hH ω)
+  refine Secure (cutFrame hw chip mem hX c t hc) ⌈S⌉₊ 0 0 _ p Y ⟨hbw, hwe, hgap, hY⟩ _ (hH ω)
     (fun i j => ⟨fun hj => ⟨hx.trans ?_, Nat.zero_le _, delivered_le_capacity _ _ (hH ω) i j⟩,
       fun _ => Nat.zero_le _⟩) hω.2
   have hj1 : j = (1 : Fin 2) := by
@@ -411,7 +411,7 @@ theorem secure_device [Nonempty ΩS] (hwinW : r.win .compute = ⟨0, c + 1⟩) (
     have h := not_lt.1 fun h => hns ⟨hω.2.1, h⟩
     rw [hwinS] at h
     simpa using h)
-  refine secure (cutFrame hw chip mem hX c t hc) ⌈S⌉₊ 0 _ y p _ hbw hwe hgap le_rfl _ (hH ω)
+  refine Secure (cutFrame hw chip mem hX c t hc) ⌈S⌉₊ 0 _ y p _ ⟨hbw, hwe, hgap, le_rfl⟩ _ (hH ω)
     (fun i j => ⟨fun hj => ⟨hxs.trans ?_, Nat.zero_le _, hy ω i j hω.2.2.1 hj⟩, fun hj => hxw.trans ?_⟩) hω.2.2.2
   · have hj1 : j = (1 : Fin 2) := by
       have h0 : (j : ℕ) ≠ 0 := fun h => hj (mem_filter.2 ⟨mem_univ _, by simpa using h⟩)

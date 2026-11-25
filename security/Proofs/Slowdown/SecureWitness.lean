@@ -6,14 +6,14 @@ import Proofs.Pouw.Prob
 /-!
 # The three sets meet two by two
 
-`secure` says no computation is feasible, accounted for and prohibited. Here its hypotheses hold together and each
+`Secure` says no computation is feasible, accounted for and prohibited. Here its hypotheses hold together and each
 pair of its sets it can meet does, at one recipe and at a frame whose one window is covered or missed, so the theorem
 is not true for want of a computation, on either of its branches:
 
 * `served_mem`: a computation in `H ∩ A`, at amounts that are the whole of the server's memory, of its link and of
   its work;
 * `trained_mem`: a computation in `H ∩ B`, holding a reference training algorithm of one counted multiplication;
-* `params`: the conditions `secure` puts on the amounts and the recipe, at the count `Y = 0`.
+* `params`: the condition `Secure` puts on the amounts, the recipe and the count (`Frame.BoundAtMost`), at `Y = 0`.
 
 The frame is one server of one leaf, doing one unit of work a tick, carrying one bit and joined to the world outside
 by one link of one bit a tick, over one tick and one window. The run is four one-bit gates, each leaf holding its
@@ -26,7 +26,7 @@ The hardware's three limits are parameters (`hw c m β`), 1 each above.
 The two computations are that one run, and differ only in the declared circuit's gates. In `served` every gate is the
 declared circuit's: the audits account for the bit carried and the bit read. In `trained` none is, and gate `3` is the
 one counted multiplication of a reference training algorithm, of the weight `0` by the activation `2`, which reads
-two fresh bits for the one weight it uses (`b_w = 2`). `trained_not_accounted` is `secure` at it.
+two fresh bits for the one weight it uses (`b_w = 2`). `trained_not_accounted` is `Secure` at it.
 
 **Each clause of the feasible set is needed.** The feasible set is four clauses, at limits per leaf each a
 statement about a leaf or the link (`feasible_iff`). With one limit set to 0 the run meets the other three clauses, and `trained` is accounted for and
@@ -35,7 +35,7 @@ carries nothing) and `work_needed` (the server does no work, the window missed).
 another, `late`: the counted multiplication at tick 0 reads its weight and its activation from gates the server
 computes at tick 5, so the server holds nothing, carries nothing into the window and reads nothing from outside, and `late` meets
 the work, memory and bandwidth clauses on a server that carries nothing over a link that carries nothing
-(`order_needed`). So `secure` is false with any one clause dropped from `H`.
+(`order_needed`). So `Secure` is false with any one clause dropped from `H`.
 
 **`secure_compute`'s hypotheses hold together** (`compute_witness`). The same run (`actual`), with a compute audit that accepts every run over the one tick and whose schedule is the one the run induces on the
 server (`audit`): the compute account does one unit of work (`audit_work`), so the audit is sound at the certificate
@@ -53,63 +53,9 @@ open InferenceOnly
 namespace Slowdown.SecurityProofs.SecureWitness
 
 open Verity ResourceAccounting ResourceAccounting.SecurityProofs.Actual Finset Slowdown.Security
-
-/-- The run's circuit: the inputs `0` and `1`, gate `2` reading `1`, and gate `3` reading `0` and `2`. -/
-abbrev circuit : Circuit where
-  N := 4
-  w _ := 1
-  isInput g := decide (g.val < 2)
-  reads g := if g.val = 2 then {1} else if g.val = 3 then {0, 2} else ∅
-  reads_lt := by decide +kernel
-  input_reads := by decide +kernel
-  op _ _ := 0
-  op_congr _ _ _ _ := rfl
-  outputs := {3}
-
-/-- The run: gates `0` and `3` on the server (`true`), gates `1` and `2` outside (`false`), all at tick 0. -/
-abbrev run : Placed Bool where
-  toCircuit := circuit
-  x g := decide (g.val = 0 ∨ g.val = 3)
-  t _ := 0
-  cell g := g.val
-  cell_inj := by decide +kernel
-
-/-- Each gate uses one unit of its leaf's compute, and every wire runs on the one link. -/
-abbrev usage : Usage run Unit := ⟨fun _ => 1, fun _ _ => ()⟩
-
-/-- The run: every gate holds 0, and each leaf holds its inputs at every tick. -/
-abbrev actual : Actual.Run Bool where
-  A := run
-  val := fun _ => 0
-  faithful := fun _ _ => rfl
-  held := fun y _ => univ.filter fun a => run.isInput a = true ∧ run.x a = y
-  holding := ⟨fun _ _ _ ha => ⟨(mem_filter.1 ha).2.2, Or.inl (mem_filter.1 ha).2.1⟩,
-    fun a ha => mem_filter.2 ⟨mem_univ a, ha, rfl⟩,
-    fun g a _ hx s hs hsg => mem_filter.2 ⟨mem_univ a,
-      hs.resolve_right (by have : s = 0 := Nat.le_zero.1 hsg; omega), hx⟩⟩
-
-/-- The hardware: each leaf does `c` units of work a tick and carries `m` bits, and one link of `β` bits a tick joins
-the server and the world outside. -/
-abbrev hw (c m β : ℕ) : Hardware Bool Unit :=
-  Hardware.ofLeaves (fun _ => c) (fun _ => m) (fun _ => (false, true)) (fun _ => β)
-
-/-- One window of one tick. -/
-abbrev cuts : Cuts 1 := ⟨1, fun j => j.val, fun _ _ h => h, rfl, rfl⟩
+  Slowdown.Security.Witness
 
 variable (c m β : ℕ) (I : Finset (Fin (1 * cuts.J)))
-
-/-- The frame: the server `{true}` over one window, missed when it is in `I`. -/
-abbrev frame : Frame Bool Unit := Frame.single (hw c m β) {true} (Set.mem_univ _) 1 cuts I
-
-/-- The run with every gate the declared circuit's. -/
-abbrev served : Computation Bool Unit := ⟨actual, usage, ∅, fun _ h => absurd h (notMem_empty _), univ⟩
-
-/-- The run with no gate the declared circuit's. -/
-abbrev trained : Computation Bool Unit := ⟨actual, usage, ∅, fun _ h => absurd h (notMem_empty _), ∅⟩
-
-/-- The recipe: one weight reaches the target, a window reads two bits for each weight it uses and one for each
-thread it enters, a thread uses a weight once, and nothing is shared with the declared circuit. -/
-noncomputable abbrev recipe : Recipe := ⟨1, 2, 1, 1, 0, 0, 0⟩
 
 theorem region_empty (X : Finset Bool) {I : Set ℕ} (h : 0 ∉ I) : run.region X I = ∅ := by
   ext g
@@ -265,12 +211,11 @@ theorem Φ_eq : (frame c m β I).Φ = c :=
 theorem unaccounted_eq : (frame 1 1 1 I).unaccounted 1 1 1 recipe = 0 := by
   simp [Frame.unaccounted, m_eq, ω_eq, b_eq]
 
-/-- **`secure`'s conditions on the amounts and the recipe hold** at the amounts `1`, `1`, `1` and `1` and the count
-`Y = 0`: the audits account for all the server's memory, all its link carries and all its work, so a covered window
-can read no bit of a reference training algorithm, a missed one has no work left for it, and the fit bound is `0`. -/
-theorem params : 0 ≤ recipe.b_w ∧ 0 < recipe.w_e ∧
-    ((frame 1 1 1 I).unaccounted 1 1 1 recipe : ℝ) < recipe.Nstar * recipe.b_w ∧
-      (frame 1 1 1 I).bound 1 1 1 1 recipe ≤ 0 := by
+/-- **`Secure`'s condition on the amounts, the recipe and the count holds** at the amounts `1`, `1`, `1` and `1` and
+the count `Y = 0`: the audits account for all the server's memory, all its link carries and all its work, so a covered
+window can read no bit of a reference training algorithm, a missed one has no work left for it, and the fit bound is
+`0`. -/
+theorem params : (frame 1 1 1 I).BoundAtMost 1 1 1 1 recipe 0 := by
   refine ⟨by norm_num, by norm_num, ?_, ?_⟩
   · rw [unaccounted_eq]
     norm_num
@@ -404,21 +349,20 @@ theorem trained_prohibited {Y : ℝ} (hY : Y < 1) : trained ∈ B (frame c m β 
 theorem trained_mem : trained ∈ H (frame 1 1 1 I) ∧ trained ∈ B (frame 1 1 1 I) recipe 0 :=
   ⟨feasible I, trained_prohibited 1 1 1 I (by norm_num)⟩
 
-/-- `secure` at the witness: the run with no gate the declared circuit's is not accounted for. -/
+/-- `Secure` at the witness: the run with no gate the declared circuit's is not accounted for. -/
 theorem trained_not_accounted : trained ∉ A (frame 1 1 1 I) 1 1 1 1 := fun hA =>
-  secure (frame 1 1 1 I) 1 1 1 1 recipe 0 (params I).1 (params I).2.1 (params I).2.2.1 (params I).2.2.2 trained
+  Secure (frame 1 1 1 I) 1 1 1 1 recipe 0 (params I) trained
     (trained_mem I).1 hA (trained_mem I).2
 
-/-- `secure` at the witness: the run with every gate the declared circuit's is not prohibited. -/
+/-- `Secure` at the witness: the run with every gate the declared circuit's is not prohibited. -/
 theorem served_not_prohibited : served ∉ B (frame 1 1 1 I) recipe 0 :=
-  secure (frame 1 1 1 I) 1 1 1 1 recipe 0 (params I).1 (params I).2.1 (params I).2.2.1 (params I).2.2.2 served
+  Secure (frame 1 1 1 I) 1 1 1 1 recipe 0 (params I) served
     (served_mem I).1 (served_mem I).2
 
-/-- **`secure`'s conclusion fails of `M` at the frame `F`**: its conditions on the amounts and the count hold, and
-`M` is accounted for and prohibited. By `secure`, `M` is then not feasible on `F`'s hardware. -/
+/-- **`Secure`'s conclusion fails of `M` at the frame `F`**: its condition on the amounts and the count holds, and
+`M` is accounted for and prohibited. By `Secure`, `M` is then not feasible on `F`'s hardware. -/
 def Escapes (M : Computation Bool Unit) (F : Frame Bool Unit) (x_s x_b x_w y_b : ℕ) (Y : ℝ) : Prop :=
-  (F.unaccounted x_s x_b y_b recipe : ℝ) < recipe.Nstar * recipe.b_w ∧ F.bound x_s x_b x_w y_b recipe ≤ Y ∧
-    M ∈ A F x_s x_b x_w y_b ∧ M ∈ B F recipe Y
+  F.BoundAtMost x_s x_b x_w y_b recipe Y ∧ M ∈ A F x_s x_b x_w y_b ∧ M ∈ B F recipe Y
 
 theorem accounted_covered : trained ∈ A (frame c m β ∅) 0 0 0 1 := fun i j =>
   ⟨fun _ => ⟨Nat.zero_le _, Nat.zero_le _, (delivered_univ c m β ∅ i j).le⟩, fun h => absurd h (notMem_empty _)⟩
@@ -429,7 +373,7 @@ theorem accounted_missed : trained ∈ A (frame c m β univ) 1 1 0 1 := fun _ _ 
 theorem escapes_covered (h : m + min β 1 = 1) : Escapes trained (frame c m β ∅) 0 0 0 1 (1 / 4) := by
   have hu : (frame c m β ∅).unaccounted 0 0 1 recipe = 1 := by
     simpa [Frame.unaccounted, m_eq, b_eq, ω_eq] using h
-  refine ⟨?_, ?_, accounted_covered c m β, trained_prohibited c m β ∅ (by norm_num)⟩
+  refine ⟨⟨by norm_num, by norm_num, ?_, ?_⟩, accounted_covered c m β, trained_prohibited c m β ∅ (by norm_num)⟩
   · rw [hu]
     norm_num
   · unfold Frame.bound
@@ -455,7 +399,7 @@ theorem work_needed :
     Order trained ∧ Memory 1 trained ∧ Bandwidth 1 trained ∧ Escapes trained (frame 0 1 1 univ) 1 1 0 1 0 := by
   have hu : (frame 0 1 1 univ).unaccounted 1 1 1 recipe = 0 := by
     simp [Frame.unaccounted, m_eq, b_eq, ω_eq]
-  refine ⟨order, memory 1 le_rfl, bandwidth 1 le_rfl, ?_, ?_, accounted_missed 0 1 1,
+  refine ⟨order, memory 1 le_rfl, bandwidth 1 le_rfl, ⟨by norm_num, by norm_num, ?_, ?_⟩, accounted_missed 0 1 1,
     trained_prohibited 0 1 1 univ (by norm_num)⟩
   · rw [hu]
     norm_num
@@ -621,7 +565,7 @@ theorem order_needed :
     Work 1 late ∧ Memory 0 late ∧ Bandwidth 0 late ∧ Escapes late (frame 1 0 0 ∅) 0 0 0 0 0 := by
   have hu : (frame 1 0 0 ∅).unaccounted 0 0 0 recipe = 0 := by
     simp [Frame.unaccounted, m_eq, b_eq, ω_eq]
-  refine ⟨late_work, late_memory, late_bandwidth, ?_, ?_,
+  refine ⟨late_work, late_memory, late_bandwidth, ⟨by norm_num, by norm_num, ?_, ?_⟩,
     fun i j => ⟨fun _ => ⟨Nat.zero_le _, Nat.zero_le _, ?_⟩, fun h => absurd h (notMem_empty _)⟩,
     prohibited_of 1 0 0 ∅ late _ (late_trains 1 0 0 ∅) (by norm_num)⟩
   · rw [hu]
@@ -877,3 +821,26 @@ theorem device_witness (ω : Unit × Unit × Unit) :
 end Compute
 
 end Slowdown.SecurityProofs.SecureWitness
+
+namespace Slowdown.SecurityProofs
+
+open Slowdown.Security Slowdown.Security.Witness SecureWitness
+
+theorem Secure_honest : Guarantees.Secure_honest :=
+  ⟨actual.faithful, actual.holding, Set.mem_univ _, params ∅, (served_mem ∅).1, (served_mem ∅).2⟩
+
+theorem Secure_nontrivial : Guarantees.Secure_nontrivial := by
+  obtain ⟨hb, hA, hB⟩ := memory_needed.2.2.2
+  exact ⟨actual.faithful, actual.holding, Set.mem_univ _, hb, hA,
+    fun hH => Secure _ 0 0 0 1 recipe (1 / 4) hb trained hH hA hB, fun h => h hB⟩
+
+theorem Secure_nontrivial_accounted : Guarantees.Secure_nontrivial_accounted :=
+  ⟨actual.faithful, actual.holding, Set.mem_univ _, params ∅, (trained_mem ∅).1, trained_not_accounted ∅,
+    fun h => h (trained_mem ∅).2⟩
+
+theorem Secure_nontrivial_bound : Guarantees.Secure_nontrivial_bound :=
+  have hB : trained ∈ B (frame 1 1 1 ∅) recipe 0 := trained_prohibited 1 1 1 ∅ (by norm_num)
+  ⟨actual.faithful, actual.holding, Set.mem_univ _, feasible ∅, accounted_covered 1 1 1,
+    fun hb => Secure _ 0 0 0 1 recipe 0 hb trained (feasible ∅) (accounted_covered 1 1 1) hB, fun h => h hB⟩
+
+end Slowdown.SecurityProofs
