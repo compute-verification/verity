@@ -13,8 +13,8 @@ A proof of resource use shows that a set `S` of gates, a declared computation, u
 physical constraints then leave the rest of the run at most the limit less `x`:
 
 * `work_outside`: under `ComputeRate`, the gates of `A[X, [a, b))` outside `S` do at most `Φ_X (b − a) − x` work;
-* `state_outside`: under `MemoryAt`, `X` carries at most `M_X − x` bits outside `S` across the tick
-  (`state_outside_of_held`: the same from a run's state, with `S` counted where it is held);
+* `state_outside`: where a run's state of `X` at a tick, what its leaves hold and what is in flight between them, is
+  at most `M` bits and at least `x` of them are of `S`, `X` carries at most `M − x` bits outside `S` across the tick;
 * `delivered_le`: under `Links`, over `[a, b)` the links deliver at most `β_X (b − a)` bits to `X`;
 * `delivered_outside`: under `Links`, where the links deliver to `X` over `[a, b)` at least `x` bits of `S` and at most
   `y` in all, `A[X, [a, b))` reads at most `min (β_X (b − a)) y − x` bits outside `S` from outside `X`.
@@ -62,19 +62,10 @@ theorem work_outside {𝒳 : Set (Finset L)} {π : Fin A.N → ℕ} {compute : F
   have h2 := work_inter_add_sdiff A π (A.region X (Set.Ico a b)) S
   omega
 
-/-- **State outside `S`**: if `X` carries at least `x` bits of `S` across the tick `t`, it carries at most `M_X − x`
-outside `S`. -/
-theorem state_outside {𝒳 : Set (Finset L)} {M : Finset L → ℕ} {T : Set ℕ} (h : A.MemoryAt 𝒳 M T) {X : Finset L}
-    (hX : X ∈ 𝒳) {t : ℕ} (ht : t ∈ T) (S : Finset (Fin A.N)) {x : ℕ} (hx : x ≤ A.stateIn X t S) :
-    A.stateIn X t Sᶜ ≤ M X - x := by
-  have h1 := h X hX t ht
-  have h2 := state_eq_stateIn_add_compl A X t S
-  omega
-
-/-- **State outside `S`, from what is held**: if the run's state of `X` at `t`, what its leaves hold and what is in
+/-- **State outside `S`**: if the run's state of `X` at `t`, what its leaves hold and what is in
 flight between them, is at most `M` bits and at least `x` of them are of `S`, then `X` carries at most `M − x` bits
 outside `S` across `t`. A gate of `S` counts when it is held, whether or not it is read again. -/
-theorem state_outside_of_held {R : Actual.Run L} {X : Finset L} {t M x : ℕ} (hM : R.mem X t ≤ M)
+theorem state_outside {R : Actual.Run L} {X : Finset L} {t M x : ℕ} (hM : R.mem X t ≤ M)
     (S : Finset (Fin R.A.N)) (hx : x ≤ R.A.width (R.state X t ∩ S)) : R.A.stateIn X t Sᶜ ≤ M - x := by
   classical
   have h1 : R.A.stateIn X t Sᶜ ≤ R.A.width (R.state X t ∩ Sᶜ) := by

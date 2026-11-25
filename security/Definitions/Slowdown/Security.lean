@@ -12,14 +12,16 @@ prohibited. Each set is a predicate on a computation `M` alone, at public parame
 * **The frame** (`Frame`), public: the hardware with its limits, the developer's servers, the run's ticks cut into
   windows (one server, one interval between two cuts), and the windows the memory and bandwidth audits don't cover
   (`missed`).
-* **A computation** (`Computation`): everything the machines did, as an actual circuit (`ResourceAccounting.Placed`)
-  with what each gate uses of its location's compute and the link each wire runs on, the registered inputs, and the
-  gates of the declared circuit (`declared`), which the audits' amounts are about.
-* **`H F`**, the feasible computations: `ResourceAccounting.Feasible` on the frame's hardware.
-* **`A F x_s x_b x_w y_b`**, what the audits account for: at each window they cover, the declared circuit's gates hold
-  at least `x_s` bits on the window's server at the cut that opens it, and the window reads at least `x_b` bits of
-  them, and at most `y_b` bits in all, from outside its server; at each window they miss, the declared circuit's gates
-  do at least `x_w` work.
+* **A computation** (`Computation`): everything the machines did, as a run (`ResourceAccounting.Actual.Run`: the
+  actual circuit, its gates' values and what each leaf holds at each tick) with what each gate uses of its location's
+  compute and the link each wire runs on, the registered inputs, and the gates of the declared circuit (`declared`),
+  which the audits' amounts are about.
+* **`H F`**, the feasible computations: `ResourceAccounting.Feasible` on the frame's hardware, with memory read on
+  what the run holds (`Actual.Run.Memory`).
+* **`A F x_s x_b x_w y_b`**, what the audits account for: at each window they cover, the window's server holds at
+  least `x_s` bits of the declared circuit's gates at the cut that opens it, and during the window the links deliver
+  to it at least `x_b` bits of them and at most `y_b` bits in all; at each window they miss, the declared circuit's
+  gates do at least `x_w` work.
 * **`B F p Y`**, the prohibited computations: those holding a reference training algorithm of more than `Y` counted
   multiplications that meets the recipe `p`'s premises (`Trains`).
 
@@ -81,63 +83,73 @@ def Φ : ℕ := univ.sup fun i => F.hw.compute (F.server i)
 
 end Frame
 
-/-- **A computation**: the actual circuit `run` of everything the machines did, what each of its gates uses of its
-location's compute and the link each wire runs on (`usage`), the input gates registered before the run, and the gates
-of the declared circuit. -/
+/-- **A computation**: the run of everything the machines did (its actual circuit `run.A`, its gates' values and what
+each leaf holds at each tick), what each of its gates uses of its location's compute and the link each wire runs on
+(`usage`), the input gates registered before the run, and the gates of the declared circuit. -/
 structure Computation (L E : Type*) where
-  run : Placed L
-  usage : Usage run E
-  registered : Finset (Fin run.N)
-  registered_input : ∀ a ∈ registered, run.isInput a = true
-  declared : Finset (Fin run.N)
+  run : Actual.Run L
+  usage : Usage run.A E
+  registered : Finset (Fin run.A.N)
+  registered_input : ∀ a ∈ registered, run.A.isInput a = true
+  declared : Finset (Fin run.A.N)
 
 namespace Computation
 
 variable {L E : Type*} [DecidableEq L] (M : Computation L E) (F : Frame L E)
 
 /-- The gates of window `(i, j)`: the computed gates placed on server `i` during window `j`'s ticks. -/
-noncomputable def window (i : Fin F.n) (j : Fin F.cuts.J) : Finset (Fin M.run.N) :=
-  M.run.region (F.server i) (F.span j)
+noncomputable def window (i : Fin F.n) (j : Fin F.cuts.J) : Finset (Fin M.run.A.N) :=
+  M.run.A.region (F.server i) (F.span j)
 
-/-- The bits of `G` server `i` carries across the cut that opens window `j`. -/
-noncomputable def carries (i : Fin F.n) (j : Fin F.cuts.J) (G : Finset (Fin M.run.N)) : ℕ :=
-  M.run.stateIn (F.server i) (F.cuts.τ j.castSucc) G
+/-- The bits of `G` server `i` holds at the cut that opens window `j`: the part in `G` of its state there, what its
+leaves hold and what is in flight between them (`Actual.Run.state`). A held bit counts whether or not a gate reads it
+again. -/
+noncomputable def holds (i : Fin F.n) (j : Fin F.cuts.J) (G : Finset (Fin M.run.A.N)) : ℕ :=
+  M.run.A.width (M.run.state (F.server i) (F.cuts.τ j.castSucc) ∩ G)
+
+/-- The bits of `G` server `i` carries across the cut that opens window `j`: those of its state there that its gates
+read at the cut or later. -/
+noncomputable def carries (i : Fin F.n) (j : Fin F.cuts.J) (G : Finset (Fin M.run.A.N)) : ℕ :=
+  M.run.A.stateIn (F.server i) (F.cuts.τ j.castSucc) G
 
 /-- The bits of `G` window `(i, j)` reads from outside its server. -/
-noncomputable def reads (i : Fin F.n) (j : Fin F.cuts.J) (G : Finset (Fin M.run.N)) : ℕ :=
-  M.run.width (((M.run.into (M.window F i j)).filter fun g => M.run.x g ∉ F.server i) ∩ G)
+noncomputable def reads (i : Fin F.n) (j : Fin F.cuts.J) (G : Finset (Fin M.run.A.N)) : ℕ :=
+  M.run.A.width (((M.run.A.into (M.window F i j)).filter fun g => M.run.A.x g ∉ F.server i) ∩ G)
 
 /-- The bits of `G` the links deliver to server `i` during window `j`: at each of the window's ticks, the bits of `G`
 the server's gates placed at that tick read from outside it. A bit read at two ticks is delivered twice. -/
-noncomputable def delivered (i : Fin F.n) (j : Fin F.cuts.J) (G : Finset (Fin M.run.N)) : ℕ :=
+noncomputable def delivered (i : Fin F.n) (j : Fin F.cuts.J) (G : Finset (Fin M.run.A.N)) : ℕ :=
   ∑ t ∈ Finset.Ico (F.cuts.τ j.castSucc) (F.cuts.τ j.succ),
-    M.run.width (((M.run.into (M.run.region (F.server i) (Set.Ico t (t + 1)))).filter
-      fun g => M.run.x g ∉ F.server i) ∩ G)
+    M.run.A.width (((M.run.A.into (M.run.A.region (F.server i) (Set.Ico t (t + 1)))).filter
+      fun g => M.run.A.x g ∉ F.server i) ∩ G)
 
 /-- What the developer's servers did over `[0, t)`, as a circuit whose inputs are what it reads, with the registered
 inputs its baseline (`Placed.declaration`). -/
 noncomputable def circuit : RegisteredCircuit :=
-  M.run.declaration (univ.biUnion F.server) F.t M.registered M.registered_input
+  M.run.A.declaration (univ.biUnion F.server) F.t M.registered M.registered_input
 
 end Computation
 
 variable {L E : Type*}
 
-/-- **`𝓗`, the feasible computations** on the frame's hardware: causality, the compute rate, memory and the links
-(`ResourceAccounting.Feasible`). -/
-def H (F : Frame L E) : Set (Computation L E) := {M | Feasible F.hw M.run M.usage}
+/-- **`𝓗`, the feasible computations** on the frame's hardware: causality, the compute rate and the links
+(`ResourceAccounting.Feasible`), and memory on what the run holds: each location's state, what its leaves hold and
+what is in flight between them, is within the location's limit at every tick (`Actual.Run.Memory`). `Feasible`'s own
+memory clause, on the bits read later alone, follows from it. -/
+def H (F : Frame L E) : Set (Computation L E) :=
+  {M | Feasible F.hw M.run.A M.usage ∧ M.run.Memory F.hw.units F.hw.M}
 
 /-- **`𝒜`, the computations consistent with what the audits account for**, at the amounts `x_s`, `x_b`, `x_w` and
-`y_b`. At each window the memory and bandwidth audits cover, the declared circuit's gates hold at least `x_s` bits on
-the window's server at the cut that opens it, and during the window the links deliver to its server at least `x_b`
+`y_b`. At each window the memory and bandwidth audits cover, the window's server holds at least `x_s` bits of the
+declared circuit's gates at the cut that opens it (`Computation.holds`), and during the window the links deliver to its server at least `x_b`
 bits of them and at most `y_b` bits in all (the network attester's count; every feasible computation is delivered at
 most what the server's links carry), a bit counted at each tick it is read (`Computation.delivered`). At each window
 they miss, the declared circuit's gates do at least `x_w` work. -/
 def A [DecidableEq L] (F : Frame L E) (x_s x_b x_w y_b : ℕ) : Set (Computation L E) :=
   {M | ∀ i j,
     (finProdFinEquiv (i, j) ∉ F.missed →
-      x_s ≤ M.carries F i j M.declared ∧ x_b ≤ M.delivered F i j M.declared ∧ M.delivered F i j univ ≤ y_b) ∧
-    (finProdFinEquiv (i, j) ∈ F.missed → x_w ≤ M.run.work M.usage.π (M.window F i j ∩ M.declared))}
+      x_s ≤ M.holds F i j M.declared ∧ x_b ≤ M.delivered F i j M.declared ∧ M.delivered F i j univ ≤ y_b) ∧
+    (finProdFinEquiv (i, j) ∈ F.missed → x_w ≤ M.run.A.work M.usage.π (M.window F i j ∩ M.declared))}
 
 /-- **A recipe**: the parameters of the premises on a reference training algorithm. `Nstar` is the fewest weights that
 reach the target loss, `b_w` the bits a window reads for each weight it uses, `w_e` the bits it reads for each thread it

@@ -4,6 +4,7 @@ public import Definitions.Slowdown.Security
 public import Proofs.Slowdown.FitRate
 public import Proofs.ResourceAccounting.Actual.Outside
 public import Definitions.ResourceAccounting.BlockProperties
+import Proofs.ResourceAccounting.Actual.Localization
 
 /-!
 # No computation is feasible, accounted for and prohibited
@@ -12,8 +13,8 @@ public import Definitions.ResourceAccounting.BlockProperties
 is at least the fit bound (`Frame.bound`) and the bits a covered window can read of a reference training algorithm
 (`Frame.unaccounted`) are fewer than `N* b_w`. Its steps:
 
-* What the limits leave. In a feasible computation whose declared circuit holds `x_s` bits on a server at a cut, the
-  server carries at most `m − x_s` bits outside the declared circuit across it (`state_outside`); one whose links
+* What the limits leave. In a feasible computation whose server holds `x_s` bits of the declared circuit at a cut,
+  the server carries at most `m − x_s` bits outside the declared circuit across it (`state_outside`); one whose links
   deliver to a window's server `x_b` bits of the declared circuit and `y_b` bits in all reads at most
   `min (b ω) y_b − x_b` others from outside the server (`delivered_outside`); and one whose declared circuit does `x_w`
   work in a window does at most `Φ ω − x_w` outside it there (`work_outside`).
@@ -120,7 +121,7 @@ theorem secure {L E : Type*} [Fintype E] [DecidableEq L] (F : Frame L E) (x_s x_
     (hbw : 0 ≤ p.b_w) (hwe : 0 < p.w_e) (hgap : (F.unaccounted x_s x_b y_b p : ℝ) < p.Nstar * p.b_w)
     (hY : F.bound x_s x_b x_w y_b p ≤ Y) (M : Computation L E) :
     M ∈ H F → M ∈ A F x_s x_b x_w y_b → M ∉ B F p Y := by
-  rintro ⟨hC, hW, -, hMem, hL⟩ hA ⟨c, emb, T, start, hT, hlt⟩
+  rintro ⟨⟨hC, hW, -, -, hL⟩, hMem⟩ hA ⟨c, emb, T, start, hT, hlt⟩
   have hω : ∀ j : Fin F.cuts.J, F.cuts.τ j.succ - F.cuts.τ j.castSucc ≤ F.ω := fun j =>
     le_sup (f := fun j : Fin F.cuts.J => F.cuts.τ j.succ - F.cuts.τ j.castSucc) (mem_univ j)
   have hm : ∀ i, F.hw.M (F.server i) ≤ F.m := fun i => le_sup (f := fun i => F.hw.M (F.server i)) (mem_univ i)
@@ -129,29 +130,28 @@ theorem secure {L E : Type*} [Fintype E] [DecidableEq L] (F : Frame L E) (x_s x_
   have hΦ : ∀ i, F.hw.compute (F.server i) ≤ F.Φ := fun i =>
     le_sup (f := fun i => F.hw.compute (F.server i)) (mem_univ i)
   have hS : ∀ (i : Fin F.n) (j : Fin F.cuts.J), finProdFinEquiv (i, j) ∉ F.missed →
-      (readsIn (M.run.declaration (univ.biUnion F.server) F.t M.registered M.registered_input)
-        (M.run.region (F.server i) (Set.Ico (F.cuts.τ j.castSucc) (F.cuts.τ j.succ)))
+      (readsIn (M.run.A.declaration (univ.biUnion F.server) F.t M.registered M.registered_input)
+        (M.run.A.region (F.server i) (Set.Ico (F.cuts.τ j.castSucc) (F.cuts.τ j.succ)))
         ((c.θᶜ).map ⟨emb.emb, emb.emb_inj⟩) : ℝ) ≤ ((F.unaccounted x_s x_b y_b p : ℕ) : ℝ) := by
     intro i j hu
     obtain ⟨hxs, hxb, hyb⟩ := (hA i j).1 hu
     have hτ : F.cuts.τ j.succ ≤ F.t := (F.cuts.mono (Fin.le_last _)).trans F.cuts.last.le
-    have hrs : M.run.stateIn (F.server i) (F.cuts.τ j.castSucc) M.declaredᶜ ≤ F.m - x_s :=
-      (state_outside M.run (T := Set.univ) (fun X hX t _ => hMem X hX t) (F.unit i) (Set.mem_univ _) M.declared
-        hxs).trans (Nat.sub_le_sub_right (hm i) _)
-    have hrb : M.run.width (((M.run.into (M.run.region (F.server i)
-        (Set.Ico (F.cuts.τ j.castSucc) (F.cuts.τ j.succ)))).filter fun g => M.run.x g ∉ F.server i) ∩
+    have hrs : M.run.A.stateIn (F.server i) (F.cuts.τ j.castSucc) M.declaredᶜ ≤ F.m - x_s :=
+      state_outside ((hMem _ (F.unit i) _).trans (hm i)) M.declared hxs
+    have hrb : M.run.A.width (((M.run.A.into (M.run.A.region (F.server i)
+        (Set.Ico (F.cuts.τ j.castSucc) (F.cuts.τ j.succ)))).filter fun g => M.run.A.x g ∉ F.server i) ∩
         M.declaredᶜ) ≤ min (F.b * F.ω) y_b - x_b := by
       unfold Computation.delivered at hxb hyb
-      have h1 := delivered_outside M.run hL (F.server i) (F.cuts.τ j.castSucc) (F.cuts.τ j.succ) M.declared
+      have h1 := delivered_outside M.run.A hL (F.server i) (F.cuts.τ j.castSucc) (F.cuts.τ j.succ) M.declared
         (x := x_b) (y := y_b) (by convert hxb) (by convert hyb)
       exact (le_of_eq (by congr)).trans (h1.trans (Nat.sub_le_sub_right
         (min_le_min_right _ (Nat.mul_le_mul (hb i) (hω j))) _))
-    exact Nat.cast_le.2 (window_reads_le M.run hC (subset_biUnion_of_mem F.server (mem_univ i)) M.registered_input
+    exact Nat.cast_le.2 (window_reads_le M.run.A hC (subset_biUnion_of_mem F.server (mem_univ i)) M.registered_input
       hτ M.declared _ hrs hrb (hT.shared_carried i j hu) (hT.shared_read i j hu))
-  have hk := fitRate_of_reads_but M.run F.hw.ℓ F.hw.ends F.hw.β M.usage.link F.n F.server M.registered
+  have hk := fitRate_of_reads_but M.run.A F.hw.ℓ F.hw.ends F.hw.β M.usage.link F.n F.server M.registered
     M.registered_input F.t F.cuts ((F.unaccounted x_s x_b y_b p : ℕ) : ℝ) c emb T start F.missed p.Nstar p.b_w p.w_e
     F.disjoint hC hL hbw hwe.le (Nat.cast_nonneg _) hS hgap fun Q hQ => ⟨hT.reach Q hQ, hT.fits Q hQ⟩
-  have hcount := card_missed_le M.run F.n F.server M.registered M.registered_input F.t F.cuts F.ω F.hw.compute
+  have hcount := card_missed_le M.run.A F.n F.server M.registered M.registered_input F.t F.cuts F.ω F.hw.compute
     M.usage.π F.Φ x_w p.o_w M.declared c emb T F.missed hW F.unit hω hΦ hT.load (fun i j hu => (hA i j).2 hu)
     hT.shared_work
   have hc : 0 < 4 * p.w_e * (p.Nstar * p.b_w - ((F.unaccounted x_s x_b y_b p : ℕ) : ℝ)) :=
@@ -167,12 +167,22 @@ theorem secure {L E : Type*} [Fintype E] [DecidableEq L] (F : Frame L E) (x_s x_
     linarith
   exact absurd (h2.trans hY) (not_le.2 hlt)
 
+/-- **`H` is five clauses**: a gate reads gates placed no later than the latency allows, the compute rate, the
+sequential speed, the links, and memory on what the run holds. `Feasible`'s memory clause is not among them: it
+follows from the last (`memory_of_mem`). -/
+theorem mem_H_iff {L E : Type*} (F : Frame L E) (M : Computation L E) :
+    M ∈ H F ↔ M.run.A.Causal F.hw.ℓ ∧ M.run.A.ComputeRate F.hw.units M.usage.π F.hw.compute ∧
+      M.run.A.SequentialSpeed F.hw.ring F.hw.D F.hw.span ∧ M.run.Memory F.hw.units F.hw.M ∧
+        M.run.A.Links F.hw.ends F.hw.β M.usage.link :=
+  ⟨fun ⟨⟨hC, hW, hS, _, hL⟩, hM⟩ => ⟨hC, hW, hS, hM, hL⟩,
+    fun ⟨hC, hW, hS, hM, hL⟩ => ⟨⟨hC, hW, hS, memory_of_mem hM, hL⟩, hM⟩⟩
+
 /-- The links of a feasible computation deliver to a window's server at most `b ω` bits. -/
 theorem delivered_le_capacity {L E : Type*} [Fintype E] [DecidableEq L] (F : Frame L E) (M : Computation L E)
     (hM : M ∈ H F) (i : Fin F.n) (j : Fin F.cuts.J) : M.delivered F i j univ ≤ F.b * F.ω := by
   unfold Computation.delivered
   simp only [inter_univ]
-  refine (le_of_eq (sum_congr rfl fun τ _ => ?_)).trans ((delivered_le M.run hM.2.2.2.2 (F.server i) _ _).trans
+  refine (le_of_eq (sum_congr rfl fun τ _ => ?_)).trans ((delivered_le M.run.A hM.1.2.2.2.2 (F.server i) _ _).trans
     (Nat.mul_le_mul (le_sup (f := fun i => linkCapacity F.hw.ends F.hw.β (F.server i)) (mem_univ i))
       (le_sup (f := fun j : Fin F.cuts.J => F.cuts.τ j.succ - F.cuts.τ j.castSucc) (mem_univ j))))
   congr
@@ -186,16 +196,16 @@ theorem secure_work {L E : Type*} [Fintype E] [DecidableEq L] (F : Frame L E) (h
     (hY : ((F.n * F.cuts.J * (F.Φ * F.ω - x_w + p.o_w) : ℕ) : ℝ) ≤ Y) (M : Computation L E) :
     M ∈ H F → M ∈ A F x_s x_b x_w y_b → M ∉ B F p Y := by
   classical
-  rintro ⟨hC, hW, -, -, hL⟩ hA ⟨c, emb, T, start, hT, hlt⟩
+  rintro ⟨⟨hC, hW, -, -, hL⟩, -⟩ hA ⟨c, emb, T, start, hT, hlt⟩
   have hω : ∀ j : Fin F.cuts.J, F.cuts.τ j.succ - F.cuts.τ j.castSucc ≤ F.ω := fun j =>
     le_sup (f := fun j : Fin F.cuts.J => F.cuts.τ j.succ - F.cuts.τ j.castSucc) (mem_univ j)
   have hΦ : ∀ i, F.hw.compute (F.server i) ≤ F.Φ := fun i =>
     le_sup (f := fun i => F.hw.compute (F.server i)) (mem_univ i)
   have hin : ∀ i j, finProdFinEquiv (i, j) ∈ F.missed := fun i j => hF ▸ mem_univ _
-  obtain ⟨P, hP⟩ := ResourceAccounting.SecurityProofs.Actual.ServerBlocksAt M.run F.hw.ℓ (fun _ => M.run.N) F.hw.ends
+  obtain ⟨P, hP⟩ := ResourceAccounting.SecurityProofs.Actual.ServerBlocksAt M.run.A F.hw.ℓ (fun _ => M.run.A.N) F.hw.ends
     F.hw.β M.usage.link F.n F.server M.registered M.registered_input F.t F.cuts ∅ F.disjoint hC
-    (computeRate_N M.run _) hL
-  have hcount := card_missed_le M.run F.n F.server M.registered M.registered_input F.t F.cuts F.ω F.hw.compute
+    (computeRate_N M.run.A _) hL
+  have hcount := card_missed_le M.run.A F.n F.server M.registered M.registered_input F.t F.cuts F.ω F.hw.compute
     M.usage.π F.Φ x_w p.o_w M.declared c emb T F.missed hW F.unit hω hΦ hT.load (fun i j hu => (hA i j).2 hu)
     hT.shared_work
   have hall : T.M.card ≤ F.missed.card * (F.Φ * F.ω - x_w + p.o_w) := by
@@ -238,25 +248,25 @@ theorem accounted_of_windows
     (union : ∀ {κ : Type} (s : Finset κ) (p : κ → Ω → Prop), pr (fun r => ∃ x ∈ s, p x r) ≤ ∑ x ∈ s, pr (p x))
     (F : Frame L E) (x_s x_b x_w y_b : ℕ) (δ_s δ_b δ_w δ_y : ℝ≥0∞)
     (hs : ∀ i j, finProdFinEquiv (i, j) ∉ F.missed →
-      ExceptWith pr accepts (fun ω => x_s ≤ (M ω).carries F i j (M ω).declared) δ_s)
+      ExceptWith pr accepts (fun ω => x_s ≤ (M ω).holds F i j (M ω).declared) δ_s)
     (hb : ∀ i j, finProdFinEquiv (i, j) ∉ F.missed →
       ExceptWith pr accepts (fun ω => x_b ≤ (M ω).delivered F i j (M ω).declared) δ_b)
     (hy : ∀ i j, finProdFinEquiv (i, j) ∉ F.missed →
       ExceptWith pr accepts (fun ω => (M ω).delivered F i j univ ≤ y_b) δ_y)
     (hw : ∀ i j, finProdFinEquiv (i, j) ∈ F.missed →
       ExceptWith pr accepts
-        (fun ω => x_w ≤ (M ω).run.work (M ω).usage.π ((M ω).window F i j ∩ (M ω).declared)) δ_w) :
+        (fun ω => x_w ≤ (M ω).run.A.work (M ω).usage.π ((M ω).window F i j ∩ (M ω).declared)) δ_w) :
     ExceptWith pr accepts (fun ω => M ω ∈ A F x_s x_b x_w y_b)
       (F.missed.card * δ_w + (F.n * F.cuts.J - F.missed.card : ℕ) * (δ_s + δ_b + δ_y)) := by
   classical
   let good : Option Bool → Fin F.n → Fin F.cuts.J → Ω → Prop := fun k i j ω =>
     match k with
-    | none => x_s ≤ (M ω).carries F i j (M ω).declared
+    | none => x_s ≤ (M ω).holds F i j (M ω).declared
     | some true => x_b ≤ (M ω).delivered F i j (M ω).declared
     | some false => (M ω).delivered F i j univ ≤ y_b
   let bad : Fin (F.n * F.cuts.J) → Ω → Prop := fun u ω => accepts ω ∧
     ¬ ((u ∉ F.missed → ∀ k, good k (finProdFinEquiv.symm u).1 (finProdFinEquiv.symm u).2 ω) ∧
-      (u ∈ F.missed → x_w ≤ (M ω).run.work (M ω).usage.π
+      (u ∈ F.missed → x_w ≤ (M ω).run.A.work (M ω).usage.π
         ((M ω).window F (finProdFinEquiv.symm u).1 (finProdFinEquiv.symm u).2 ∩ (M ω).declared)))
   have hu : ∀ u : Fin (F.n * F.cuts.J),
       finProdFinEquiv ((finProdFinEquiv.symm u).1, (finProdFinEquiv.symm u).2) = u :=

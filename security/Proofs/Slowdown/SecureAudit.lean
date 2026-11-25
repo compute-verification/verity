@@ -74,7 +74,7 @@ variable {L : Type*} {ι α E ΩW ΩQ ΩS : Type} [Fintype α] [DecidableEq α] 
 /-- **The computation at the coins `ω`**: the run `ρ ω` with its usage and registered inputs, its declared circuit's
 gates those charged to the account of the resource `res`. -/
 abbrev computation (res : Resource) (ω : ΩW × ΩQ × ΩS) : Computation L E :=
-  ⟨(ρ ω).A, usage ω, θ ω, hθ ω, univ.filter fun g => acct ω g = r.acct res⟩
+  ⟨ρ ω, usage ω, θ ω, hθ ω, univ.filter fun g => acct ω g = r.acct res⟩
 
 end Audit
 
@@ -108,7 +108,7 @@ memory on that run. -/
 theorem secure_compute (hwin : r.win .compute = ⟨0, t⟩) (hbm : E × L) (side : ι → E × L)
     (hsched : ∀ ω, r.schedule ω = (ρ ω).schedule chip mem (cls ω) (acct ω) (usage ω).link hbm side) (pc : Price)
     (hπ : ∀ ω g, (ρ ω).A.x g ∈ chip ∪ mem → (usage ω).π g = (cls ω g).elim 0 pc)
-    (hH : ∀ ω, Feasible hw (ρ ω).A (usage ω)) {pRead W ε : ℝ} (hsound : r.ComputeSoundPerRunPriced pc pRead W ε)
+    (hH : ∀ ω, Feasible hw (ρ ω).A (usage ω) ∧ (ρ ω).Memory hw.units hw.M) {pRead W ε : ℝ} (hsound : r.ComputeSoundPerRunPriced pc pRead W ε)
     (p : Recipe) :
     Pouw.pr (fun ω => r.accepts .compute ω ∧
       computation r ρ usage θ hθ acct .compute ω ∈ B (deviceFrame hw chip mem hX t) p
@@ -144,7 +144,7 @@ theorem secure_w1 {Q O S : Type} [Fintype Q] [DecidableEq Q] [Fintype O] [Fintyp
     (acct : ∀ ω, Fin (ρ ω).A.N → α) (hwin : r.win .compute = ⟨0, t⟩) (hbm : E × L) (side : ι → E × L)
     (hsched : ∀ ω, r.schedule ω = (ρ ω).schedule chip mem (cls ω) (acct ω) (usage ω).link hbm side) (pc : Price)
     (hπ : ∀ ω g, (ρ ω).A.x g ∈ chip ∪ mem → (usage ω).π g = (cls ω g).elim 0 pc)
-    (hH : ∀ ω, Feasible hw (ρ ω).A (usage ω)) {pRead : ℝ}
+    (hH : ∀ ω, Feasible hw (ρ ω).A (usage ω) ∧ (ρ ω).Memory hw.units hw.M) {pRead : ℝ}
     (hq : d.rate .oracle * (r.win .compute).len ≤ 2 ^ 64)
     (real : RealizesPearlCPriced (Pouw.PearlC.W1.w1Stop dv salt) P U w r pc pRead) (p : Recipe) :
     Pouw.pr (fun ω => r.accepts .compute ω ∧
@@ -183,7 +183,7 @@ theorem secure_bandwidth (hwin : r.win .bandwidth = ⟨0, t⟩) (hbm : E × L) (
     (hsched : ∀ ω, r.schedule ω = (ρ ω).schedule chip mem (cls ω) (acct ω) (usage ω).link hbm side)
     (hchip : hbm.2 ∈ chip)
     (hfar : ∀ y, hw.ends hbm.1 = (y, hbm.2) ∨ hw.ends hbm.1 = (hbm.2, y) → y ∉ chip)
-    (hH : ∀ ω, Feasible hw (ρ ω).A (usage ω)) {Q ε : ℝ} (hsound : r.BandwidthSoundPerRun Q ε) (p : Recipe) (Y : ℝ)
+    (hH : ∀ ω, Feasible hw (ρ ω).A (usage ω) ∧ (ρ ω).Memory hw.units hw.M) {Q ε : ℝ} (hsound : r.BandwidthSoundPerRun Q ε) (p : Recipe) (Y : ℝ)
     (hbw : 0 ≤ p.b_w) (hwe : 0 < p.w_e)
     (hgap : ((chipFrame hw chip hX t).unaccounted 0 ⌈Q⌉₊
       ((chipFrame hw chip hX t).b * (chipFrame hw chip hX t).ω) p : ℝ) < p.Nstar * p.b_w)
@@ -201,7 +201,7 @@ theorem secure_bandwidth (hwin : r.win .bandwidth = ⟨0, t⟩) (hbm : E × L) (
   refine sum_le_sum fun τ _ => ?_
   have h := read_le_delivered (ρ ω) chip mem (cls ω) (acct ω) (usage ω).link hbm side hchip
     (fun g s hs hne hl hy => hfar _ (by
-      have he := ((hH ω).2.2.2.2.1 g s hs hne).2
+      have he := ((hH ω).1.2.2.2.2.1 g s hs hne).2
       rwa [hl, hy] at he)) τ (r.acct .bandwidth)
   convert h
 
@@ -216,7 +216,7 @@ theorem secure_poub [Fintype ι] {N b h s G : ℕ} (k lam : ℕ) (r : Run d α �
     (hsched : ∀ ω, r.schedule ω = (ρ ω).schedule chip mem (cls ω) (acct ω) (usage ω).link hbm side)
     (hchip : hbm.2 ∈ chip)
     (hfar : ∀ y, hw.ends hbm.1 = (y, hbm.2) ∨ hw.ends hbm.1 = (hbm.2, y) → y ∉ chip)
-    (hH : ∀ ω, Feasible hw (ρ ω).A (usage ω)) (hN : 0 < N) (real : RealizesBandwidth G r) (p : Recipe) (Y : ℝ)
+    (hH : ∀ ω, Feasible hw (ρ ω).A (usage ω) ∧ (ρ ω).Memory hw.units hw.M) (hN : 0 < N) (real : RealizesBandwidth G r) (p : Recipe) (Y : ℝ)
     (hbw : 0 ≤ p.b_w) (hwe : 0 < p.w_e)
     (hgap : ((chipFrame hw chip hX t).unaccounted 0
       ⌈((k * b : ℕ) : ℝ) - d.chip - ((∑ i, d.cap i * (r.win .bandwidth).len : ℕ) : ℝ) - ((G * b : ℕ) : ℝ) - lam⌉₊

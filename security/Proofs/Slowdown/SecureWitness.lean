@@ -2,6 +2,7 @@ module
 
 public import Proofs.Slowdown.SecureAudit
 import Proofs.Pouw.Prob
+import Proofs.ResourceAccounting.Actual.Localization
 
 /-!
 # The three sets meet two by two
@@ -16,8 +17,8 @@ is not true for want of a computation, on either of its branches:
 * `params`: the conditions `secure` puts on the amounts and the recipe, at the count `Y = 0`.
 
 The frame is one server of one leaf, doing one unit of work a tick, carrying one bit and joined to the world outside
-by one link of one bit a tick, over one tick and one window. The run is four one-bit gates: `0`, an input the server
-holds; `1`, an input outside; `2`, computed outside from `1`; and `3`, computed on the server from `0` and `2`. So the
+by one link of one bit a tick, over one tick and one window. The run is four one-bit gates, each leaf holding its
+inputs: `0`, an input the server holds; `1`, an input outside; `2`, computed outside from `1`; and `3`, computed on the server from `0` and `2`. So the
 server carries one bit into the window, reads one bit from outside and does one unit of work, which is all its memory,
 its link and its compute allow.
 
@@ -29,16 +30,15 @@ one counted multiplication of a reference training algorithm, of the weight `0` 
 two fresh bits for the one weight it uses (`b_w = 2`). `trained_not_accounted` is `secure` at it.
 
 **Each clause of the feasible set is needed.** At limits per leaf the feasible set is four clauses
-(`feasible_iff`). With one limit set to 0 the run meets the other three clauses, and `trained` is accounted for and
+(`feasible_iff`), memory read on what the leaves hold. With one limit set to 0 the run meets the other three clauses, and `trained` is accounted for and
 prohibited at the fit bound (`Escapes`): `memory_needed` (the server carries nothing), `bandwidth_needed` (the link
 carries nothing) and `work_needed` (the server does no work, the window missed). For the order clause the run is
 another, `late`: the counted multiplication at tick 0 reads its weight and its activation from gates the server
-computes at tick 5, so the server carries nothing into the window and reads nothing from outside, and `late` meets
+computes at tick 5, so the server holds nothing, carries nothing into the window and reads nothing from outside, and `late` meets
 the work, memory and bandwidth clauses on a server that carries nothing over a link that carries nothing
 (`order_needed`). So `secure` is false with any one clause dropped from `H`.
 
-**`secure_compute`'s hypotheses hold together** (`compute_witness`). The same run as an actual-circuit run (`actual`),
-with a compute audit that accepts every run over the one tick and whose schedule is the one the run induces on the
+**`secure_compute`'s hypotheses hold together** (`compute_witness`). The same run (`actual`), with a compute audit that accepts every run over the one tick and whose schedule is the one the run induces on the
 server (`audit`): the compute account does one unit of work (`audit_work`), so the audit is sound at the certificate
 1 with no error (`audit_sound`), and `secure_compute` applies. `secure_bandwidth`'s hold together too
 (`bandwidth_witness`): the same audit's bandwidth account reads the one bit the memory link delivers (`audit_read`),
@@ -76,6 +76,17 @@ abbrev run : Placed Bool where
 /-- Each gate uses one unit of its leaf's compute, and every wire runs on the one link. -/
 abbrev usage : Usage run Unit := ⟨fun _ => 1, fun _ _ => ()⟩
 
+/-- The run: every gate holds 0, and each leaf holds its inputs at every tick. -/
+abbrev actual : Actual.Run Bool where
+  A := run
+  val := fun _ => 0
+  faithful := fun _ _ => rfl
+  held := fun y _ => univ.filter fun a => run.isInput a = true ∧ run.x a = y
+  holding := ⟨fun _ _ _ ha => ⟨(mem_filter.1 ha).2.2, Or.inl (mem_filter.1 ha).2.1⟩,
+    fun a ha => mem_filter.2 ⟨mem_univ a, ha, rfl⟩,
+    fun g a _ hx s hs hsg => mem_filter.2 ⟨mem_univ a,
+      hs.resolve_right (by have : s = 0 := Nat.le_zero.1 hsg; omega), hx⟩⟩
+
 /-- The hardware: each leaf does `c` units of work a tick and carries `m` bits, and one link of `β` bits a tick joins
 the server and the world outside. -/
 abbrev hw (c m β : ℕ) : Hardware Bool Unit :=
@@ -90,10 +101,10 @@ variable (c m β : ℕ) (I : Finset (Fin (1 * cuts.J)))
 abbrev frame : Frame Bool Unit := Frame.single (hw c m β) {true} (Set.mem_univ _) 1 cuts I
 
 /-- The run with every gate the declared circuit's. -/
-abbrev served : Computation Bool Unit := ⟨run, usage, ∅, fun _ h => absurd h (notMem_empty _), univ⟩
+abbrev served : Computation Bool Unit := ⟨actual, usage, ∅, fun _ h => absurd h (notMem_empty _), univ⟩
 
 /-- The run with no gate the declared circuit's. -/
-abbrev trained : Computation Bool Unit := ⟨run, usage, ∅, fun _ h => absurd h (notMem_empty _), ∅⟩
+abbrev trained : Computation Bool Unit := ⟨actual, usage, ∅, fun _ h => absurd h (notMem_empty _), ∅⟩
 
 /-- The recipe: one weight reaches the target, a window reads two bits for each weight it uses and one for each
 thread it enters, a thread uses a weight once, and nothing is shared with the declared circuit. -/
@@ -110,23 +121,31 @@ theorem region_eq (X : Finset Bool) {I : Set ℕ} (h : 0 ∈ I) :
   exact and_congr_left fun _ => by simp; omega
 
 /-- The order clause: a gate reads only gates at its tick or before. -/
-def Order (M : Computation Bool Unit) : Prop := M.run.Causal fun _ _ => 0
+def Order (M : Computation Bool Unit) : Prop := M.run.A.Causal fun _ _ => 0
 
 /-- The work clause: a leaf does at most `c` units of work a tick. -/
 def Work (M : Computation Bool Unit) : Prop :=
-  ∀ p a b, M.run.work M.usage.π (M.run.region {p} (Set.Ico a b)) ≤ c * (b - a)
+  ∀ p a b, M.run.A.work M.usage.π (M.run.A.region {p} (Set.Ico a b)) ≤ c * (b - a)
 
-/-- The memory clause: a set of leaves carries at most `m` bits a leaf across a tick. -/
-def Memory (M : Computation Bool Unit) : Prop := ∀ X t, M.run.state X t ≤ ∑ _p ∈ X, m
+/-- The memory clause: at each tick a set of leaves holds, with what is in flight between them, at most `m` bits a
+leaf. -/
+def Memory (M : Computation Bool Unit) : Prop := ∀ X t, M.run.mem X t ≤ ∑ _p ∈ X, m
 
 /-- The bandwidth clause: the link carries at most `β` bits a tick. -/
 def Bandwidth (M : Computation Bool Unit) : Prop :=
-  M.run.Links (fun _ : Unit => (false, true)) (fun _ => β) M.usage.link
+  M.run.A.Links (fun _ : Unit => (false, true)) (fun _ => β) M.usage.link
 
 /-- The feasible set at the hardware `hw c m β` is the four clauses. -/
 theorem feasible_iff (M : Computation Bool Unit) :
-    Feasible (hw c m β) M.run M.usage ↔ Order M ∧ Work c M ∧ Memory m M ∧ Bandwidth β M :=
-  feasible_ofLeaves_iff M.run _ _ _ _ M.usage
+    M ∈ H (frame c m β I) ↔ Order M ∧ Work c M ∧ Memory m M ∧ Bandwidth β M := by
+  constructor
+  · rintro ⟨hF, hM⟩
+    obtain ⟨ho, hw, -, hl⟩ := (feasible_ofLeaves_iff M.run.A _ _ _ _ M.usage).1 hF
+    exact ⟨ho, hw, fun X t => hM X (Set.mem_univ _) t, hl⟩
+  · rintro ⟨ho, hw, hm, hl⟩
+    exact ⟨(feasible_ofLeaves_iff M.run.A _ _ _ _ M.usage).2 ⟨ho, hw, fun X t =>
+      memory_of_mem (R := M.run) (𝒳 := Set.univ) (M := fun X => ∑ _p ∈ X, m) (fun X _ t => hm X t) X
+        (Set.mem_univ _) t, hl⟩, fun X _ t => hm X t⟩
 
 theorem order : Order trained := fun _ _ _ => le_rfl
 
@@ -147,17 +166,21 @@ theorem work (hc : 1 ≤ c) : Work c trained := by
 
 theorem memory (hm : 1 ≤ m) : Memory m trained := by
   intro X t
-  change run.state X t ≤ ∑ _p ∈ X, m
-  have h1 : run.state X t ≤ ∑ _p ∈ X, 1 := by
-    by_cases h : (0 : ℕ) ∈ Set.Ici t
-    · unfold Placed.state
-      rw [region_eq _ h, Finset.filter_congr_decidable]
-      revert X
-      decide
-    · unfold Placed.state
-      rw [region_empty _ h]
-      simp [Circuit.into, Circuit.width]
-  exact h1.trans (sum_le_sum fun _ _ => hm)
+  change actual.mem X t ≤ ∑ _p ∈ X, m
+  have key : ∀ X : Finset Bool, run.width (univ.filter fun a => run.isInput a = true ∧ run.x a ∈ X) ≤ ∑ _p ∈ X, 1 := by
+    decide
+  refine ((width_mono run fun a ha => ?_).trans (key X)).trans (sum_le_sum fun _ _ => hm)
+  simp only [Actual.Run.state, mem_filter, mem_univ, true_and] at ha
+  refine mem_filter.2 ⟨mem_univ a, ?_⟩
+  rcases ha with ⟨y, hy, ha⟩ | ⟨ha, hx⟩
+  · obtain ⟨hi, hxa⟩ := ha
+    subst hxa
+    exact ⟨hi, hy⟩
+  · obtain ⟨hna, g, hg, -⟩ := (ResourceAccounting.SecurityProofs.Actual.mem_into run).1 ha
+    have ht : (0 : ℕ) ∈ Set.Ici t := ((mem_region run).1 hg).2.2
+    refine ⟨?_, hx⟩
+    by_contra hi
+    exact hna ((mem_region run).2 ⟨by simpa using hi, hx, ht⟩)
 
 theorem bandwidth (hβ : 1 ≤ β) : Bandwidth β trained := by
   change run.Links (fun _ : Unit => (false, true)) (fun _ => β) usage.link
@@ -180,8 +203,8 @@ theorem bandwidth (hβ : 1 ≤ β) : Bandwidth β trained := by
     rw [he]
     simp [Circuit.width]
 
-theorem feasible : Feasible (hw 1 1 1) run usage :=
-  (feasible_iff 1 1 1 trained).2 ⟨order, work 1 le_rfl, memory 1 le_rfl, bandwidth 1 le_rfl⟩
+theorem feasible : Feasible (hw 1 1 1) run usage ∧ actual.Memory (hw 1 1 1).units (hw 1 1 1).M :=
+  (feasible_iff 1 1 1 ∅ trained).2 ⟨order, work 1 le_rfl, memory 1 le_rfl, bandwidth 1 le_rfl⟩
 
 theorem window_eq (i : Fin (frame c m β I).n) (j : Fin (frame c m β I).cuts.J) :
     run.region ((frame c m β I).server i) ((frame c m β I).span j) = {3} := by
@@ -212,10 +235,11 @@ theorem served_mem : served ∈ H (frame 1 1 1 I) ∧ served ∈ A (frame 1 1 1 
   have hj : j = (0 : Fin 1) := Subsingleton.elim _ _
   subst hj
   refine ⟨fun _ => ⟨?_, (delivered_univ 1 1 1 I i 0).ge, (delivered_univ 1 1 1 I i 0).le⟩, fun _ => ?_⟩
-  · change 1 ≤ run.stateIn {true} 0 univ
-    unfold Placed.stateIn
-    rw [region_eq _ (Set.mem_Ici.2 (le_refl 0)), Finset.filter_congr_decidable]
-    decide
+  · change 1 ≤ run.width (actual.state {true} 0 ∩ univ)
+    have h0 : (0 : Fin run.N) ∈ actual.state {true} 0 ∩ univ := by
+      simp only [Actual.Run.state, mem_inter, mem_filter, mem_univ, true_and, and_true]
+      exact Or.inl ⟨true, mem_singleton_self _, by decide, by decide⟩
+    exact (by decide : 1 ≤ run.w 0).trans (single_le_sum (f := fun a => run.w a) (fun _ _ => Nat.zero_le _) h0)
   · change 1 ≤ run.work usage.π (run.region ((frame 1 1 1 I).server i) ((frame 1 1 1 I).span 0) ∩ univ)
     rw [window_eq]
     decide
@@ -457,8 +481,22 @@ abbrev lateRun : Placed Bool where
 /-- Gate `3` uses one unit of the server's compute and the others none. -/
 abbrev lateUsage : Usage lateRun Unit := ⟨fun g => if g.val = 3 then 1 else 0, fun _ _ => ()⟩
 
+/-- The run out of order: every gate holds 0 and no leaf holds a gate, since none is read after it is placed. -/
+abbrev lateActual : Actual.Run Bool where
+  A := lateRun
+  val := fun _ => 0
+  faithful := fun _ _ => rfl
+  held := fun _ _ => ∅
+  holding := ⟨fun _ _ _ ha => absurd ha (notMem_empty _), fun _ ha => absurd ha Bool.false_ne_true,
+    fun g a ha _ s hs hsg => by
+      have key : ∀ g a : Fin 4, a ∈ lateRun.reads g → lateRun.t g < lateRun.t a := by decide
+      have k := key g a ha
+      rcases hs with hs | hs
+      · exact absurd hs Bool.false_ne_true
+      · omega⟩
+
 /-- The run out of order, with no gate the declared circuit's. -/
-abbrev late : Computation Bool Unit := ⟨lateRun, lateUsage, ∅, fun _ h => absurd h (notMem_empty _), ∅⟩
+abbrev late : Computation Bool Unit := ⟨lateActual, lateUsage, ∅, fun _ h => absurd h (notMem_empty _), ∅⟩
 
 theorem late_region {J : Set ℕ} (h0 : 0 ∈ J) (h5 : 5 ∉ J) : lateRun.region {true} J = {3} := by
   ext g
@@ -542,7 +580,7 @@ theorem late_work : Work 1 late := by
 
 theorem late_memory : Memory 0 late := by
   intro X t
-  change lateRun.state X t ≤ ∑ _p ∈ X, 0
+  change lateActual.mem X t ≤ ∑ _p ∈ X, 0
   have key : ∀ g a : Fin 4, a ∈ lateRun.reads g →
       lateRun.isInput a = false ∧ lateRun.x a = lateRun.x g ∧ lateRun.t g ≤ lateRun.t a := by decide
   have h : lateRun.into (lateRun.region X (Set.Ici t)) = ∅ := by
@@ -551,8 +589,13 @@ theorem late_memory : Memory 0 late := by
     obtain ⟨-, hx, ht⟩ := (mem_region lateRun).1 hg
     obtain ⟨k1, k2, k3⟩ := key g a hr
     exact hna ((mem_region lateRun).2 ⟨k1, k2 ▸ hx, Set.mem_Ici.2 ((Set.mem_Ici.1 ht).trans k3)⟩)
-  unfold Placed.state
-  rw [h]
+  have hs : lateActual.state X t = ∅ := by
+    refine eq_empty_of_forall_notMem fun a ha => ?_
+    simp only [Actual.Run.state, mem_filter, mem_univ, true_and] at ha
+    rcases ha with ⟨y, -, hy⟩ | ⟨hi, -⟩
+    · exact notMem_empty _ hy
+    · exact notMem_empty _ (h ▸ hi)
+  rw [Actual.Run.mem, hs]
   simp [Circuit.width]
 
 theorem late_bandwidth : Bandwidth 0 late := by
@@ -589,17 +632,6 @@ theorem order_needed :
     decide
 
 section Compute
-
-/-- The run with every gate holding 0 and each leaf holding its inputs. -/
-def actual : Actual.Run Bool where
-  A := run
-  val := fun _ => 0
-  faithful := fun _ _ => rfl
-  held := fun y _ => univ.filter fun a => run.isInput a = true ∧ run.x a = y
-  holding := ⟨fun _ _ _ ha => ⟨(mem_filter.1 ha).2.2, Or.inl (mem_filter.1 ha).2.1⟩,
-    fun a ha => mem_filter.2 ⟨mem_univ a, ha, rfl⟩,
-    fun g a _ hx s hs hsg => mem_filter.2 ⟨mem_univ a,
-      hs.resolve_right (by have : s = 0 := Nat.le_zero.1 hsg; omega), hx⟩⟩
 
 /-- A device that fits any schedule of four one-bit gates. -/
 def dev : Device Empty := ⟨4, 4, fun _ => 4, 4, Empty.elim⟩
