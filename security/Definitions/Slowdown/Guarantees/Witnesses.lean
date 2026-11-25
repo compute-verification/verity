@@ -51,19 +51,19 @@ open Verity Finset Slowdown.Capability.Toy Slowdown.Witness Slowdown.Slowdown
 
 /-- **`ThreadedTraining`'s and `ThreadedTrainingOn`'s premises hold together** at the toy, with `Γ = 2`, `α = 1/2`,
 `b_w = b_a = 1/2`, `κ = 1`, `r = d = Toy.D` through the containment of the toy in itself, the threading `T1` and
-`(dd, e) = (1, 0)`: a small subcircuit holding gate `2` reads the token, one fresh bit, and is charged half a bit for the
-weight and half for the token. -/
+`(dd, e) = (1, 0)`, the weight in its own parameter slot (`σ1`): a small subcircuit holding gate `2` reads the token, one
+fresh bit, and is charged half a bit for the weight and half for the token. -/
 def ThreadedTraining_honest : Prop :=
   CompliesRate 2 (1 / 2) D ∧ Assumptions.ThetaRegistered D D M1 ∧
-    T1.Threaded 2 1 1 0 ∧ Assumptions.WeightsIncompressible D T1 2 1 (1 / 2) (1 / 2) ∧
+    T1.Threaded 2 1 1 0 ∧ Assumptions.WeightsIncompressibleSlots D T1 σ1 2 1 (1 / 2) (1 / 2) ∧
     Assumptions.Coverage 1 D (2 * T1.M.card)
 
-/-- **`ThreadedTraining` without coverage**: at the threading `T0` of no counted multiplication, `κ = 1` is no coverage,
-and the bound `κ b_a size(r) ≤ 2 α Λ size(d)` fails, `Λ` being `0`. -/
+/-- **`ThreadedTraining` without coverage**: at the threading `T0` of no counted multiplication and its one parameter
+slot (`σ0`), `κ = 1` is no coverage, and the bound `κ b_a size(r) ≤ 2 α Λ size(d)` fails, `Λ` being `0`. -/
 def ThreadedTraining_nontrivial : Prop :=
   (0 : ℝ) ≤ 1 / 2 ∧ (0 : ℝ) < 1 / 2 ∧ (0 : ℝ) < 1 / 2 ∧ 0 < 1 ∧ CompliesRate 2 (1 / 2) D ∧
     Assumptions.ThetaRegistered D D M1 ∧
-    (T0 D).Threaded 2 1 1 0 ∧ Assumptions.WeightsIncompressible D (T0 D) 2 1 (1 / 2) (1 / 2) ∧
+    (T0 D).Threaded 2 1 1 0 ∧ Assumptions.WeightsIncompressibleSlots D (T0 D) (σ0 D) 2 1 (1 / 2) (1 / 2) ∧
     ¬ Assumptions.Coverage 1 D (2 * (T0 D).M.card) ∧
     ¬ (1 * (1 / 2) * D.D.size D.D.computed ≤
         2 * (1 / 2 : ℝ) * (T0 D).bound 1 (1 / 2) 1 0 * D.D.size D.D.computed)
@@ -73,7 +73,7 @@ dark gate. -/
 def ThreadedTrainingOn_nontrivial : Prop :=
   (0 : ℝ) ≤ 1 / 2 ∧ (0 : ℝ) < 1 / 2 ∧ (0 : ℝ) < 1 / 2 ∧ 0 < 1 ∧ CompliesRate 2 (1 / 2) D ∧
     Assumptions.ThetaRegistered D D M1 ∧
-    (T0 D).Threaded 2 1 1 0 ∧ Assumptions.WeightsIncompressible D (T0 D) 2 1 (1 / 2) (1 / 2) ∧
+    (T0 D).Threaded 2 1 1 0 ∧ Assumptions.WeightsIncompressibleSlots D (T0 D) (σ0 D) 2 1 (1 / 2) (1 / 2) ∧
     ¬ Assumptions.Coverage 1 D (2 * (T0 D).M.card) ∧
     ¬ (1 * (1 / 2) * D.D.size D.D.computed ≤
         2 * (1 / 2) * M1.dark.card +
@@ -115,7 +115,7 @@ threading `T1` keyed with no roots (`layered1`, `d = e = 1`, `eLk = 0`, `b = 2`)
 def LayeredTraining_honest : Prop :=
   Nonempty (Layered T1 1 1 0 2) ∧ CompliesRate 2 (1 / 2) D ∧
     Assumptions.ThetaRegistered D D M1 ∧
-    Assumptions.CapBelowColumns 1 0 2 ∧ Assumptions.WeightsIncompressible D T1 2 1 (1 / 2) (1 / 2) ∧
+    Assumptions.CapBelowColumns 1 0 2 ∧ Assumptions.WeightsIncompressibleSlots D T1 σ1 2 1 (1 / 2) (1 / 2) ∧
     Assumptions.Coverage 1 D (2 * T1.M.card)
 
 /-- **`LayeredTraining` without coverage**: at the threading `T0` keyed with no roots (`layered0`), `κ = 1` is no
@@ -124,7 +124,7 @@ def LayeredTraining_nontrivial : Prop :=
   Nonempty (Layered (T0 D) 1 0 0 2) ∧ (0 : ℝ) ≤ 1 / 2 ∧ (0 : ℝ) < 1 / 2 ∧ (0 : ℝ) < 1 / 2 ∧ 0 < 1 ∧
     CompliesRate 2 (1 / 2) D ∧
     Assumptions.ThetaRegistered D D M1 ∧
-    Assumptions.CapBelowColumns 1 0 2 ∧ Assumptions.WeightsIncompressible D (T0 D) 2 1 (1 / 2) (1 / 2) ∧
+    Assumptions.CapBelowColumns 1 0 2 ∧ Assumptions.WeightsIncompressibleSlots D (T0 D) (σ0 D) 2 1 (1 / 2) (1 / 2) ∧
     ¬ Assumptions.Coverage 1 D (2 * (T0 D).M.card) ∧
     ¬ (1 * (1 / 2) * D.D.size D.D.computed ≤
         2 * (1 / 2 : ℝ) * (T0 D).bound 1 (1 / 2) (1 - 0) (0 + 0 * 0) * D.D.size D.D.computed)

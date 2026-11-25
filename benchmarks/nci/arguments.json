@@ -139,7 +139,7 @@
    "statement": "A small subcircuit of the reference training algorithm's circuit reads b_w bits per updated weight it uses and b_a per thread value. Stated over wiring; proofs recommends the support form. False at step 0 and for small-batch circuits of the reference training algorithm.",
    "refs": {
     "lean": [
-     "Slowdown.Assumptions.WeightsIncompressible"
+     "Slowdown.Assumptions.WeightsIncompressibleSlots"
     ],
     "estimates": [
      "b_w.pretrained/frontier-lossy",

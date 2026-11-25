@@ -20,8 +20,8 @@ inequality and any `p` that caps each thread's multiplications at `c · p`, so i
 Theorem 2 follows Appendix B, through a partial containment (`ThreadedThrottledOnSlots`): pull a compliant division of
 the containing declaration back to the gates `S` of `c` it computes (`piece`); each piece is small, reads no more than its
 inference block, and Theorem 1 bounds its counted multiplications. The pieces divide `S`, and a total containment is the case `S =
-computed` (`ThreadedThrottledSlots`). `ThreadedTraining` and `ThreadedTrainingOn`, over weight gates, are from the
-bounds at one slot per weight gate (`Fit.idSlots`), where `WeightsIncompressible` gives `WeightsIncompressibleSlots`
+computed` (`ThreadedThrottledSlots`). At one slot per weight gate (`Fit.idSlots`) the weights are charged per weight
+gate, `WeightsIncompressible`, which gives `WeightsIncompressibleSlots` at every slot map
 (`weightsIncompressibleSlots_of`).
 -/
 
@@ -378,28 +378,28 @@ theorem threaded_reads_of_structure {c : RegisteredCircuit} (T : Threading c) (�
 
 /-- **Training is slowed** (the thread draft, "Putting the two together"). -/
 theorem ThreadedTraining_rate :
-    ∀ (Γ : ℕ) (α b_w b_a κ : ℝ) (c d : RegisteredCircuit) (T : Threading c) (dd e : ℕ) (M : Containment c.D d.D),
+    ∀ (Γ : ℕ) (α b_w b_a κ : ℝ) (c d : RegisteredCircuit) (T : Threading c) (σ : T.Slots) (dd e : ℕ)
+      (M : Containment c.D d.D),
       0 ≤ α → 0 < b_w → 0 < b_a → 0 < dd → CompliesRate Γ α d →
       Assumptions.ThetaRegistered c d (PartialContainment.ofContainment M) →
-      T.Threaded Γ (α * Γ) dd e → Assumptions.WeightsIncompressible c T Γ (α * Γ) b_w b_a →
+      T.Threaded Γ (α * Γ) dd e → Assumptions.WeightsIncompressibleSlots c T σ Γ (α * Γ) b_w b_a →
       κ * c.D.size c.D.computed ≤ 2 * T.M.card →
         κ * b_a * c.D.size c.D.computed ≤ 2 * α * T.bound (α * Γ) b_w dd e * d.D.size d.D.computed := by
-  intro Γ α b_w b_a κ c d T dd e M hα hbw hba hdd hd hB hT hW hκ
-  have h := ThreadedThrottledSlots_rate Γ α b_w b_a c d T (Fit.idSlots T) dd e M hα hbw hba hdd hd hB hT
-    (weightsIncompressibleSlots_of (Fit.idSlots T) hbw.le hW)
+  intro Γ α b_w b_a κ c d T σ dd e M hα hbw hba hdd hd hB hT hW hκ
+  have h := ThreadedThrottledSlots_rate Γ α b_w b_a c d T σ dd e M hα hbw hba hdd hd hB hT hW
   nlinarith
 
 /-- **Training is slowed, with dark gates.** -/
 theorem ThreadedTrainingOn_rate :
-    ∀ (Γ : ℕ) (α b_w b_a κ : ℝ) (c d : RegisteredCircuit) (T : Threading c) (dd e : ℕ) (M : PartialContainment c d),
+    ∀ (Γ : ℕ) (α b_w b_a κ : ℝ) (c d : RegisteredCircuit) (T : Threading c) (σ : T.Slots) (dd e : ℕ)
+      (M : PartialContainment c d),
       0 ≤ α → 0 < b_w → 0 < b_a → 0 < dd → CompliesRate Γ α d → Assumptions.ThetaRegistered c d M →
-      T.Threaded Γ (α * Γ) dd e → Assumptions.WeightsIncompressible c T Γ (α * Γ) b_w b_a →
+      T.Threaded Γ (α * Γ) dd e → Assumptions.WeightsIncompressibleSlots c T σ Γ (α * Γ) b_w b_a →
       κ * c.D.size c.D.computed ≤ 2 * T.M.card →
         κ * b_a * c.D.size c.D.computed ≤
           2 * b_a * M.dark.card + 2 * α * T.bound (α * Γ) b_w dd e * d.D.size d.D.computed := by
-  intro Γ α b_w b_a κ c d T dd e M hα hbw hba hdd hd hB hT hW hκ
-  have h := ThreadedThrottledOnSlots_rate Γ α b_w b_a c d T (Fit.idSlots T) dd e M hα hbw hba hdd hd hB hT
-    (weightsIncompressibleSlots_of (Fit.idSlots T) hbw.le hW)
+  intro Γ α b_w b_a κ c d T σ dd e M hα hbw hba hdd hd hB hT hW hκ
+  have h := ThreadedThrottledOnSlots_rate Γ α b_w b_a c d T σ dd e M hα hbw hba hdd hd hB hT hW
   have hs : (T.M.card : ℝ) ≤ M.dark.card + (T.M ∩ M.S).card := by
     exact_mod_cast card_le_dark_add_inter M T.M_computed
   have h1 := mul_le_mul_of_nonneg_left hκ hba.le

@@ -18,9 +18,8 @@ books (`ThreadedThrottledOnSlots`, `ThreadedThrottledDarkSlots`, `ThreadedTraini
 containment, total or partial, takes `ThetaRegistered` for it: no dark value, and no fresh input of the reference
 training algorithm, is in the declaration's registered information θ.
 
-Theorems 1 and 2 take `WeightsIncompressibleSlots`, weights charged per parameter slot: a subcircuit that spans several
-optimizer steps on a parameter is charged for it once. `ThreadedTraining` and `ThreadedTrainingOn` take
-`WeightsIncompressible`, weights charged per weight gate.
+Every statement takes `WeightsIncompressibleSlots`, weights charged per parameter slot of a slot map `σ`: a subcircuit
+that spans several optimizer steps on a parameter is charged for it once.
 -/
 
 @[expose] public section
@@ -36,10 +35,11 @@ open Verity
 no fresh input of it in its registered information (`ThetaRegistered`), is larger by a factor of at least
 `κ b_a / (2 α Λ)`. -/
 def ThreadedTraining : Prop :=
-  ∀ (Γ : ℕ) (α b_w b_a κ : ℝ) (r d : RegisteredCircuit) (T : Threading r) (dd e : ℕ) (M : Containment r.D d.D),
+  ∀ (Γ : ℕ) (α b_w b_a κ : ℝ) (r d : RegisteredCircuit) (T : Threading r) (σ : T.Slots) (dd e : ℕ)
+    (M : Containment r.D d.D),
     0 ≤ α → 0 < b_w → 0 < b_a → 0 < dd → CompliesRate Γ α d →
     Assumptions.ThetaRegistered r d (PartialContainment.ofContainment M) →
-    T.Threaded Γ (α * Γ) dd e → Assumptions.WeightsIncompressible r T Γ (α * Γ) b_w b_a →
+    T.Threaded Γ (α * Γ) dd e → Assumptions.WeightsIncompressibleSlots r T σ Γ (α * Γ) b_w b_a →
     Assumptions.Coverage κ r (2 * T.M.card) →
       κ * b_a * r.D.size r.D.computed ≤ 2 * α * T.bound (α * Γ) b_w dd e * d.D.size d.D.computed
 
@@ -48,9 +48,10 @@ flops, a declaration that complies at `(Γ, α)` and contains it partly, with no
 information (`ThetaRegistered`), is larger by a factor of at least `κ b_a / (2 α Λ)`, less what its dark gates absorb:
 `κ b_a size(r) ≤ 2 b_a #dark + 2 α Λ size(d)`. -/
 def ThreadedTrainingOn : Prop :=
-  ∀ (Γ : ℕ) (α b_w b_a κ : ℝ) (r d : RegisteredCircuit) (T : Threading r) (dd e : ℕ) (M : PartialContainment r d),
+  ∀ (Γ : ℕ) (α b_w b_a κ : ℝ) (r d : RegisteredCircuit) (T : Threading r) (σ : T.Slots) (dd e : ℕ)
+    (M : PartialContainment r d),
     0 ≤ α → 0 < b_w → 0 < b_a → 0 < dd → CompliesRate Γ α d → Assumptions.ThetaRegistered r d M →
-    T.Threaded Γ (α * Γ) dd e → Assumptions.WeightsIncompressible r T Γ (α * Γ) b_w b_a →
+    T.Threaded Γ (α * Γ) dd e → Assumptions.WeightsIncompressibleSlots r T σ Γ (α * Γ) b_w b_a →
     Assumptions.Coverage κ r (2 * T.M.card) →
       κ * b_a * r.D.size r.D.computed ≤
         2 * b_a * M.dark.card + 2 * α * T.bound (α * Γ) b_w dd e * d.D.size d.D.computed

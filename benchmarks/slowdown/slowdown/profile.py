@@ -23,14 +23,14 @@ class Profile:
     # Weights and their updates
     #: `b`: bits a block pays per parameter whose update it completes (`UpdateHardness`)
     b: float | None = None
-    #: `b_w`: bits a small subcircuit pays per weight it uses (`WeightsIncompressible`)
+    #: `b_w`: bits a small subcircuit pays per weight it uses (`WeightsIncompressibleSlots`)
     b_w: float | None = None
     #: `c_w`, `c_a`: the chained costs, per weight and per activation (`CoveringBound`, `CoveringBoundTwoCosts`)
     c_w: float | None = None
     c_a: float | None = None
 
     # Activations and values
-    #: `b_a`: bits per novel activation read (`WeightsIncompressible`'s activation side, `ThreadedThrottledSlots`)
+    #: `b_a`: bits per novel activation read (`WeightsIncompressibleSlots`' activation side, `ThreadedThrottledSlots`)
     b_a: float | None = None
     #: `β_x`: fresh bits a block pays per counted activation it uses, at a rate that survives replay (the draft's
     #: Proposition 3; measured on exact blocks)

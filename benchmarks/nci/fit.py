@@ -8,7 +8,7 @@ its 17-bit id. The fit bound needs threading only at server scale, where the los
 server block of whole wipe periods (``tiers.windows_bound``'s blocks):
 
 * F1, capacity (C1 per weight, not per region): a server block that multiplies p distinct updated weights and works on e tokens
-  it didn't start reads at least b_w p + w_e e bits: the weight half of ``WeightsIncompressible`` at server-block scale, with
+  it didn't start reads at least b_w p + w_e e bits: the weight half of ``WeightsIncompressibleSlots`` at server-block scale, with
   F4's w_e as its thread half. Master weights, optimizer state and stored activations only add to it; ``B_TRAIN`` is the
   training-storage premise that charges them.
 * F2, state: a server block of L seconds reads at most S = R_wipe + lambda_in L bits, lambda_in = sigma + tau + alpha F

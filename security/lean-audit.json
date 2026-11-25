@@ -2908,12 +2908,6 @@
    "issue": "TRN-167",
    "due": "2026-11-30"
   },
-  "Slowdown.Assumptions.WeightsIncompressible": {
-   "owner": "@lean",
-   "digest": "992c852103a0d8cee942980d4fe7141b22a2516b816ef2090b00f59e11f9d3b7",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
   "Slowdown.Assumptions.WeightsIncompressibleSlots": {
    "owner": "@lean",
    "digest": "d6e434b3bed5d4cd3385ffbbf2d4244535dbf98347ecbc869f52a3a2d9ba771f",
@@ -22849,12 +22843,12 @@
      "InferenceOnly.Assumptions.ThetaRegistered",
      "InferenceOnly.CompliesRate",
      "Slowdown.Assumptions.CapBelowColumns",
-     "Slowdown.Assumptions.WeightsIncompressible"
+     "Slowdown.Assumptions.WeightsIncompressibleSlots"
     ],
     "reads": []
    },
    "type_hash": "aed3728beac744fd77a04bcd17962a2cfb395ef4baf1eac7569868b453f4220c",
-   "unfolded_hash": "e695bb14f5a407cdeb83a652384993ad85764b3f06609fe4e40049b90ce26fb2"
+   "unfolded_hash": "7a7dbfcc5dc9982e6646b786fe7f371287dc28c45beb1325b2df75bc795f0577"
   },
   "Slowdown.SecurityProofs.LayeredTraining_honest": {
    "owner": "@lean",
@@ -22868,11 +22862,11 @@
      "InferenceOnly.Assumptions.Coverage",
      "InferenceOnly.Assumptions.ThetaRegistered",
      "Slowdown.Assumptions.CapBelowColumns",
-     "Slowdown.Assumptions.WeightsIncompressible"
+     "Slowdown.Assumptions.WeightsIncompressibleSlots"
     ]
    },
    "type_hash": "71a9ea7bc132965dd36da1ebfa6c458421fe4d11be4dfe6b289e03a032247442",
-   "unfolded_hash": "1a2604a714f5c7cebbdc327a08cdec92a7cd29707e97d242072896319d6fad9d"
+   "unfolded_hash": "7ba0d0ce9bda41b03434ab4fe9f0d2c54059a0fd56a7c400eef25bde6fc76621"
   },
   "Slowdown.SecurityProofs.LayeredTraining_nontrivial": {
    "owner": "@lean",
@@ -22886,11 +22880,11 @@
      "InferenceOnly.Assumptions.Coverage",
      "InferenceOnly.Assumptions.ThetaRegistered",
      "Slowdown.Assumptions.CapBelowColumns",
-     "Slowdown.Assumptions.WeightsIncompressible"
+     "Slowdown.Assumptions.WeightsIncompressibleSlots"
     ]
    },
    "type_hash": "d5eb2f61cd7afbed5f47bd46a243d4001aec6ff453affae3542a1d6a64083e73",
-   "unfolded_hash": "f1bd58b7081fb1058a93ec8ad5bbb69943eef5acca25c58adcc80b06369c3d21"
+   "unfolded_hash": "0a35d70515fee39aae9abccae54971772561eb87831162bbffdb6c043577181d"
   },
   "Slowdown.SecurityProofs.ReferenceThreaded": {
    "owner": "@lean",
@@ -23720,13 +23714,13 @@
      "InferenceOnly.Assumptions.Coverage",
      "InferenceOnly.Assumptions.ThetaRegistered",
      "InferenceOnly.CompliesRate",
-     "Slowdown.Assumptions.WeightsIncompressible",
+     "Slowdown.Assumptions.WeightsIncompressibleSlots",
      "Slowdown.Threading.Threaded"
     ],
     "reads": []
    },
    "type_hash": "1a64fd0526dd584d770b053345fe1395b7deb815acd1784357530bc7e221c5ba",
-   "unfolded_hash": "466c59424e9f2fd1ac5af9aeadd7b79ca164395cb10fddca199f208426c92031"
+   "unfolded_hash": "e1ab71246c0c9daa51d5f3cbe12b87d5b30c78f43664f9f0f9b67244e4278323"
   },
   "Slowdown.SecurityProofs.ThreadedTrainingOn": {
    "owner": "@lean",
@@ -23739,13 +23733,13 @@
      "InferenceOnly.Assumptions.Coverage",
      "InferenceOnly.Assumptions.ThetaRegistered",
      "InferenceOnly.CompliesRate",
-     "Slowdown.Assumptions.WeightsIncompressible",
+     "Slowdown.Assumptions.WeightsIncompressibleSlots",
      "Slowdown.Threading.Threaded"
     ],
     "reads": []
    },
    "type_hash": "7b9b8bd4d38686b24912f3722b248c2409c0164fe9a5eac12ff908acdfa7cb38",
-   "unfolded_hash": "98fb5f5bf5d3c777ccaf759d447e0df3e4084f2174036ce2b665658b0a80d8cf"
+   "unfolded_hash": "3c85e801828a2f888885131788929cd3e75a20378e422748b268aa6ff8595f69"
   },
   "Slowdown.SecurityProofs.ThreadedTrainingOn_nontrivial": {
    "owner": "@lean",
@@ -23760,11 +23754,11 @@
     "reads": [
      "InferenceOnly.Assumptions.Coverage",
      "InferenceOnly.Assumptions.ThetaRegistered",
-     "Slowdown.Assumptions.WeightsIncompressible"
+     "Slowdown.Assumptions.WeightsIncompressibleSlots"
     ]
    },
    "type_hash": "bb7caa0639f5ab616e417bd15f2996c2ce468b6022458701f49d1819c3c3bf68",
-   "unfolded_hash": "f430bcaee15df4bb6b28a6503d825e5e5954a5bd150afbe5dc5e00ee87d94ebe"
+   "unfolded_hash": "a486b1e837f2e96cadb21cf88e9307ce7543a7065bd7f6b16a03aa46579e3cce"
   },
   "Slowdown.SecurityProofs.ThreadedTraining_honest": {
    "owner": "@lean",
@@ -23777,11 +23771,11 @@
     "reads": [
      "InferenceOnly.Assumptions.Coverage",
      "InferenceOnly.Assumptions.ThetaRegistered",
-     "Slowdown.Assumptions.WeightsIncompressible"
+     "Slowdown.Assumptions.WeightsIncompressibleSlots"
     ]
    },
    "type_hash": "f7d4ad3fa380a258b37384f7f45e3d50c27b268b688bb933d8c23fdf5b028912",
-   "unfolded_hash": "238b4ad33cb8f54107e7d9c352fb4f08a0c6c5111ad3dd0d1409d30f9b7ad201"
+   "unfolded_hash": "45b57c44253fd204d792e3634b7ac060b8be70fdd44cd20b1a95792aa8c87b35"
   },
   "Slowdown.SecurityProofs.ThreadedTraining_nontrivial": {
    "owner": "@lean",
@@ -23794,11 +23788,11 @@
     "reads": [
      "InferenceOnly.Assumptions.Coverage",
      "InferenceOnly.Assumptions.ThetaRegistered",
-     "Slowdown.Assumptions.WeightsIncompressible"
+     "Slowdown.Assumptions.WeightsIncompressibleSlots"
     ]
    },
    "type_hash": "d0bd29d413ed5bf646e161ff238703f7e72c0197010c0a5de55fc68ae50c56ef",
-   "unfolded_hash": "1931c8322617fc2378fc459f64d443a502d6d61cc8cfe52c24b6472577ec1ec4"
+   "unfolded_hash": "481a5b0a747596f5bd5f0ba1119704292b76b49a92adb20c3fbb4dac80dc0e7b"
   },
   "Slowdown.SecurityProofs.VerdictLag": {
    "owner": "@lean",
@@ -39249,9 +39243,8 @@
    }
   },
   "Definitions.Slowdown.Assumptions.Threads": {
-   "digest": "3edd87a3f6081e34961b59a8fc0355bc1b33932928a46a6d424eb1bcfd66cb97",
+   "digest": "58817e7b3b800fb16534eaa9f95e853150b4295cc5c348a06ba80c00e2736417",
    "definitions": {
-    "Slowdown.Assumptions.WeightsIncompressible": "992c852103a0d8cee942980d4fe7141b22a2516b816ef2090b00f59e11f9d3b7",
     "Slowdown.Assumptions.WeightsIncompressibleSlots": "d6e434b3bed5d4cd3385ffbbf2d4244535dbf98347ecbc869f52a3a2d9ba771f"
    }
   },
@@ -39479,9 +39472,9 @@
    }
   },
   "Definitions.Slowdown.Guarantees.Layered": {
-   "digest": "2d3632971a8538c1a77cc3e5d0cab783e3532ffeed349da475e90d5dbe6f5d96",
+   "digest": "b83ddbc352e4c3b4c48077ff5bceef8aeda197fb41987c50a3bd3d2b86149123",
    "definitions": {
-    "Slowdown.Guarantees.LayeredTraining": "d215a263c0ad43b60aa1e13625753cf05716547fffbda268ef73bb8c513d6d5a",
+    "Slowdown.Guarantees.LayeredTraining": "d65c33bb96dd19d41a24379f627f81ff25189e832fc1e918a2835d6665f79fad",
     "Slowdown.Guarantees.ReferenceThreaded": "d470e23a7cadf40e7646a68973b2cf2343e66b01720a40564e41bdc32d3c0061",
     "Slowdown.Guarantees.ThreadedOfLayered": "eedc1c3fb7dfc2b097ea454f28b77120e010c3fd912a9b549dc6346c7789d014"
    }
@@ -39569,23 +39562,23 @@
    }
   },
   "Definitions.Slowdown.Guarantees.Threads": {
-   "digest": "d4a7b3d5be04a2eb86f7ced5e78085425e8f2bdc9d04854b34715a21e72ebe33",
+   "digest": "23a5839b37c9a8a497de7b482fb5decd5a86dddc440eb20df5ae9559dd86450a",
    "definitions": {
     "Slowdown.Guarantees.ThreadedReadsSlots": "1b50940901457650d6672ac1e6599854e3b41f703731098504a0dc46f1009544",
     "Slowdown.Guarantees.ThreadedThrottledDarkSlots": "5951a3bc349deab7c4abf18e6aa06f92bc5ce644918158743c5cf317ba8d3fcf",
     "Slowdown.Guarantees.ThreadedThrottledOnSlots": "99144548cbe5ae5a0b824b9222d3ddf8465067f51983a9a456e227dc7eb3fbdd",
     "Slowdown.Guarantees.ThreadedThrottledSlots": "29a3c69bd1da82d3b475c309755c37c358566f5616ef95922d9863d72e131a64",
-    "Slowdown.Guarantees.ThreadedTraining": "0ff869f49833b3fe31ecd9f3c6af6306684985d754681f13f2ef82fdc251b91f",
-    "Slowdown.Guarantees.ThreadedTrainingOn": "bbede57f5ac44d8e6a7592c7f002da724ac62d7d9b09002985da79b87477588c"
+    "Slowdown.Guarantees.ThreadedTraining": "98f2042c177ac4cd704e67586912095876f1b7f405e41315f6955bb124d22e13",
+    "Slowdown.Guarantees.ThreadedTrainingOn": "1216ad73b12bd80d2620e0f9181d4618f6814d9255f01d455559d28b0278f690"
    }
   },
   "Definitions.Slowdown.Guarantees.Witnesses": {
-   "digest": "30afd5ed1c87a7f7bf204f6e4b3f22b2c418ea83365b1147a29ad0983d628ed4",
+   "digest": "9c160c2c3fe81c5b9560ab2575fffb2c07a6dcb2e52f6bc7adf945028cb75404",
    "definitions": {
     "Slowdown.Cover.Guarantees.CoverTraining_honest": "ac68f4da06862d8a97034088051f3771505314bb08f6982f88a26e4a7d691c4c",
     "Slowdown.Cover.Guarantees.CoverTraining_nontrivial": "72a2f1006251a4fa0efe304eaa37af6ce51ef603c0c64d71c74a64868563d334",
-    "Slowdown.Guarantees.LayeredTraining_honest": "800f91f919853ddd516010c9c42f1411069562804947b23f4500109f1e9d224b",
-    "Slowdown.Guarantees.LayeredTraining_nontrivial": "96f254410c5edac32d7a60a6e05d0ca7c0639cda10da565c49339e2232d1b988",
+    "Slowdown.Guarantees.LayeredTraining_honest": "6ee636a6bc76d1cb9d38f8cad44a08ab8b49d0c3be99f5425bb45072b97391de",
+    "Slowdown.Guarantees.LayeredTraining_nontrivial": "fd393c8134b2f677768378fbe233cc5af4ec289ffe8d99fb1d0521663c076c7a",
     "Slowdown.Guarantees.SlowdownRemote_honest": "ee2a50572fa75ac995ba48206088d76932c10e7d22992d991434a9e5f94bea0d",
     "Slowdown.Guarantees.SlowdownRemote_nontrivial": "2f26df605752888d4dd362295d5e846e5412967a8f2c61215640faa17b03111e",
     "Slowdown.Guarantees.SlowdownThreadedSlots_honest": "9dac158d58a9c434fa44437384fa675dc75878865a8c01d5b0eda13bae39b2a7",
@@ -39594,9 +39587,9 @@
     "Slowdown.Guarantees.ThreadedThrottledOnSlots_nontrivial": "dc2fe01121cf720d3e78ce3fd2c726310f66e2d043081d96f0ab6b8b17b8cfcf",
     "Slowdown.Guarantees.ThreadedThrottledSlots_honest": "9da94f6331b08cc2388f4a12c610b1dee0f5dc831fffab53d73a1dd7d1144115",
     "Slowdown.Guarantees.ThreadedThrottledSlots_nontrivial": "22ca0626bc007edf0d48c79616005dae04ac61becb050b9ab8c5f7a34cd312cb",
-    "Slowdown.Guarantees.ThreadedTrainingOn_nontrivial": "c0cc16d7534e4db15f3920f8b361df86ef43234a952d8d514ced80812e11daee",
-    "Slowdown.Guarantees.ThreadedTraining_honest": "44db02cdaef894dc97f334b46042f54e01ded7323ea73262ab03f4205ee16483",
-    "Slowdown.Guarantees.ThreadedTraining_nontrivial": "3dedb6788d44bfe69de8b015a25fb0faac62c86644a945c22a19328c9fdb7588"
+    "Slowdown.Guarantees.ThreadedTrainingOn_nontrivial": "f0d6cf7262760f6e939ec94c68561997a3a9a69ea719e07ae31099db3568ce2e",
+    "Slowdown.Guarantees.ThreadedTraining_honest": "959200bb9b8fda1768c0099d2dde72fedc6308ec12f1485c25d56c73948ee786",
+    "Slowdown.Guarantees.ThreadedTraining_nontrivial": "076812791696d4c061161df1c4825e523418084acc863a8de17ba511d2dde3bf"
    }
   },
   "Definitions.Slowdown.Layered": {

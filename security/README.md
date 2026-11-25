@@ -341,7 +341,7 @@ statement.
 block's boundary count by the bits they represent; a compressed code counts as the code, and decoding it spends gates;
 values reconstructed inside the block spend gates. For decoding, whether cached keys and values cost fresh bits or gates
 is a question of the cheapest admissible placement and reconstruction, not of which data the argument elects to
-charge. The threaded read costs (`Slowdown.Threading.Threaded`, `Slowdown.Assumptions.WeightsIncompressible`), under which
+charge. The threaded read costs (`Slowdown.Threading.Threaded`, `Slowdown.Assumptions.WeightsIncompressibleSlots`), under which
 `Slowdown.Guarantees.ThreadedReadsSlots` proves q(c, k) = (k/β)·max(a_out, w_out·k/(4·a_in·b_w)), assume read costs rather than
 derive them; they are a candidate sufficient condition, not part of the repertoire.
 
