@@ -169,27 +169,6 @@ theorem ThreadedTrainingOn_nontrivial : Guarantees.ThreadedTrainingOn_nontrivial
   rw [bound_T0, size_D, dark_id]
   norm_num
 
-theorem ThreadedThrottled_honest : Guarantees.ThreadedThrottled_honest :=
-  ⟨compliesRate_D, theta_id D, T1_threaded, T1_weights⟩
-
-theorem ThreadedThrottled_nontrivial : Guarantees.ThreadedThrottled_nontrivial := by
-  refine ⟨by norm_num, by norm_num, by norm_num, by norm_num, compliesRate_Dθ, not_theta_Dθ, T1_threaded, T1_weights,
-    ?_⟩
-  rw [card_T1]
-  norm_num
-
-theorem ThreadedThrottledOn_nontrivial : Guarantees.ThreadedThrottledOn_nontrivial := by
-  refine ⟨by norm_num, by norm_num, by norm_num, by norm_num, compliesRate_Dθ, not_theta_Dθ, T1_threaded, T1_weights,
-    ?_⟩
-  rw [show (T1.M ∩ Mθ.S).card = 1 by decide]
-  norm_num
-
-theorem ThreadedThrottledDark_nontrivial : Guarantees.ThreadedThrottledDark_nontrivial := by
-  refine ⟨by norm_num, by norm_num, by norm_num, by norm_num, compliesRate_Dθ, not_theta_Dθ, T1_threaded, T1_weights,
-    ?_⟩
-  rw [card_T1, dark_Mθ]
-  norm_num
-
 theorem ThreadedThrottledSlots_honest : Guarantees.ThreadedThrottledSlots_honest :=
   ⟨compliesRate_D, theta_id D, T1_threaded, T1_weightsSlots⟩
 
@@ -237,18 +216,6 @@ theorem slowdown_T0_fails :
           declaredShare 1 (rhoT ((1 : ℕ) / (2 : ℕ) : ℝ) (1 / 2) ((T0 D).bound 1 (1 / 2) 1 0)) 2 0 + 0) := by
   rw [bound_T0, show (T0 D).reuse = 0 from rfl]
   norm_num [efficiency, unregisteredShare, residualShare, memoryCap, declaredShare, rhoT]
-
-theorem SlowdownThreaded_honest : Guarantees.SlowdownThreaded_honest := by
-  refine ⟨compliesRate_D, theta_id D, T1_threaded, T1_weights, by rw [size_D]; norm_num, by decide,
-    by norm_num [Assumptions.ExecutionPhaseLength], ?_, executionPhasesHold_T1⟩
-  rw [show T1.reuse = 1 from rfl]
-  norm_num
-
-theorem SlowdownThreaded_nontrivial : Guarantees.SlowdownThreaded_nontrivial := by
-  refine ⟨by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num,
-    by norm_num, by norm_num, compliesRate_D, theta_id D, T0_threaded _ _ _ _ _, T0_weights _ _ _ _ _,
-    by rw [size_D]; norm_num, by decide, by norm_num, by norm_num, by norm_num, by norm_num,
-    by norm_num [Assumptions.ExecutionPhaseLength], by norm_num, not_executionPhasesHold_T0, slowdown_T0_fails⟩
 
 theorem SlowdownThreadedSlots_honest : Guarantees.SlowdownThreadedSlots_honest := by
   refine ⟨compliesRate_D, theta_id D, T1_threaded, T1_weightsSlots, by rw [size_D]; norm_num, by decide,
