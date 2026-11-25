@@ -1,6 +1,7 @@
 module
 
-public import Proofs.Slowdown.Secure
+public import Proofs.Slowdown.SecureCompute
+import Proofs.Pouw.Prob
 
 /-!
 # The three sets meet two by two
@@ -35,6 +36,11 @@ another, `late`: the counted multiplication at tick 0 reads its weight and its a
 computes at tick 5, so the server carries nothing into the window and reads nothing from outside, and `late` meets
 the work, memory and bandwidth clauses on a server that carries nothing over a link that carries nothing
 (`order_needed`). So `secure` is false with any one clause dropped from `H`.
+
+**`secure_compute`'s hypotheses hold together** (`compute_witness`). The same run as an actual-circuit run (`actual`),
+with a compute audit that accepts every run over the one tick and whose schedule is the one the run induces on the
+server (`audit`): the compute account does one unit of work (`audit_work`), so the audit is sound at the certificate
+1 with no error (`audit_sound`), and `secure_compute` applies.
 -/
 
 @[expose] public section
@@ -576,5 +582,80 @@ theorem order_needed :
     rw [late_window, Finset.filter_congr_decidable]
     change lateRun.width ((lateRun.into {3}).filter fun g => lateRun.x g ∉ ({true} : Finset Bool)) ≤ 0
     decide
+
+section Compute
+
+/-- The run with every gate holding 0 and each leaf holding its inputs. -/
+def actual : Actual.Run Bool where
+  A := run
+  val := fun _ => 0
+  faithful := fun _ _ => rfl
+  held := fun y _ => univ.filter fun a => run.isInput a = true ∧ run.x a = y
+  holding := ⟨fun _ _ _ ha => ⟨(mem_filter.1 ha).2.2, Or.inl (mem_filter.1 ha).2.1⟩,
+    fun a ha => mem_filter.2 ⟨mem_univ a, ha, rfl⟩,
+    fun g a _ hx s hs hsg => mem_filter.2 ⟨mem_univ a,
+      hs.resolve_right (by have : s = 0 := Nat.le_zero.1 hsg; omega), hx⟩⟩
+
+/-- A device that fits any schedule of four one-bit gates. -/
+def dev : Device Empty := ⟨4, 4, fun _ => 4, 4, Empty.elim⟩
+
+/-- Every gate is a tensor-core op, priced at 1. -/
+def price : Price := fun _ => 1
+
+theorem width_le (S : Finset (Fin run.N)) : run.width S ≤ 4 :=
+  (Finset.sum_le_sum_of_subset (subset_univ S)).trans (by decide)
+
+/-- The compute audit that always accepts, over the one tick, with the schedule `actual` induces on the server. -/
+noncomputable def audit : ResourceAccounting.Run dev Unit Unit Unit Unit where
+  acct _ := ()
+  win _ := ⟨0, 1⟩
+  schedule _ := actual.schedule {true} ∅ (fun _ => some .tc) (fun _ => ()) usage.link ((), true) Empty.elim
+  fits _ t := ⟨fun _ => by
+      rw [Fintype.sum_unique]
+      dsimp only [Actual.Run.schedule, dev]
+      exact (Finset.card_le_univ (α := Fin run.N) _).trans (by decide : Fintype.card (Fin run.N) ≤ 4), by
+      rw [Fintype.sum_unique]
+      dsimp only [Actual.Run.schedule, dev]
+      exact width_le _, fun i => i.elim, by
+      rw [Fintype.sum_unique]
+      dsimp only [Actual.Run.schedule, dev]
+      exact width_le _, by
+      rw [Fintype.sum_unique]
+      dsimp only [Actual.Run.schedule, dev]
+      exact width_le _⟩
+  accepts _ _ := True
+
+/-- The compute account does one unit of work on every run, the server's whole compute over the tick. -/
+theorem audit_work (ω : Unit × Unit × Unit) : audit.work price ω = 1 := by
+  have h := covers_work actual {true} ∅ (fun _ => some .tc) (fun _ : Fin actual.A.N => ()) usage.link ((), true)
+    Empty.elim (p := price) (π := usage.π) (fun _ _ => rfl) ⟨0, 1⟩ ()
+  change _ = audit.work price ω at h
+  rw [← h]
+  change run.work usage.π ((run.region _ (Set.Ico 0 (0 + 1))).filter fun _ => () = ()) = 1
+  rw [region_eq _ (by simp)]
+  decide
+
+/-- The always-accepting audit is sound at the certificate 1 with no error. -/
+theorem audit_sound : audit.ComputeSoundPerRunPriced price 0 1 0 := fun o =>
+  (Pouw.pr_eq_zero fun x hx => absurd hx.2 (by rw [audit_work]; norm_num)).le
+
+/-- **`secure_compute` is not vacuous**: its hypotheses hold together at an audit that accepts every run, at the
+certificate 1, which is all the work the server does in the tick. So the run holds no reference training algorithm
+of more counted multiplications than it shares with the compute account's gates. -/
+theorem compute_witness (p : Recipe) (ω : Unit × Unit × Unit) :
+    computation audit (fun _ => actual) (fun _ => usage) (fun _ => ∅) (fun _ _ h => absurd h (notMem_empty _))
+      (fun _ _ => ()) ω ∉ B (deviceFrame (hw 1 1 1) {true} ∅ (Set.mem_univ _) 1) p (p.o_w : ℕ) := fun hB => by
+  have h := secure_compute (hw 1 1 1) {true} ∅ (Set.mem_univ _) 1 audit (fun _ => actual) (fun _ => usage) (fun _ => ∅)
+    (fun _ _ h => absurd h (notMem_empty _)) (fun _ _ => some .tc) (fun _ _ => ()) rfl ((), true) Empty.elim
+    (fun _ => rfl) price (fun _ _ _ => rfl) (fun _ => feasible) audit_sound p
+  have hY : ∀ x, (hw 1 1 1).compute ({true} ∪ ∅) * 1 - ⌈(1 : ℝ) - 0 * audit.pouwRead x⌉₊ + p.o_w = p.o_w :=
+    fun _ => by simp [Hardware.ofLeaves]
+  simp only [hY] at h
+  have h1 := Pouw.pr_eq_one (P := fun ω => audit.accepts .compute ω ∧ _) fun x =>
+    (⟨trivial, Subsingleton.elim ω x ▸ hB⟩ : _ ∧ _)
+  rw [h1] at h
+  exact absurd h (by norm_num)
+
+end Compute
 
 end Slowdown.SecurityProofs.SecureWitness
