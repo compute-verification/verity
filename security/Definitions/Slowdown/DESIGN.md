@@ -52,7 +52,8 @@ divided into windows, the read sizes it is defined at, and its count for `k` win
 `Training.Holds` is its one obligation: under its premises, the counted multiplications outside a set of windows
 number at most its count for the windows left. The statements read nothing else of it, so a route to a bound on
 training is a value of `Training` with a proof of `Training.Holds`, and it enters at no other place. The fit bound is
-`Training.fit` at a recipe (`fit_holds`, `security/Proofs/Slowdown/Secure.lean`). The missed windows' work
+`Training.fit` at a recipe (`fit_holds`, `security/Proofs/Slowdown/Secure.lean`), and the threaded route is
+`Training.threaded` (`threaded_holds`, `security/Proofs/Slowdown/SecureThreaded.lean`). The missed windows' work
 and what a reference training algorithm shares with the declared circuit (`Shared`) are not the training bound's:
 `Secure` adds them for every bound.
 
