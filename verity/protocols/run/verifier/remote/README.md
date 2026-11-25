@@ -240,7 +240,8 @@ The time credit adds the data sheet's rates.
 fresh bits per gate, anything outside the registered information θ (`InferenceOnly.CompliesRate Γ α_f`); and θ is registered
 information. On a Boolean circuit such a partition is a (c, k)-partition with c = Γ and k = ⌊α_f·Γ⌋
 (`Verity.Partition.IsCK`), the hypothesis part 6's local bounds take. With gates up to W bits wide, the bit-level
-expansion meets it at Γ·W gates and k = ⌊α_f·Γ·W⌋. `SlowdownThreaded` takes `InferenceOnly.CompliesRate Γ α_f` of d.
+expansion meets it at Γ·W gates and k = ⌊α_f·Γ·W⌋. `SlowdownThreadedSlots` takes `InferenceOnly.CompliesRate Γ α_f`
+of d.
 
 **How it is checked.**
 
@@ -276,9 +277,9 @@ part 6's premises say why that shape trains little.
 3. *A compliance verdict of `Desc.evaluate` ⇒ `InferenceOnly.CompliesRate Γ α_f` of the laid-out `Verity.RegisteredCircuit`, on every
    expansion:*
    `InferenceOnlyCheck.Properties.SecurityProofs.DescWitnesses` (its `Witnessed`), **proved**, with `DescReports` (the verdict
-   is the definition's), **proved**; `refines` bounds the unrolled check's blocks by (Γ, α_f·Γ). `SlowdownThreaded`
-   takes `CompliesRate Γ α_f d`, what this verdict gives, and `PolicyHeld` holds it of the case's circuit
-   (`Properties.Remote.PolicyMet`).
+   is the definition's), **proved**; `refines` bounds the unrolled check's blocks by (Γ, α_f·Γ).
+   `SlowdownThreadedSlots` takes `CompliesRate Γ α_f d`, what this verdict gives, and `PolicyHeld` holds it of the case's
+   circuit (`Properties.Remote.PolicyMet`).
 4. *`CompliesRate` ⇒ the (c, k)-partition the local bounds read:* `InferenceOnly.Guarantees.CompliesCK`, and through the
    bit-level expansion `InferenceOnly.Guarantees.ExpandComplies`, **proved**. `PolicyMet` holds both of the
    case's circuit, its constants registered; of the committed files' circuit they wait on link 1's two statements.

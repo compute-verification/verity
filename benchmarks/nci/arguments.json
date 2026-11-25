@@ -165,7 +165,7 @@
    "statement": "The declared circuit contains the reference training algorithm's circuit gate for gate (Declaration.Contains).",
    "refs": {
     "lean": [
-     "Slowdown.SecurityProofs.ThreadedThrottled"
+     "Slowdown.SecurityProofs.ThreadedThrottledSlots"
     ]
    }
   },

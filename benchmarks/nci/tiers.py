@@ -180,9 +180,9 @@ TIERS = {
 
 #: what each step of the model rests on
 STATUS = [
-    ("Declared computation, thread bound", "ThreadedThrottled is proved in Lean when the declaration "
-     "contains the reference training algorithm's circuit gate for gate, and with dark gates (T1', ThreadedThrottledOn) on a branch. It rests "
-     "on WeightsIncompressible and Threaded (d, e). (10, 37248) is ReferenceThreaded's for a circuit of the reference training algorithm written "
+    ("Declared computation, thread bound", "ThreadedThrottledSlots is proved in Lean when the declaration "
+     "contains the reference training algorithm's circuit gate for gate, and with dark gates (T1', ThreadedThrottledOnSlots) on a branch. It rests "
+     "on WeightsIncompressibleSlots and Threaded (d, e). (10, 37248) is ReferenceThreaded's for a circuit of the reference training algorithm written "
      "in Dot16 steps, as the declarations are (17 terms less 7 bf16 embedding columns; 2,328 steps of 16 products), under "
      "the open conjecture ReferenceLayered, whose lookups need the embedding columns to be inputs: a run that trains its "
      "embedding reads them as updated weights, so the default is the structural d = 1 until Layered's lookups may read "

@@ -30,7 +30,7 @@ class Profile:
     c_a: float | None = None
 
     # Activations and values
-    #: `b_a`: bits per novel activation read (`WeightsIncompressible`'s activation side, `ThreadedThrottled`)
+    #: `b_a`: bits per novel activation read (`WeightsIncompressible`'s activation side, `ThreadedThrottledSlots`)
     b_a: float | None = None
     #: `β_x`: fresh bits a block pays per counted activation it uses, at a rate that survives replay (the draft's
     #: Proposition 3; measured on exact blocks)
@@ -38,7 +38,7 @@ class Profile:
     #: `aOut`: counted products per activation value
     fanout: float | None = None
 
-    # Threads (`Threading`, `ThreadedThrottled`)
+    # Threads (`Threading`, `ThreadedThrottledSlots`)
     #: `d`: fresh input values of a thread a small subcircuit may read before `e` stops binding
     thread_d: int | None = None
     #: `e`: counted multiplications per value read from a thread
