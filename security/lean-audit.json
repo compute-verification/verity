@@ -38964,13 +38964,13 @@
    }
   },
   "Definitions.Registration.Physical": {
-   "digest": "9b2f8ca913f2fc824b8f95b808635a27e5350b0f3d80373deebae1ebf4adb499",
+   "digest": "b7ed2927b69b9cc8c179aa961177e9c9367fb814f6f36039b28b3574042956fd",
    "definitions": {
     "ResourceAccounting.Actual.Run.record": "7c09a3913558bb212ac0b15a38c54af6be56b6dfaa8fabe2941527fd8ec2e1a1",
     "ResourceAccounting.CausalStrategy": "19e69404b925ce6b3d6439d8198296a031f9b690b813203173d716a4f53cbb50",
     "ResourceAccounting.Covered": "192331c0d142be1eefab95b75131460830ea50cfe9835892b39d5f9fe2bef50c",
     "ResourceAccounting.DeclaredLinks": "8241eba1ffcab1a0ff1bd8db678a4240241859c11d8f41227461aacbce8d32d6",
-    "ResourceAccounting.Hardware": "e45884fdbb6c9d527abe8af7f40d0ca13f949770b2912784f406faf647679ba4",
+    "ResourceAccounting.Hardware": "176baeda2d7ee53e57e940692415486bc5bc4583ceaea3cfe91c7d489ed90074",
     "ResourceAccounting.Hardware.M": "ae8914a063de2cef73294a834adac0c8c1ae2deafa623b2639712150255e3687",
     "ResourceAccounting.Hardware.compute": "ad17c2d0d795039226e0b188b78d20b6e5b86886bc7a7b89b43cd252766f9b8f",
     "ResourceAccounting.Hardware.ends": "52d5466ec6fea2f7068cbef6786e647e6a65823459a1bd641e373ac63f4883fc",
@@ -38996,9 +38996,9 @@
    }
   },
   "Definitions.Registration.Server": {
-   "digest": "704cb880815d7b643252c9fdf79bdbe4c525b5f0312214d3bbf497a42f8345e7",
+   "digest": "cbbdebeaae788b32a4d0849d115e7f7c320c26172b616218d04a1b61700ecb08",
    "definitions": {
-    "ResourceAccounting.Hardware.ofLeaves": "39f908b85a88041df6ef8bb22a8d8e97ed70cfc3c995e52367b1cc6181072104"
+    "ResourceAccounting.Hardware.ofLeaves": "3afb50dee34de330756186df8191cca5b3b0e029c3c4a283f21ce0ce5e78e98e"
    }
   },
   "Definitions.ResourceAccounting.Actual": {

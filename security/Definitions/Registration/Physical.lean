@@ -26,7 +26,7 @@ The hardware is a tree of *locations* `𝒳` (a set of `Finset L`) and *links* `
 leaves `ends e` with capacity `β_e` bits a tick each way. A link is *certified* when a certifier sits on it, at one of its ends
 (`cert`). `β_X` (`linkCapacity`) is the total capacity of the links across `X`'s boundary (`boundary`), `β°_X`
 (`uncertifiedLinkCapacity`) that of the uncertified ones, and a *spatial unit* is a location with `β°_X = 0`
-(`Hardware.SpatialUnit`). `in_X(I), out_X(I) ≤ β_X |I|` is then a lemma (`ResourceAccounting.SecurityProofs.Actual.ingress_le`,
+(`Covered`). `in_X(I), out_X(I) ≤ β_X |I|` is then a lemma (`ResourceAccounting.SecurityProofs.Actual.ingress_le`,
 `egress_le`). Compute `Φ_X` (`compute`) and memory `M_X` are numbers per location, in work and bits.
 
 `CausalStrategy`, `DeclaredLinks` and `Secrets` bundle, one named premise each, a constraint's strategy-level and
@@ -116,7 +116,7 @@ end Placed
 
 open Classical in
 /-- **The certifiers' record** in a run (v2.6): the gates at the certifiers' leaves `cert` in the record cells each
-declares (`cells y` at the leaf `y`, `Hardware.record`). A certifier's record is what it holds, not a set chosen per
+declares (`cells y` at the leaf `y`). A certifier's record is what it holds, not a set chosen per
 run, so the record placed before `t` is part of what the certifiers can tell at `t` (`history`). -/
 noncomputable def Actual.Run.record {L : Type*} (R : Actual.Run L) (cert : Finset L) (cells : L → Set ℕ) :
     Finset (Fin R.A.N) :=
@@ -189,18 +189,15 @@ noncomputable def uncertifiedLinkCapacity (ends : E → L × L) (β : E → ℕ)
 
 /-- **Coverage** (the listed claim `certifier-coverage`): every boundary link of `X` is certified, `β°_X = 0`
 (`uncertifiedLinkCapacity`), so nothing leaves `X` but through a certifier. One physical premise, the auditor's placement
-in the onsite protocol; `Hardware.SpatialUnit` is it at a `Hardware`'s parameters. -/
+in the onsite protocol. -/
 def Covered (ends : E → L × L) (β : E → ℕ) (cert X : Finset L) : Prop :=
   uncertifiedLinkCapacity ends β cert X = 0
 
 end Links
 
 /-- The hardware a run's physical assumptions are about: the tree's locations `units`, the latencies, each location's
-compute `compute` (`Φ`) and memory `M` (work a tick and bits), the links `E` with their ends and capacities `β` (bits a
-tick), the location `ring` of the ring's multiplications modulo `p` (its `add` and `one` sit elsewhere) with the
-sequential depth `D` and the span `Δ + RTT` (`span`) of `SequentialSpeed` (v2.7), the certifiers' leaves, the trusted
-devices' leaves, the buckets of ticks, each certifier's jitter bits a bucket, and the record cells `record y` each
-certifier's leaf `y` declares (v2.6: its record is its gates in them, `Actual.Run.record`). -/
+compute `compute` (`Φ`) and memory `M` (work a tick and bits), and the links `E` with their ends and capacities `β` (bits
+a tick). -/
 structure Hardware (L : Type*) (E : Type*) where
   units : Set (Finset L)
   ℓ : L → L → ℕ
@@ -208,18 +205,6 @@ structure Hardware (L : Type*) (E : Type*) where
   M : Finset L → ℕ
   ends : E → L × L
   β : E → ℕ
-  ring : Finset L
-  D : ℕ
-  span : ℕ
-  cert : Finset L
-  trusted : Finset L
-  bucket : ℕ → ℕ
-  jitter : ℕ
-  record : L → Set ℕ
-
-/-- **A spatial unit**: a location all of whose boundary links are certified, `β°_X = 0`. -/
-def Hardware.SpatialUnit {L E : Type*} [Fintype E] (H : Hardware L E) (X : Finset L) : Prop :=
-  X ∈ H.units ∧ uncertifiedLinkCapacity H.ends H.β H.cert X = 0
 
 /-- **A run's usage**: what the physical assumptions on one run read about `A` that its gates don't carry, what each
 gate uses of its location's compute (`π`, its work) and the link each wire uses (`link`). -/

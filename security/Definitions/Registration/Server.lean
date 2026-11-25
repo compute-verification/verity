@@ -31,14 +31,6 @@ def Hardware.ofLeaves {L E : Type*} (compute M : L → ℕ) (ends : E → L × L
   M X := ∑ p ∈ X, M p
   ends := ends
   β := β
-  ring := ∅
-  D := 0
-  span := 0
-  cert := ∅
-  trusted := ∅
-  bucket := id
-  jitter := 0
-  record _ := ∅
 
 /-- **The leaves of a server of `n` GPUs**: each GPU's die and its device memory, the host, the switch between the
 GPUs, and the world outside. -/

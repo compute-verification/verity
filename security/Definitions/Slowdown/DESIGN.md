@@ -14,10 +14,9 @@ every gate at a leaf and a tick, each gate's value, and what each leaf holds at 
 uses of its location's compute (a pricing), the link each wire between two leaves runs on, the registered inputs, and
 the gates of the declared circuit.
 
-The hardware (`ResourceAccounting.Hardware`) is leaves and links. `H` reads six of its fields: the latency between
-two leaves, its locations (sets of leaves), each location's compute a tick and its memory, and each link's ends and
-capacity. A machine is a choice of
-leaves and links. `Hardware.ofLeaves` gives every set of leaves the sum of its leaves' limits, and `server n` is `n`
+The hardware (`ResourceAccounting.Hardware`) is leaves and links, six fields, all of which `H` reads: the latency
+between two leaves, its locations (sets of leaves), each location's compute a tick and its memory, and each link's ends
+and capacity. A machine is a choice of leaves and links. `Hardware.ofLeaves` gives every set of leaves the sum of its leaves' limits, and `server n` is `n`
 GPUs (a die and a device memory each), the host, the switch between the GPUs and the world outside. More GPUs, the
 host's compute and a switch are more leaves of the one model.
 
@@ -42,8 +41,9 @@ location and its oracle locations. No theorem yet reads that from `H`: `pous_slo
 at its deadline as a premise.
 
 `H` leaves out sequential speed (`Placed.SequentialSpeed`), a latency ceiling (`Placed.LatencyAtMost`) and a bound on
-depth a tick, which no claim over `H` reads. Dropping a clause enlarges `H`, so the statement holds of more computations. The rest of the `Hardware` bundle
-(the ring, the trusted devices' leaves, buckets, jitter, record cells) is protocol structure, which `H` doesn't read.
+depth a tick, which no claim over `H` reads. Dropping a clause enlarges `H`, so the statement holds of more
+computations. The certifiers' and trusted devices' leaves, buckets, jitter and record cells are protocol structure, not
+hardware: the premises that read them (`Covered`, `TrustedUnits`) take them as their own parameters.
 
 ## The training bound is a parameter
 
