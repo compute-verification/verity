@@ -50,7 +50,7 @@ The model of `security/Definitions/ResourceAccounting/Actual.lean`:
   (`and_causal`); `Recall`, B2's count: what a location does is a function of its state's content, at most `mem`
   bits; `zero_link` fails `Alphabet` at capacity 0 while meeting `Links` (`zero_link_alphabet`, `zero_links`).
 * `Actual/Device.lean`: the bridge to the device model: the schedule a run induces, its chip and memory charges what
-  those locations hold, fits the device (`fits`, `fits_of_feasible`) and charges what an account's gates use
+  those locations hold, fits the device (`fits`) and charges what an account's gates use
   (`covers_ingress`, `covers_work`).
 * `Actual/Confidence.lean`: `Composition`, protocols sound alone compose into the confidence set at `∑ δ i`, and
   `Fit`, `req_μ(P) ≤ res_μ` when `μ` adds; at tick 0 the state is the inputs (`state_zero`), and causality's global

@@ -145,8 +145,7 @@ variable {L E : Type*}
 than the latency between their leaves allows (`Placed.Causal`); the gates at a location over an interval of ticks use
 at most the location's compute a tick (`Placed.ComputeRate`); each location's state, what its leaves hold and what is
 in flight between them, is within the location's memory at every tick (`Actual.Run.Memory`); and each link delivers at
-most its capacity a tick (`Placed.Links`). These are `ResourceAccounting.Feasible`'s clauses less its sequential
-speed, with memory on what is held, not on the bits read later alone. `Guarantees.Secure` reads of the first clause
+most its capacity a tick (`Placed.Links`). `Guarantees.Secure` reads of the first clause
 only that a gate reads no gate placed after it; the latency is what a timed audit's deadline rests on. It reads the
 hardware's locations, their latencies, compute and memory, and its links with their capacities, and nothing of the
 audits' frame. -/

@@ -13,8 +13,8 @@ import Proofs.ResourceAccounting.Actual.Split
 between them) are at most the device's state and memory (`Run.Memory`), and the memory link and side channels carry at
 most the device's bandwidth and side capacities. Summed over accounts, each charge is
 the device's whole (each gate has one account, `sum_width_filter`), and that is what compute rate, memory and links
-bound. `fits_of_feasible` takes links from the feasible set and memory from the run (`Feasible`'s `Memory` bounds the
-circuit's `state` only); the per-class rates stay a hypothesis, as `Feasible` prices compute one way only.
+bound. A computation of the feasible set (`Slowdown.Security.H`) has the memory and the links; the per-class rates stay
+a hypothesis, as the feasible set prices compute one way only.
 
 The converse, that the schedule charges everything an account's gates use: `covers_ingress`, when every wire into
 `chip` from outside it runs on the memory link or a side channel toward its device end, the chip's ingress from an
@@ -75,19 +75,6 @@ theorem fits {ι α E : Type} [Fintype α] (R : Actual.Run L) (d : Device ι) (c
   · simp only [Actual.Run.schedule]
     rw [sum_width_filter]
     exact (hM mem hmem (t + 1)).trans hMm
-
-open Classical in
-/-- **A feasible run's schedule fits the device**, when its locations `chip` and `mem` and its links are the device's,
-its memory per run is the hardware's and each op class runs at most at its rate. `Feasible`'s `Memory` bounds only the
-circuit's `state` (`memory_of_mem` derives it from the run's), so the run's memory is a hypothesis of its own. -/
-theorem fits_of_feasible {ι α E : Type} [Fintype α] (R : Actual.Run L) {H : Hardware L E} {usage : Usage R.A E}
-    (hF : Feasible H R.A usage) (hM : R.Memory H.units H.M) (d : Device ι) (chip mem : Finset L)
-    (cls : Fin R.A.N → Option OpClass) (acct : Fin R.A.N → α) (hbm : E × L) (side : ι → E × L)
-    (hΦ : ∀ o, R.A.ComputeRate {chip ∪ mem} (R.A.classPrice cls o) (fun _ => d.rate o))
-    (hchip : chip ∈ H.units) (hmem : mem ∈ H.units) (hMc : H.M chip ≤ d.chip) (hMm : H.M mem ≤ d.mem)
-    (hbw : H.β hbm.1 ≤ d.bw) (hcap : ∀ i, H.β (side i).1 ≤ d.cap i) :
-    (R.schedule chip mem cls acct usage.link hbm side).Fits d :=
-  fits R d chip mem cls acct hbm side hΦ hM hchip hmem hMc hMm hF.2.2.2.2 hbw hcap
 
 open Classical in
 /-- **The schedule charges the chip's ingress**: when every wire into `chip` from outside it runs on the memory link

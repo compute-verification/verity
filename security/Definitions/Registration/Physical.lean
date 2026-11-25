@@ -8,9 +8,9 @@ public import Definitions.Pouw.Confidence
 The actual-circuit model's physical assumptions.
 A physical assumption is a constraint on the actual circuit `A` of one run, a `Prop` over `Placed` taken as a hypothesis
 by what needs it, never a global assumption; `TrustedUnits` is one on a strategy, a map from coins to runs, since what a
-certifier sends is a function of its record across runs. The *feasible set* is the actual circuits that meet the
-constraints on one run (`Feasible`); each guarantee names the ones it uses. Each that fails frees a different covert
-resource:
+certifier sends is a function of its record across runs. The *feasible set* of a hardware is the computations that meet
+causality, compute rate, memory and links on it (`Slowdown.Security.H`); each guarantee names the constraints it uses.
+Each that fails frees a different covert resource:
 
 | Constraint | What it says | What its failure frees |
 | --- | --- | --- |
@@ -226,11 +226,5 @@ gate uses of its location's compute (`π`, its work) and the link each wire uses
 structure Usage {L : Type*} (A : Placed L) (E : Type*) where
   π : Fin A.N → ℕ
   link : Fin A.N → Fin A.N → E
-
-/-- **The feasible set**: `A` meets every physical assumption on one run on the hardware `H`, read with `usage`.
-`TrustedUnits`, on a strategy, is taken beside it. -/
-def Feasible {L E : Type*} (H : Hardware L E) (A : Placed L) (usage : Usage A E) : Prop :=
-  A.Causal H.ℓ ∧ A.ComputeRate H.units usage.π H.compute ∧ A.SequentialSpeed H.ring H.D H.span ∧
-    A.Memory H.units H.M ∧ A.Links H.ends H.β usage.link
 
 end ResourceAccounting

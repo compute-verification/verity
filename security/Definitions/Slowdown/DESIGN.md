@@ -41,8 +41,8 @@ its ring's multiplications take to answer (`ResourceAccounting.RingResponder`), 
 location and its oracle locations. No theorem yet reads that from `H`: `pous_slot` takes the audit's device model
 at its deadline as a premise.
 
-`H` leaves out `ResourceAccounting.Feasible`'s sequential speed and a bound on depth a tick, which no claim over `H`
-reads. Dropping a clause enlarges `H`, so the statement holds of more computations. The rest of the `Hardware` bundle
+`H` leaves out sequential speed (`Placed.SequentialSpeed`), a latency ceiling (`Placed.LatencyAtMost`) and a bound on
+depth a tick, which no claim over `H` reads. Dropping a clause enlarges `H`, so the statement holds of more computations. The rest of the `Hardware` bundle
 (the ring, the trusted devices' leaves, buckets, jitter, record cells) is protocol structure, which `H` doesn't read.
 
 ## The training bound is a parameter

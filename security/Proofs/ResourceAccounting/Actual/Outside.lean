@@ -2,6 +2,7 @@ module
 
 public import Proofs.ResourceAccounting.Actual.Physical
 public import Definitions.Registration.Server
+public import Definitions.Slowdown.Security
 public import Proofs.ResourceAccounting.Actual.Device
 import Mathlib.Algebra.BigOperators.Ring.Finset
 import Mathlib.Algebra.Order.BigOperators.Group.Finset
@@ -208,19 +209,17 @@ theorem server_link :
   simp [server, Hardware.ofLeaves]
 
 open Classical in
-/-- **Each GPU of a server is a device.** The schedule a run feasible on the server induces at GPU `i` fits the device
-with the die's state, the device memory's bits, the memory link's bandwidth and the host and switch links as side
-channels, when each op class runs at most at its rate there. -/
-theorem server_gpu_fits {α : Type} [Fintype α] (R : Actual.Run (Loc n))
-    {usage : Usage R.A (Wire n)}
-    (hF : Feasible (server n die host fabric chip dram ram queue world store bus peer net) R.A usage)
-    (hM : R.Memory Set.univ (server n die host fabric chip dram ram queue world store bus peer net).M) (i : Fin n)
-    (rate : OpClass → ℕ) (cls : Fin R.A.N → Option OpClass) (acct : Fin R.A.N → α)
-    (hΦ : ∀ o, R.A.ComputeRate {{Loc.die i} ∪ {Loc.mem i}} (R.A.classPrice cls o) (fun _ => rate o)) :
-    (R.schedule {Loc.die i} {Loc.mem i} cls acct usage.link (Wire.store i, Loc.die i)
+/-- **Each GPU of a server is a device.** The schedule a computation feasible on the server (`Slowdown.Security.H`)
+induces at GPU `i` fits the device with the die's state, the device memory's bits, the memory link's bandwidth and the
+host and switch links as side channels, when each op class runs at most at its rate there. -/
+theorem server_gpu_fits {α : Type} [Fintype α] (M : Slowdown.Security.Computation (Loc n) (Wire n))
+    (hM : M ∈ Slowdown.Security.H (server n die host fabric chip dram ram queue world store bus peer net)) (i : Fin n)
+    (rate : OpClass → ℕ) (cls : Fin M.run.A.N → Option OpClass) (acct : Fin M.run.A.N → α)
+    (hΦ : ∀ o, M.run.A.ComputeRate {{Loc.die i} ∪ {Loc.mem i}} (M.run.A.classPrice cls o) (fun _ => rate o)) :
+    (M.run.schedule {Loc.die i} {Loc.mem i} cls acct M.usage.link (Wire.store i, Loc.die i)
       (fun b : Bool => (if b then Wire.bus i else Wire.peer i, Loc.die i))).Fits
       ⟨chip, dram, rate, store, fun b => if b then bus else peer⟩ := by
-  refine fits_of_feasible R hF hM _ _ _ cls acct _ _ (by convert hΦ) (Set.mem_univ _) (Set.mem_univ _) ?_ ?_ ?_ ?_
+  refine fits M.run _ _ _ cls acct _ _ (by convert hΦ) hM.2.2.1 (Set.mem_univ _) (Set.mem_univ _) ?_ ?_ hM.2.2.2 ?_ ?_
   · simp [server, Hardware.ofLeaves]
   · simp [server, Hardware.ofLeaves]
   · simp [server, Hardware.ofLeaves]

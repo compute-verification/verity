@@ -52,7 +52,7 @@ Current terms and notation, one line each, ``- **Term** (area): definition. Code
 - **Dither** (PoUW): PoUW's no-fold design, beside H1's fold: it commits each segment's noised prefix sums before its challenge and opens sampled output cells after it. Code: `Pouw.Dither`.
 - **Docket** (SPOT): what a run is committed to before any challenge: its circuit's digest, its pieces, the sampling rule and the committed roots. Code: `Spot.Docket`.
 - **Epoch**: one round: the hardware runs, then the run is verified; for network attestation T ticks.
-- **Feasible set**: 𝓕, every circuit with all the properties the accounting layer establishes of the actual circuit. Code: `ResourceAccounting.Feasible`.
+- **Feasible set**: 𝓕, the computations the hardware can run: causal at its latencies, within each location's compute rate and memory, and within each link's capacity. Code: `Slowdown.Security.H`.
 - **Fixed finder**: a construction from the prover's strategy that outputs a SHA-512 collision, the only thing `ecr/sha-512` applies to.
 - **Fixed operand** (PoUW): B_w, a GEMM operand fixed before the salt and reused by id, such as model weights. Code: `Pouw.Layout.fixedId`.
 - **Fixture registry**: `artifacts.json`, the root index of the tree's replicated data files: each file's path by its `art:` id, its bytes in the evidence store. `research data` registers and fetches one.

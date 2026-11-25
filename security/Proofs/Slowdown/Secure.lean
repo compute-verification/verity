@@ -244,12 +244,6 @@ theorem Secure : Guarantees.Secure := by
       (by rw [Nat.cast_add]; exact add_le_add hcov le_rfl)
   exact absurd (h2.trans hY) (not_le.2 hlt)
 
-/-- **A computation the tree's feasible set holds is in `H`**, where its memory limit holds of what the run holds:
-`H` asks less of the circuit than `ResourceAccounting.Feasible` (no sequential speed) and more of memory. -/
-theorem mem_H_of_feasible {L E : Type*} (hw : Hardware L E) (M : Computation L E)
-    (hF : Feasible hw M.run.A M.usage) (hM : M.run.Memory hw.units hw.M) : M ∈ H hw :=
-  ⟨hF.1, hF.2.1, hM, hF.2.2.2.2⟩
-
 /-- The links of a feasible computation deliver to a window's server at most `b ω` bits. -/
 theorem delivered_le_capacity {L E : Type*} [Fintype E] [DecidableEq L] (F : Frame L E) (M : Computation L E)
     (hM : M ∈ H F.hw) (i : Fin F.n) (j : Fin F.cuts.J) : M.delivered F i j univ ≤ F.b * F.ω := by
