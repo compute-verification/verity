@@ -8,7 +8,7 @@ Current terms and notation, one line each, ``- **Term** (area): definition. Code
 - **Accounting layer**: the accounting protocols (`verity/protocols/accounting`), compilation first, then compute, memory and network, each attester inside one; it gives the policy layer verified properties of blocks, and nothing else. Code: `Scheme`.
 - **Actual circuit**: everything the developer's hardware computes in a period, treated as one Boolean circuit, each gate placed at a device and a tick. Code: `ResourceAccounting.Placed`.
 - **Adapter**: what attaches Verity to one serving system (`adapters/`), only what completeness rests on: its compiler, and finding the engine's values for Verity's commitment functions.
-- **Admissible set**: 𝒜 = 𝓕 ∩ ⋂_p 𝒜_p, where an accepted run lies except with probability Σ_p δ_p and the cryptographic terms. Code: `Slowdown.Security.H`, `Slowdown.Security.A`.
+- **Admissible set**: 𝒜 = 𝓕 ∩ ⋂_p 𝒜_p, where an accepted run lies except with probability Σ_p δ_p and the cryptographic terms. Code: `Slowdown.Security.H`, `Slowdown.Security.A`, `Slowdown.Guarantees.RunSecure`.
 - **Adversary resource model**: the world's compute, which every result is stated against (`world-inference-2027` in `calibration/census/adversary.json`).
 - **Advice**: the bits of the prover's choices after registration about its declared circuit, requests among them: their length is those choices' number in log space, at most ℓ_a an epoch, committed before the challenges and never interpreted. Code: `Compiler.run`.
 - **After-landing run** (landing): the whole `verity check` (`--kind after-landing`), run beside each candidate and beside `main` each time it moves.

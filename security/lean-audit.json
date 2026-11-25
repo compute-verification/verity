@@ -401,7 +401,7 @@
   },
   "Slowdown.Security.A": {
    "owner": "@compute-research",
-   "digest": "6227553a35d340ed2b73291625db56a9b4867712be121a1807a0dd4f8c8c4ad8",
+   "digest": "cf2d431bce1cbd29ce5238da013cbf5fa0be4def3b8dffb5a4b8ae6a611f96e7",
    "why": "The computations consistent with what the audits account for, the second of the three sets Secure says share no member; an audit's guarantee puts an accepted run's computation in it."
   },
   "Slowdown.Security.Frame.BoundAtMost": {
@@ -411,7 +411,7 @@
   },
   "Slowdown.Security.H": {
    "owner": "@compute-research",
-   "digest": "e9bb92b6d233bc72f7db1dd8ca5299490025d1c48e6f8834d0173620db19c5ce",
+   "digest": "91170cd3e6f5e7219c8fae57d2b7711d3f54b2e39d2db2086c556574ea98d26e",
    "why": "The feasible computations, the first of the three sets Secure says share no member; that a machine's computation is in it is the hardware model's claim."
   },
   "Spot.Sampling.Adaptive.Play.Drawn": {
@@ -4601,6 +4601,11 @@
   "Pous.SecurityProofs.StreamedWipeResidual": {
    "honest": ["Pous.SecurityProofs.StreamedWipeResidual_honest"],
    "nontrivial": "Pous.SecurityProofs.StreamedWipeResidual_nontrivial"
+  },
+  "Slowdown.SecurityProofs.RunSecure": {
+   "honest": ["Slowdown.SecurityProofs.RunSecure_honest"],
+   "nontrivial": ["Slowdown.SecurityProofs.RunSecure_nontrivial"],
+   "kind": "exclusion"
   },
   "Slowdown.SecurityProofs.Secure": {
    "honest": ["Slowdown.SecurityProofs.Secure_honest"],
@@ -23141,6 +23146,149 @@
    "type_hash": "1818bdeba041ed089562c62f1bdfca840e31d46eea7c3d7d1641b810be2e0a65",
    "unfolded_hash": "1e535fc6bd1fe03ebd96f63598ba952b0d5b07b7b2c443e780e6f525974dcb3d"
   },
+  "Slowdown.SecurityProofs.RunSecure": {
+   "owner": "@compute-research",
+   "signature": ["Slowdown.SecurityProofs.RunSecure.{u_1, u_2} : Slowdown.Guarantees.RunSecure"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [
+     "ResourceAccounting.Hardware.units",
+     "Slowdown.Security.Frame.BoundAtMost",
+     "Slowdown.Security.H",
+     "Verity.Sound"
+    ],
+    "open": ["ResourceAccounting.Placed.Faithful", "ResourceAccounting.Placed.Holding"],
+    "reads": [
+     "ResourceAccounting.Cuts",
+     "ResourceAccounting.Cuts.J",
+     "ResourceAccounting.Cuts.mk",
+     "ResourceAccounting.Cuts.τ",
+     "ResourceAccounting.Hardware",
+     "ResourceAccounting.Hardware.M",
+     "ResourceAccounting.Hardware.compute",
+     "ResourceAccounting.Hardware.ends",
+     "ResourceAccounting.Hardware.mk",
+     "ResourceAccounting.Hardware.β",
+     "ResourceAccounting.Hardware.ℓ",
+     "ResourceAccounting.Placed",
+     "ResourceAccounting.Placed.Causal",
+     "ResourceAccounting.Placed.ComputeRate",
+     "ResourceAccounting.Placed.Links",
+     "ResourceAccounting.Placed.cut",
+     "ResourceAccounting.Placed.declaration",
+     "ResourceAccounting.Placed.mk",
+     "ResourceAccounting.Placed.readOn",
+     "ResourceAccounting.Placed.region",
+     "ResourceAccounting.Placed.stateIn",
+     "ResourceAccounting.Placed.t",
+     "ResourceAccounting.Placed.toCircuit",
+     "ResourceAccounting.Placed.work",
+     "ResourceAccounting.Placed.x",
+     "ResourceAccounting.Usage",
+     "ResourceAccounting.Usage.link",
+     "ResourceAccounting.Usage.mk",
+     "ResourceAccounting.Usage.π",
+     "ResourceAccounting.boundary",
+     "ResourceAccounting.linkCapacity"
+    ]
+   },
+   "type_hash": "a82e07e26df4fe234de962152fc2ed32a13828dfeeed442ed38464ccec4ec0eb",
+   "unfolded_hash": "78ea5818e36aab585f7beab3c6e0c3771d0ba05ef8fbdd70f956bda58644a049"
+  },
+  "Slowdown.SecurityProofs.RunSecure_honest": {
+   "owner": "@compute-research",
+   "signature": ["Slowdown.SecurityProofs.RunSecure_honest : Slowdown.Guarantees.RunSecure_honest"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": [
+     "ResourceAccounting.Cuts",
+     "ResourceAccounting.Cuts.J",
+     "ResourceAccounting.Cuts.mk",
+     "ResourceAccounting.Cuts.τ",
+     "ResourceAccounting.Hardware",
+     "ResourceAccounting.Hardware.M",
+     "ResourceAccounting.Hardware.compute",
+     "ResourceAccounting.Hardware.ends",
+     "ResourceAccounting.Hardware.mk",
+     "ResourceAccounting.Hardware.units",
+     "ResourceAccounting.Hardware.β",
+     "ResourceAccounting.Hardware.ℓ",
+     "ResourceAccounting.Placed",
+     "ResourceAccounting.Placed.Causal",
+     "ResourceAccounting.Placed.ComputeRate",
+     "ResourceAccounting.Placed.Faithful",
+     "ResourceAccounting.Placed.Holding",
+     "ResourceAccounting.Placed.Links",
+     "ResourceAccounting.Placed.mk",
+     "ResourceAccounting.Placed.readOn",
+     "ResourceAccounting.Placed.region",
+     "ResourceAccounting.Placed.t",
+     "ResourceAccounting.Placed.toCircuit",
+     "ResourceAccounting.Placed.work",
+     "ResourceAccounting.Placed.x",
+     "ResourceAccounting.Usage",
+     "ResourceAccounting.Usage.link",
+     "ResourceAccounting.Usage.mk",
+     "ResourceAccounting.Usage.π",
+     "ResourceAccounting.boundary",
+     "ResourceAccounting.linkCapacity"
+    ]
+   },
+   "type_hash": "57ee70cf16d9821caed74980e94903c823011b3e08de1e53365a4eb1ee25f75d",
+   "unfolded_hash": "d064da0887879967f651562bb3df2847d9cbe2d33793f4d4c10157f85adc1f1e"
+  },
+  "Slowdown.SecurityProofs.RunSecure_nontrivial": {
+   "owner": "@compute-research",
+   "signature": ["Slowdown.SecurityProofs.RunSecure_nontrivial : Slowdown.Guarantees.RunSecure_nontrivial"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": [
+     "ResourceAccounting.Cuts",
+     "ResourceAccounting.Cuts.J",
+     "ResourceAccounting.Cuts.mk",
+     "ResourceAccounting.Cuts.τ",
+     "ResourceAccounting.Hardware",
+     "ResourceAccounting.Hardware.M",
+     "ResourceAccounting.Hardware.compute",
+     "ResourceAccounting.Hardware.ends",
+     "ResourceAccounting.Hardware.mk",
+     "ResourceAccounting.Hardware.units",
+     "ResourceAccounting.Hardware.β",
+     "ResourceAccounting.Hardware.ℓ",
+     "ResourceAccounting.Placed",
+     "ResourceAccounting.Placed.Causal",
+     "ResourceAccounting.Placed.ComputeRate",
+     "ResourceAccounting.Placed.Faithful",
+     "ResourceAccounting.Placed.Holding",
+     "ResourceAccounting.Placed.Links",
+     "ResourceAccounting.Placed.cut",
+     "ResourceAccounting.Placed.declaration",
+     "ResourceAccounting.Placed.mk",
+     "ResourceAccounting.Placed.readOn",
+     "ResourceAccounting.Placed.region",
+     "ResourceAccounting.Placed.stateIn",
+     "ResourceAccounting.Placed.t",
+     "ResourceAccounting.Placed.toCircuit",
+     "ResourceAccounting.Placed.work",
+     "ResourceAccounting.Placed.x",
+     "ResourceAccounting.Usage",
+     "ResourceAccounting.Usage.link",
+     "ResourceAccounting.Usage.mk",
+     "ResourceAccounting.Usage.π",
+     "ResourceAccounting.boundary",
+     "ResourceAccounting.linkCapacity"
+    ]
+   },
+   "type_hash": "73ba1dc112bb3f5fec58aef0bc00b832fc3cdd1ed73be5c83426c36439f154e2",
+   "unfolded_hash": "e1eed7633970839920108796483a226ee9dfb44a98d18c0449094331c468e8eb"
+  },
   "Slowdown.SecurityProofs.Secure": {
    "owner": "@compute-research",
    "signature": ["Slowdown.SecurityProofs.Secure.{u_1, u_2} : Slowdown.Guarantees.Secure"],
@@ -23165,6 +23313,7 @@
      "ResourceAccounting.Hardware.ends",
      "ResourceAccounting.Hardware.mk",
      "ResourceAccounting.Hardware.β",
+     "ResourceAccounting.Hardware.ℓ",
      "ResourceAccounting.Placed",
      "ResourceAccounting.Placed.Causal",
      "ResourceAccounting.Placed.ComputeRate",
@@ -23210,6 +23359,7 @@
      "ResourceAccounting.Hardware.mk",
      "ResourceAccounting.Hardware.units",
      "ResourceAccounting.Hardware.β",
+     "ResourceAccounting.Hardware.ℓ",
      "ResourceAccounting.Placed",
      "ResourceAccounting.Placed.Causal",
      "ResourceAccounting.Placed.ComputeRate",
@@ -23254,6 +23404,7 @@
      "ResourceAccounting.Hardware.mk",
      "ResourceAccounting.Hardware.units",
      "ResourceAccounting.Hardware.β",
+     "ResourceAccounting.Hardware.ℓ",
      "ResourceAccounting.Placed",
      "ResourceAccounting.Placed.Causal",
      "ResourceAccounting.Placed.ComputeRate",
@@ -23301,6 +23452,7 @@
      "ResourceAccounting.Hardware.mk",
      "ResourceAccounting.Hardware.units",
      "ResourceAccounting.Hardware.β",
+     "ResourceAccounting.Hardware.ℓ",
      "ResourceAccounting.Placed",
      "ResourceAccounting.Placed.Causal",
      "ResourceAccounting.Placed.ComputeRate",
@@ -23348,6 +23500,7 @@
      "ResourceAccounting.Hardware.mk",
      "ResourceAccounting.Hardware.units",
      "ResourceAccounting.Hardware.β",
+     "ResourceAccounting.Hardware.ℓ",
      "ResourceAccounting.Placed",
      "ResourceAccounting.Placed.Causal",
      "ResourceAccounting.Placed.ComputeRate",
@@ -27052,6 +27205,7 @@
    "Spot.Sampling.Adaptive.life_harm_budget": "frozen (obligation,no-function): It takes KnowledgeSound and BindSound (security/Proofs/Spot/Sampling/OneStage.lean:85, :94), open obligations of the backend, as hypotheses, and it is about the abstract lifetime of one-stage audits rather than a Lean function.",
    "Spot.Sampling.audit_executionPhase_split_of_record": "frozen (obligation,no-function): It takes KnowledgeSound and BindSound (security/Proofs/Spot/Sampling/OneStage.lean:85, :94), open obligations of the backend, as hypotheses, and it is about the abstract one-stage audit rather than a Lean function.",
    "Pous.SecurityProofs.StreamedWipeResidual": "frozen (no-function): A bound in the streamed-label wipe's game (security/Definitions/Pous/Model/StreamedWipe.lean) at any fill of N labels of b bits and any k reads, at the wipe residual wipeResidual N k b s (security/Definitions/Pous/Model/StreamedWipeResidual.lean), whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryAttester.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict.",
+   "Slowdown.SecurityProofs.RunSecure": "frozen (no-function): It is about an arbitrary run (a Verity.Game whose outcomes each have a computation behind them) at a public frame, and its premises are the four audits' soundness for their clauses of the computations consistent with the audits' amounts, each at an acceptance taken as a predicate, rather than a function's acceptance: the premises are the slots an audit's guarantee fills, and no audit's verifier is named in it.",
    "Slowdown.SecurityProofs.Secure": "frozen (no-function): It is about an arbitrary computation (Slowdown.Security.Computation: a run of the machines with what each gate uses and the declared circuit's gates) at a public frame, and its premises are two sets of computations, the feasible ones and those consistent with the audits' amounts, rather than a function's acceptance. The theorems that state it of an audit's acceptance (security/Proofs/Slowdown/SecureAudit.lean) take that audit's soundness as hypotheses and are not listed."
   },
   "conjectures": {
@@ -38953,7 +39107,7 @@
    }
   },
   "Definitions.Registration.Physical": {
-   "digest": "6b614e4829143b0c65395b46562652310ad5ff2fd86b9d69d8607b642844a07f",
+   "digest": "9b2f8ca913f2fc824b8f95b808635a27e5350b0f3d80373deebae1ebf4adb499",
    "definitions": {
     "ResourceAccounting.Actual.Run.record": "7c09a3913558bb212ac0b15a38c54af6be56b6dfaa8fabe2941527fd8ec2e1a1",
     "ResourceAccounting.CausalStrategy": "19e69404b925ce6b3d6439d8198296a031f9b690b813203173d716a4f53cbb50",
@@ -38965,6 +39119,7 @@
     "ResourceAccounting.Hardware.ends": "52d5466ec6fea2f7068cbef6786e647e6a65823459a1bd641e373ac63f4883fc",
     "ResourceAccounting.Hardware.units": "8ebcf337efe7f169d57953cc12b436b0917d9c4a94ec6857265820f6a74de410",
     "ResourceAccounting.Hardware.β": "7e09d416f203c98b504c9f621c92e71810383fdcf82ce7751eafc43cb3a42dc4",
+    "ResourceAccounting.Hardware.ℓ": "7647294623e8f1e222cca9e9da472ec4a99d327fc80a33203c2593a90475da92",
     "ResourceAccounting.Placed.Causal": "5b09cea2ee749b7b1972c1dd1a895cb0633a219db98e37d8ac8319ee760ea10f",
     "ResourceAccounting.Placed.ComputeRate": "9b39c20e44fb25b5f2e3c337b11446d7cbad6b0728eb726f638e75d80a8e9ca2",
     "ResourceAccounting.Placed.Links": "34e95f809838ff91a0d6ef2930e7ec03492a1fd62eba7b8e09d6ceabed058870",
@@ -39806,6 +39961,15 @@
     "Slowdown.Guarantees.SlowdownRemoteMonitoringPeriod_nontrivial": "bd390a6eacde06b94c75edb30eb3c0bbdcb10217b08c4d9d9eba7816c825c950"
    }
   },
+  "Definitions.Slowdown.Guarantees.Run": {
+   "digest": "62e302f0b811de30cae3d47d0d34e7c8c29a0d8dc4c3b6d6022dfd399c0c0cc2",
+   "definitions": {
+    "Slowdown.Guarantees.RunSecure": "e83d66772c7a6aa7d95c7c2b44c92734115151eeed18af1cfdf752ab388114bc",
+    "Slowdown.Guarantees.RunSecure_honest": "1057b09b75ade35ebb59cd489d6f7c3a97a5b8b3ec1b5b2baa677578e2f2b205",
+    "Slowdown.Guarantees.RunSecure_nontrivial": "cfe9d4c7640a1e2533adae3a832d9f001a910747390b66aa6a09d7e3afad5340",
+    "Slowdown.Guarantees.still": "ef65aa2627ae4547e45920cce111ea8f286a4d4f4d44fa91ade3941866d47127"
+   }
+  },
   "Definitions.Slowdown.Guarantees.Secure": {
    "digest": "374ef490f20d43a4e1bda58c7e8e6c49282b5f14f8c5a10137c188aa5deeda57",
    "definitions": {
@@ -39906,9 +40070,9 @@
    }
   },
   "Definitions.Slowdown.Security": {
-   "digest": "9f5f22b54c2797d453399bce7f3881dc904faf175a8f29f6b262c1830f3a4d21",
+   "digest": "09c40045f06b00d74abe732c8fe31e831e9f1db4044d8ad4b90e12f4602b3109",
    "definitions": {
-    "Slowdown.Security.A": "6227553a35d340ed2b73291625db56a9b4867712be121a1807a0dd4f8c8c4ad8",
+    "Slowdown.Security.A": "cf2d431bce1cbd29ce5238da013cbf5fa0be4def3b8dffb5a4b8ae6a611f96e7",
     "Slowdown.Security.B": "941bef0b41ae6ddef2ee79832a86eda4e83ff7bd7ec6aff12d57f1175090bdd6",
     "Slowdown.Security.Computation": "0b44a3d9953aa43abaedf78a2ee48ec84253deb19405689a530b3f84bc743643",
     "Slowdown.Security.Computation.carries": "e5008ff946e49914d0877e3b4776fd92b94166dd8738d9c2d4712a00e8b9c75b",
@@ -39921,6 +40085,8 @@
     "Slowdown.Security.Computation.run": "2e55867015638136dc6b01f8761ea138b316fb89b79af013d9e10ce3c1a2b7f3",
     "Slowdown.Security.Computation.usage": "63e40c58db83f3176c0265136345d320b5422777e8999f6e85ce5d4e64878ace",
     "Slowdown.Security.Computation.window": "98db3afdc725da353ac04268a9f522dd27b5b19cc5aa04722d461bda8e8f4cbf",
+    "Slowdown.Security.DeliveredAtLeast": "95cf2fc96ef143d51cd97db369be8b6a14f3efc5a208a215af8fa3d83d17cda5",
+    "Slowdown.Security.DeliveredAtMost": "227bb382f880449df741f5542850b73fc93f9afd4c67a94e3658c3d84ecc25dd",
     "Slowdown.Security.Divides": "a112745460cc66320c8434a466f69365f15533438f7c2f512163fd73e740c678",
     "Slowdown.Security.Frame": "8e222d81c73f702ec3c0dbe716590b46f2b0613554d2a2ef4c422e6546bf9341",
     "Slowdown.Security.Frame.BoundAtMost": "4cac74c1e713e1bde6796a3dd50105f8a55c2b9c9369b516167b82678d7f9ae7",
@@ -39939,7 +40105,8 @@
     "Slowdown.Security.Frame.unaccounted": "ae3c7ec0bd4f3434743e6077e446dfa97769e53dd87819bcec3497f62009e8fe",
     "Slowdown.Security.Frame.Φ": "100a32b99d60210bbf6931879814af8c575b05b201aaacf306b42152fb39970d",
     "Slowdown.Security.Frame.ω": "addc5733fbc60cfb5f4edd4883079638b6d9bb1ef7acabcff869d4860775a9cb",
-    "Slowdown.Security.H": "e9bb92b6d233bc72f7db1dd8ca5299490025d1c48e6f8834d0173620db19c5ce",
+    "Slowdown.Security.H": "91170cd3e6f5e7219c8fae57d2b7711d3f54b2e39d2db2086c556574ea98d26e",
+    "Slowdown.Security.HeldAtLeast": "269c94dbe705342bbadfec8954ffcf826ac78878e20758e1d1ec1b122dc48d86",
     "Slowdown.Security.Recipe": "83d67626995defcffd4dfdb87e481a0c921891d3b3162502a121e4b43a625faa",
     "Slowdown.Security.Recipe.Nstar": "e33efec7a9e5c8e94e81b007733a79b4fc460ad277848aa623b414039d279b63",
     "Slowdown.Security.Recipe.b_w": "7845624f7b6f2b2a6a8ccf32729e54977ce4fd9a8c8b77021a810b814c3eb36a",
@@ -39948,7 +40115,8 @@
     "Slowdown.Security.Recipe.o_w": "46cef5a37853782cbe714fe98dc061481e95692be6e33e5fc3898e48487049c1",
     "Slowdown.Security.Recipe.reuse": "6ce924a0566b1c78d801b68d482a013704afcfc115ff093961701d8cf5e40545",
     "Slowdown.Security.Recipe.w_e": "b0254dc27a5bda8618d7624e35500098d50563d8f96eda17f0ea5dbef9a14236",
-    "Slowdown.Security.Trains": "7a1f4490d1441e27287994475fad631fcc935a3b54cc416f48326a979af0d2d7"
+    "Slowdown.Security.Trains": "7a1f4490d1441e27287994475fad631fcc935a3b54cc416f48326a979af0d2d7",
+    "Slowdown.Security.WorkAtLeast": "4b4bc77cc044dae33b61881ab3bc38a641811068afc79a520fb58d2da19e8b58"
    }
   },
   "Definitions.Slowdown.SecurityWitness": {

@@ -3,8 +3,9 @@
 `security/Definitions/Slowdown/Security.lean` holds the three sets of the security argument, and
 `security/Definitions/Slowdown/Guarantees/Secure.lean` its one statement, `Slowdown.Guarantees.Secure`: at a frame
 `F`, no computation is in `H F.hw`, in `A F x_s x_b x_w y_b` and in `B F p Y`, for every count `Y` at least the fit
-bound (`Frame.bound`). This file says why the hardware model `H` has the clauses it has, what it takes from an H100's
-card, and what the statement does not give.
+bound (`Frame.bound`). `security/Definitions/Slowdown/Guarantees/Run.lean` holds the two statements over a run's
+coins that stand on it, `RunSecure` and `RunComplete`. This file says why the hardware model `H` has the clauses it
+has, what it takes from an H100's card, what the statements over a run say, and what they do not give.
 
 ## The computation and the hardware
 
@@ -13,8 +14,9 @@ every gate at a leaf and a tick, each gate's value, and what each leaf holds at 
 uses of its location's compute (a pricing), the link each wire between two leaves runs on, the registered inputs, and
 the gates of the declared circuit.
 
-The hardware (`ResourceAccounting.Hardware`) is leaves and links. `H` reads five of its fields: its locations (sets
-of leaves), each location's compute a tick and its memory, and each link's ends and capacity. A machine is a choice of
+The hardware (`ResourceAccounting.Hardware`) is leaves and links. `H` reads six of its fields: the latency between
+two leaves, its locations (sets of leaves), each location's compute a tick and its memory, and each link's ends and
+capacity. A machine is a choice of
 leaves and links. `Hardware.ofLeaves` gives every set of leaves the sum of its leaves' limits, and `server n` is `n`
 GPUs (a die and a device memory each), the host, the switch between the GPUs and the world outside. More GPUs, the
 host's compute and a switch are more leaves of the one model.
@@ -23,7 +25,7 @@ host's compute and a switch are more leaves of the one model.
 
 | Clause | Statement | Lean | `Secure` reads it at | False without it |
 | --- | --- | --- | --- | --- |
-| Order | a gate reads only gates placed no later than itself | `Placed.Causal` at no latency | every wire | `order_needed` |
+| Latency | a gate reads only gates placed no later than the latency between their leaves allows | `Placed.Causal` | every wire, of which it reads the order of the two gates alone | `order_needed`, of the order |
 | Work | at the computation's pricing, the gates at a location over an interval of ticks cost at most its compute a tick | `Placed.ComputeRate` | the frame's servers, over missed windows | `work_needed` |
 | Memory | at every tick a location's leaves hold, with what is in flight between them, at most its memory | `Actual.Run.Memory` | the frame's servers, at the cuts that open covered windows | `memory_needed` |
 | Bandwidth | each link delivers at most its capacity a tick, each way | `Placed.Links` | the links across each server's boundary, over covered windows | `bandwidth_needed` |
@@ -33,10 +35,15 @@ clauses, is in `A` and is in `B` at the fit bound, so the statement is false wit
 set at the hardware alone: every audit's claim (`security/Proofs/Slowdown/SecureAudit.lean`) is about the same `H`,
 whatever frame the audit covers.
 
-`H` leaves out what no claim reads: the latency between leaves (the proofs use the order of a wire's two gates, never
-how far apart they are), `ResourceAccounting.Feasible`'s sequential speed, and a bound on depth a tick. Dropping a
-clause enlarges `H`, so the statement holds of more computations. The rest of the `Hardware` bundle (the ring, the
-trusted devices' leaves, buckets, jitter, record cells) is protocol structure, which `H` doesn't read.
+`Secure` reads of the latency clause only that a gate reads no gate placed after it. The latency itself is what a
+timed audit's deadline rests on: PoUS bounds what a location computes before a challenge's answer is due by the ticks
+its ring's multiplications take to answer (`ResourceAccounting.RingResponder`), which is a latency between the
+location and its oracle locations. No theorem yet reads that from `H`: `secure_pous` takes the audit's device model
+at its deadline as a premise.
+
+`H` leaves out `ResourceAccounting.Feasible`'s sequential speed and a bound on depth a tick, which no claim over `H`
+reads. Dropping a clause enlarges `H`, so the statement holds of more computations. The rest of the `Hardware` bundle
+(the ring, the trusted devices' leaves, buckets, jitter, record cells) is protocol structure, which `H` doesn't read.
 
 ## Choices the proofs forced
 
@@ -54,6 +61,25 @@ trusted devices' leaves, buckets, jitter, record cells) is protocol structure, w
   exhaust a link, "at least `x_b`" alone leaves the link's whole capacity unaccounted for.
 - **The run is cut into windows.** A window the memory and bandwidth audits cover is charged what it can read of a
   reference training algorithm, and a window they miss is charged its work.
+
+## The statements over a run
+
+A run is a `Verity.Game`, the verifier's coins and the developer's messages, and each of its outcomes has a
+computation behind it (`world`). Its probability is `Verity.Game.prob` and soundness is `Verity.Sound`, Core's, so a
+protocol's guarantee in that form composes with these with no translation.
+
+- **`RunSecure`.** Every outcome's computation is in `H`. The verifier accepts only when the four audits do, and each
+  audit is sound, at its own error, for one clause of `A` at each window it covers: bits held (`HeldAtLeast`), bits
+  delivered to the declared circuit (`DeliveredAtLeast`), bits delivered in all (`DeliveredAtMost`) and work
+  (`WorkAtLeast`). Then against every developer the verifier accepts a run whose computation is in `B` with
+  probability at most the errors added over the windows. `Secure` is the step from `A` to `B` inside it.
+- **`RunComplete`.** A developer whose strategy each audit rejects with probability at most its own error is
+  rejected with probability at most their sum.
+
+The four soundness premises are the audits' slots: `RunSecure` takes them, and an audit fills one by proving that
+premise of its own acceptance. A slot's clause is in bits of wire width, the unit of `A`. An audit's guarantee is
+about a device model's schedule and, for a wipe, about information (below), so no audit fills a slot yet, and a
+clause's unit moves to whatever the first audit that fills one proves.
 
 ## The H100's parameters
 
@@ -89,7 +115,13 @@ processors), the sideband buses, and the limits the firmware sets (the clocks, t
 - **Three audits, two frames.** Work and memory are at the device (the die and its device memory), bandwidth at the
   die. `secure_device` takes work, memory and a count; no theorem takes all three certificates.
 - **The audits' premises.** Each theorem over an audit's coins takes that the audit's schedule is the one the run
-  induces on the device, and the premises of the audit's own guarantee.
+  induces on the device, and the premises of the audit's own guarantee, among them the memory audit's device model at
+  its deadline, which is not derived from `H`'s latency.
 - **Training.** That a run which trains is in `B` is `Trains`'s premises: `reach` and `fits` are empirical, and the
   three `shared` premises bound what a reference training algorithm shares with the declared circuit.
 - **Units.** `A` counts bits held, and a wipe's guarantee bounds the information that survives it.
+- **The run's slots.** `RunSecure` holds with the four audits' soundness as premises. The theorems over an audit's
+  coins (`SecureAudit.lean`) are in `Pouw.pr`, each at its own frame, and none is restated as a slot's premise.
+- **Honest acceptance.** `RunComplete` takes each audit's rejection probability at the honest strategy; that an
+  honest developer's computation is in `H ∩ A` at nonzero amounts is shown at one small run (`served_mem`), not at a
+  served workload.

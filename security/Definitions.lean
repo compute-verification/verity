@@ -82,6 +82,7 @@ public import Definitions.Slowdown.Guarantees.Layered
 public import Definitions.Slowdown.Guarantees.Fit
 public import Definitions.Slowdown.Guarantees.FitRate
 public import Definitions.Slowdown.Guarantees.Secure
+public import Definitions.Slowdown.Guarantees.Run
 public import Definitions.Slowdown.Guarantees.Slowdown
 public import Definitions.Slowdown.Guarantees.Remote
 public import Definitions.Slowdown.Guarantees.RemoteMonitoringPeriod

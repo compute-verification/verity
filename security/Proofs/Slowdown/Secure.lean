@@ -30,9 +30,9 @@ least the sum over the windows of `Φ len − x_w + o_w`, with no premise on the
 Over the audits' runs, with `ExceptWith` the tree's "fails on an accepted run with probability at most `ε`":
 `accounted_of_windows` adds the audits' errors over the windows (an accepted run is in `A` outside
 `|missed| δ_w + (n J − |missed|) (δ_s + δ_b + δ_y)`), and `secure_pr` is `Secure` there (where every run is feasible
-and an accepted run is in `A` outside `δ`, an accepted run is not in `B` outside `δ`). `single_m`, `single_b` and `single_Φ`
-are the limits of a frame of one server, and `server_m`, `server_b` and `server_Φ` those of a server of `n` GPUs with
-its host and switch.
+and an accepted run is in `A` outside `δ`, an accepted run is not in `B` outside `δ`). `single_m`, `single_b` and
+`single_Φ` are the limits of a frame of one server, and `server_m`, `server_b` and `server_Φ` those of a server of `n`
+GPUs with its host and switch.
 -/
 
 @[expose] public section
@@ -130,6 +130,8 @@ theorem Secure : Guarantees.Secure := by
     have hrb : M.run.A.width (((M.run.A.into (M.run.A.region (F.server i)
         (Set.Ico (F.cuts.τ j.castSucc) (F.cuts.τ j.succ)))).filter fun g => M.run.A.x g ∉ F.server i) ∩
         M.declaredᶜ) ≤ min (F.b * F.ω) y_b - x_b := by
+      change x_b ≤ M.delivered F i j M.declared at hxb
+      change M.delivered F i j univ ≤ y_b at hyb
       unfold Computation.delivered at hxb hyb
       have h1 := delivered_outside M.run.A hL (F.server i) (F.cuts.τ j.castSucc) (F.cuts.τ j.succ) M.declared
         (x := x_b) (y := y_b) (by convert hxb) (by convert hyb)
@@ -137,7 +139,7 @@ theorem Secure : Guarantees.Secure := by
         (min_le_min_right _ (Nat.mul_le_mul (hb i) (hω j))) _))
     exact Nat.cast_le.2 (window_reads_le M.run.A hC (subset_biUnion_of_mem F.server (mem_univ i)) M.registered_input
       hτ M.declared _ hrs hrb (hT.shared_carried i j hu) (hT.shared_read i j hu))
-  have hk := fitRate_of_reads_but M.run.A (fun _ _ => 0) F.hw.ends F.hw.β M.usage.link F.n F.server M.registered
+  have hk := fitRate_of_reads_but M.run.A F.hw.ℓ F.hw.ends F.hw.β M.usage.link F.n F.server M.registered
     M.registered_input F.t F.cuts ((F.unaccounted x_s x_b y_b p : ℕ) : ℝ) c emb T start F.missed p.Nstar p.b_w p.w_e
     F.disjoint hC hL hbw hwe.le (Nat.cast_nonneg _) hS hgap fun Q hQ => ⟨hT.reach Q hQ, hT.fits Q hQ⟩
   have hcount : _ ≤ ∑ u ∈ F.missed, (F.Φ * F.len (finProdFinEquiv.symm u).2 - x_w + p.o_w) :=
@@ -159,11 +161,10 @@ theorem Secure : Guarantees.Secure := by
   exact absurd (h2.trans hY) (not_le.2 hlt)
 
 /-- **A computation the tree's feasible set holds is in `H`**, where its memory limit holds of what the run holds:
-`H` asks less of the circuit than `ResourceAccounting.Feasible` (no latency, no sequential speed) and more of
-memory. -/
+`H` asks less of the circuit than `ResourceAccounting.Feasible` (no sequential speed) and more of memory. -/
 theorem mem_H_of_feasible {L E : Type*} (hw : Hardware L E) (M : Computation L E)
     (hF : Feasible hw M.run.A M.usage) (hM : M.run.Memory hw.units hw.M) : M ∈ H hw :=
-  ⟨fun g a ha => (Nat.le_add_right _ _).trans (hF.1 g a ha), hF.2.1, hM, hF.2.2.2.2⟩
+  ⟨hF.1, hF.2.1, hM, hF.2.2.2.2⟩
 
 /-- The links of a feasible computation deliver to a window's server at most `b ω` bits. -/
 theorem delivered_le_capacity {L E : Type*} [Fintype E] [DecidableEq L] (F : Frame L E) (M : Computation L E)
@@ -190,7 +191,7 @@ theorem secure_work {L E : Type*} [Fintype E] [DecidableEq L] (F : Frame L E) (h
   have hΦ : ∀ i, F.hw.compute (F.server i) ≤ F.Φ := fun i =>
     le_sup (f := fun i => F.hw.compute (F.server i)) (mem_univ i)
   have hin : ∀ i j, finProdFinEquiv (i, j) ∈ F.missed := fun i j => hF ▸ mem_univ _
-  obtain ⟨P, hP⟩ := ResourceAccounting.SecurityProofs.Actual.ServerBlocksAt M.run.A (fun _ _ => 0)
+  obtain ⟨P, hP⟩ := ResourceAccounting.SecurityProofs.Actual.ServerBlocksAt M.run.A F.hw.ℓ
     (fun _ => M.run.A.N) F.hw.ends F.hw.β M.usage.link F.n F.server M.registered M.registered_input F.t F.cuts ∅
     F.disjoint hC (computeRate_N M.run.A _) hL
   have hcount : _ ≤ ∑ u ∈ F.missed, (F.Φ * F.len (finProdFinEquiv.symm u).2 - x_w + p.o_w) :=
@@ -283,7 +284,7 @@ theorem accounted_of_windows
   by_contra hno
   refine hω.2 fun i j => ?_
   by_contra hij
-  refine hno ⟨finProdFinEquiv (i, j), mem_univ _, hω.1, fun hg => hij ⟨fun hn => ?_, by simpa using hg.2⟩⟩
+  refine hno ⟨finProdFinEquiv (i, j), mem_univ _, hω.1, fun hg => hij ⟨fun hn => ?_, by simpa [WorkAtLeast] using hg.2⟩⟩
   have h3 := hg.1 hn
   simp only [Equiv.symm_apply_apply] at h3
   exact ⟨h3 none, h3 (some true), h3 (some false)⟩

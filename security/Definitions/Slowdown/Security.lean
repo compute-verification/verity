@@ -16,7 +16,7 @@ prohibited. Each set is a predicate on a computation `M` alone, at public parame
   actual circuit, its gates' values and what each leaf holds at each tick) with what each gate uses of its location's
   compute and the link each wire runs on, the registered inputs, and the gates of the declared circuit (`declared`),
   which the audits' amounts are about.
-* **`H hw`**, the feasible computations, four clauses of the hardware alone: a gate reads no gate placed after it,
+* **`H hw`**, the feasible computations, four clauses of the hardware alone: the latency between a wire's two gates,
   the compute rate, memory on what the run holds, and the links.
 * **`A F x_s x_b x_w y_b`**, what the audits account for: at each window they cover, the window's server holds at
   least `x_s` bits of the declared circuit's gates at the cut that opens it, and during the window the links deliver
@@ -26,7 +26,8 @@ prohibited. Each set is a predicate on a computation `M` alone, at public parame
   multiplications that meets the recipe `p`'s premises (`Trains`).
 
 `Slowdown.Guarantees.Secure` is the emptiness, at `Y` the fit bound (`Frame.bound`) on what the limits less the
-amounts leave (`Frame.unaccounted`).
+amounts leave (`Frame.unaccounted`). `Slowdown.Guarantees.RunSecure` is the statement over a run's coins: the
+verifier accepts a run whose computation is prohibited with probability at most the audits' errors together.
 -/
 
 @[expose] public section
@@ -136,27 +137,51 @@ end Computation
 variable {L E : Type*}
 
 /-- **`𝓗`, the feasible computations** on the hardware `hw`, four clauses: a gate reads only gates placed no later
-than itself (`Placed.Causal` at no latency); the gates at a location over an interval of ticks use at most the
-location's compute a tick (`Placed.ComputeRate`); each location's state, what its leaves hold and what is in flight
-between them, is within the location's memory at every tick (`Actual.Run.Memory`); and each link delivers at most its
-capacity a tick (`Placed.Links`). These are `ResourceAccounting.Feasible`'s clauses less its latencies and its
-sequential speed, with memory on what is held, not on the bits read later alone. It reads the hardware's locations,
-their compute and memory, and its links with their capacities, and nothing of the audits' frame. -/
+than the latency between their leaves allows (`Placed.Causal`); the gates at a location over an interval of ticks use
+at most the location's compute a tick (`Placed.ComputeRate`); each location's state, what its leaves hold and what is
+in flight between them, is within the location's memory at every tick (`Actual.Run.Memory`); and each link delivers at
+most its capacity a tick (`Placed.Links`). These are `ResourceAccounting.Feasible`'s clauses less its sequential
+speed, with memory on what is held, not on the bits read later alone. `Guarantees.Secure` reads of the first clause
+only that a gate reads no gate placed after it; the latency is what a timed audit's deadline rests on. It reads the
+hardware's locations, their latencies, compute and memory, and its links with their capacities, and nothing of the
+audits' frame. -/
 def H (hw : Hardware L E) : Set (Computation L E) :=
-  {M | M.run.A.Causal (fun _ _ => 0) ∧ M.run.A.ComputeRate hw.units M.usage.π hw.compute ∧
+  {M | M.run.A.Causal hw.ℓ ∧ M.run.A.ComputeRate hw.units M.usage.π hw.compute ∧
     M.run.Memory hw.units hw.M ∧ M.run.A.Links hw.ends hw.β M.usage.link}
 
+section Clauses
+
+variable [DecidableEq L] (F : Frame L E) (i : Fin F.n) (j : Fin F.cuts.J)
+
+/-- **Memory's clause of `𝒜`** at window `(i, j)`: the window's server holds at least `x_s` bits of the declared
+circuit's gates at the cut that opens it (`Computation.holds`). -/
+def HeldAtLeast (x_s : ℕ) : Set (Computation L E) := {M | x_s ≤ M.holds F i j M.declared}
+
+/-- **Bandwidth's clause of `𝒜`** at window `(i, j)`: during the window the links deliver to its server at least
+`x_b` bits of the declared circuit's gates, a bit counted at each tick it is read (`Computation.delivered`). -/
+def DeliveredAtLeast (x_b : ℕ) : Set (Computation L E) := {M | x_b ≤ M.delivered F i j M.declared}
+
+/-- **The count's clause of `𝒜`** at window `(i, j)`: during the window the links deliver to its server at most
+`y_b` bits in all (the network attester's count; every feasible computation is delivered at most what the server's
+links carry). -/
+def DeliveredAtMost (y_b : ℕ) : Set (Computation L E) := {M | M.delivered F i j univ ≤ y_b}
+
+/-- **Work's clause of `𝒜`** at window `(i, j)`: the declared circuit's gates do at least `x_w` work in the
+window. -/
+def WorkAtLeast (x_w : ℕ) : Set (Computation L E) :=
+  {M | x_w ≤ M.run.A.work M.usage.π (M.window F i j ∩ M.declared)}
+
+end Clauses
+
 /-- **`𝒜`, the computations consistent with what the audits account for**, at the amounts `x_s`, `x_b`, `x_w` and
-`y_b`. At each window the memory and bandwidth audits cover, the window's server holds at least `x_s` bits of the
-declared circuit's gates at the cut that opens it (`Computation.holds`), and during the window the links deliver to its server at least `x_b`
-bits of them and at most `y_b` bits in all (the network attester's count; every feasible computation is delivered at
-most what the server's links carry), a bit counted at each tick it is read (`Computation.delivered`). At each window
-they miss, the declared circuit's gates do at least `x_w` work. -/
+`y_b`: at each window the memory and bandwidth audits cover, memory's clause, bandwidth's and the count's
+(`HeldAtLeast`, `DeliveredAtLeast`, `DeliveredAtMost`), and at each window they miss, work's (`WorkAtLeast`). Each
+clause is what one audit's guarantee concludes of an accepted run's computation. -/
 def A [DecidableEq L] (F : Frame L E) (x_s x_b x_w y_b : ℕ) : Set (Computation L E) :=
   {M | ∀ i j,
     (finProdFinEquiv (i, j) ∉ F.missed →
-      x_s ≤ M.holds F i j M.declared ∧ x_b ≤ M.delivered F i j M.declared ∧ M.delivered F i j univ ≤ y_b) ∧
-    (finProdFinEquiv (i, j) ∈ F.missed → x_w ≤ M.run.A.work M.usage.π (M.window F i j ∩ M.declared))}
+      M ∈ HeldAtLeast F i j x_s ∧ M ∈ DeliveredAtLeast F i j x_b ∧ M ∈ DeliveredAtMost F i j y_b) ∧
+    (finProdFinEquiv (i, j) ∈ F.missed → M ∈ WorkAtLeast F i j x_w)}
 
 /-- **A recipe**: the parameters of the premises on a reference training algorithm. `Nstar` is the fewest weights that
 reach the target loss, `b_w` the bits a window reads for each weight it uses, `w_e` the bits it reads for each thread it
