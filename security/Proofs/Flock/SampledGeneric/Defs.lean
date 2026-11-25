@@ -289,6 +289,9 @@ structure Exp (V : Type) where
 /-- `Pr[E]` in the experiment. -/
 noncomputable def Exp.pr {V : Type} (e : Exp V) (E : V → Prop) : ℝ≥0∞ := prob E e.g e.s
 
+/-- An experiment's probability is the run's (`Verity.Game.prob`) at its game and strategy. -/
+theorem Exp.pr_eq_prob {V : Type} (e : Exp V) (E : V → Prop) : e.pr E = prob E e.g e.s := rfl
+
 /-- **Post-processing**: the experiment, then an experiment that reads its view. -/
 def Exp.andThen {V W : Type} (e : Exp V) (f : V → Exp W) : Exp W :=
   ⟨e.g.bind fun v => (f v).g, Strategy.bind _ _ e.s fun v => (f v).s⟩

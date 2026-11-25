@@ -15,6 +15,7 @@ public import Proofs.ResourceAccounting.Actual.RegisteredSite
 public import Proofs.ResourceAccounting.Actual.RegisteredWitness
 public import Proofs.ResourceAccounting.Actual.LinkEnds
 public import Proofs.ResourceAccounting.Actual.Transducer
+public import Proofs.ResourceAccounting.Actual.ConfidenceDraw
 public import Proofs.ResourceAccounting.Defs.Actual.Source
 public import Proofs.ResourceAccounting.Actual.Sampler
 

@@ -119,6 +119,7 @@ public import Proofs.Compose.ComposeMonitoringPeriod.Honest
 public import Proofs.ResourceAccounting.Served
 public import Proofs.Pous.Obligation
 public import Proofs.Compose.Additive
+public import Proofs.Compose.JointPeriodDraw
 public import Proofs.Slowdown.ServingBlocks
 public import Proofs.Slowdown.ServingBlocks.Witnesses
 public import Proofs.ResourceAccounting.Defs.Actual.Source
