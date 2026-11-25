@@ -104,24 +104,4 @@ theorem w1Stop_computeSoundPerRunPriced [Fintype Q] [DecidableEq Q] [Fintype R] 
     (PearlC.W1Stop.w1Priced_nonneg dv hdv salt) P D g δ hg hG U hU w κ hκ hw t εs hεs inferInstance ι α ΩQ ΩS d r p
     pRead hq real
 
-/-- **At W1 priced, what the compute residual bounds**: `Run.pr_accepts_residual_perRunPriced_le` at
-`w1Stop_computeSoundPerRunPriced`'s certificate and error, with `cap` the device's compute over the period. -/
-theorem w1Stop_residual [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (dv : PearlC.W1.W1Device)
-    (hdv : PearlC.W1BudgetAbort.Positive dv) (salt : S → List ℕ) {P : PearlC.Protocol Q R S}
-    {D : PearlC.Layout → Prop} {g : ℝ} {δ : ℕ → ℕ → ℝ} (hg : g < 1)
-    (hG : PearlC.GGapPerCoin (PearlC.W1.w1Priced dv salt) P D g δ) {U : PearlC.Workload} (hU : U.InDomain P D)
-    {w : ℕ → ℕ} {κ : ℝ} (hκ : 0 ≤ κ) (hw : ∀ u < U.layout.N, P.Wref U.layout u = κ * w u) {t : ℕ} {εs : ℝ}
-    (hεs : εs ≤ 1) [Nonempty (PearlCCoins Q R S U w t)] {ι α ΩQ ΩS : Type} [Fintype α] [Fintype ΩQ] [Fintype ΩS]
-    [Nonempty ΩQ] [Nonempty ΩS] {d : Device ι} (r : Run d α (PearlCCoins Q R S U w t) ΩQ ΩS) {p : Price} {pRead : ℝ}
-    (hq : d.rate .oracle * (r.win .compute).len ≤ 2 ^ 64)
-    (real : RealizesPearlCPriced (PearlC.W1.w1Stop dv salt) P U w r p pRead) (cap : ℕ)
-    (lhs rest : PearlCCoins Q R S U w t × ΩQ × ΩS → ℝ)
-    (hdev : ∀ ω (x : ℕ), x ≤ r.work p ω → lhs ω ≤ ((cap - x : ℕ) : ℝ) + rest ω) :
-    Pouw.pr (fun ω => r.accepts .compute ω ∧
-      ((cap - ⌈(1 - g) * (1 - εs) * ∑ u ∈ Finset.range U.layout.N, P.Wref U.layout u
-        - pRead * r.pouwRead ω⌉₊ : ℕ) : ℝ) + rest ω < lhs ω)
-      ≤ (1 - εs) ^ t + δ (d.rate .oracle * (r.win .compute).len) U.layout.N :=
-  r.pr_accepts_residual_perRunPriced_le
-    (w1Stop_computeSoundPerRunPriced dv hdv salt hg hG hU hκ hw hεs r hq real) cap lhs rest hdev
-
 end ResourceAccounting
