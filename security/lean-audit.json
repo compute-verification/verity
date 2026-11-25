@@ -4931,29 +4931,13 @@
    "type_hash": "e9201ef974a43ae555299415df13c299f7b1b329742eb56fe742cc09a5d3c8b2",
    "unfolded_hash": "577ae1e2947fea70b19fa6f4f630736a5bec70c581654b691eb16511ae2317a8"
   },
-  "ResourceAccounting.SecurityProofs.Actual.SlowdownServerBlocksCap": {
-   "type_hash": "63ca7d130072841c447d6fe71ffc6611e4f6da761b85ac8f64f1a2a2599cf06e",
-   "unfolded_hash": "8bc632a14d5494309ea80a0d4819436e7fc6a6c74cae4ef1e9bac3f34bacc0a3"
-  },
   "ResourceAccounting.SecurityProofs.Actual.SlowdownServerBlocksCapSlots": {
    "type_hash": "37367957b50fb032120d987f127fc94f99f0395715efb73ad8a2fffeeda69ea5",
    "unfolded_hash": "8047c81b2b963c88364aba47153802702b3913eff2b21addd96ac904c7b38603"
   },
-  "ResourceAccounting.SecurityProofs.Actual.ThreadedRate": {
-   "type_hash": "7fe548ffbe19cc1be1737a6518f5296eb920e26bc0aa38741852e17fc4ba9fed",
-   "unfolded_hash": "12d53fcaf2abf2300f5fc5c904391dcd4fdec82768ed3b7c586efedfd11c6e86"
-  },
   "ResourceAccounting.SecurityProofs.Actual.ThreadedRateSlots": {
    "type_hash": "012817a055806342cc7e5ea836ece0c0ead59b52980a0447be2537fc90727405",
    "unfolded_hash": "b7e2a5c6120c4925aec90ba71e200f84498e3c357719b7eb2964bee4abb8b96d"
-  },
-  "ResourceAccounting.SecurityProofs.Actual.ThreadedRuntime": {
-   "type_hash": "5fc4bba2fc2d91b5a75f0f03a3204d1b29e5c153c73ae7385695cf871275aade",
-   "unfolded_hash": "69b6d60930be7356dd615986f154a8368c6e61a887073c346c8e4cf5aec68fe4"
-  },
-  "ResourceAccounting.SecurityProofs.Actual.ThreadedRuntimeDark": {
-   "type_hash": "30a3514b4115c12a4751222010338fa4785ec562b6d6fd983df489874eedd92f",
-   "unfolded_hash": "1f38038b24c534cbe650e6d1cc9a0f4a15a4087d58cdba79005d5bda4d04c3da"
   },
   "ResourceAccounting.SecurityProofs.Actual.ThreadedRuntimeDarkSlots": {
    "type_hash": "46854086539499de4e6cb6b762494b7799134d026b86bdbedf83ea769ba388d5",
@@ -16753,43 +16737,6 @@
    "type_hash": "e9201ef974a43ae555299415df13c299f7b1b329742eb56fe742cc09a5d3c8b2",
    "unfolded_hash": "577ae1e2947fea70b19fa6f4f630736a5bec70c581654b691eb16511ae2317a8"
   },
-  "ResourceAccounting.SecurityProofs.Actual.SlowdownServerBlocksCap": {
-   "owner": "@lean",
-   "signature": [
-    "ResourceAccounting.SecurityProofs.Actual.SlowdownServerBlocksCap.{u_1, u_2} :",
-    "  ResourceAccounting.Guarantees.Actual.SlowdownServerBlocksCap"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [
-     "ResourceAccounting.Placed.Causal",
-     "ResourceAccounting.Placed.ComputeRate",
-     "ResourceAccounting.Placed.Links",
-     "Slowdown.Assumptions.WeightsIncompressible",
-     "Slowdown.Threading.Threaded",
-     "Verity.RegisteredCircuit.Contains"
-    ],
-    "reads": [
-     "ResourceAccounting.Placed",
-     "ResourceAccounting.Placed.cut",
-     "ResourceAccounting.Placed.declaration",
-     "ResourceAccounting.Placed.mk",
-     "ResourceAccounting.Placed.readOn",
-     "ResourceAccounting.Placed.region",
-     "ResourceAccounting.Placed.state",
-     "ResourceAccounting.Placed.t",
-     "ResourceAccounting.Placed.toCircuit",
-     "ResourceAccounting.Placed.work",
-     "ResourceAccounting.Placed.x",
-     "ResourceAccounting.boundary",
-     "ResourceAccounting.linkCapacity"
-    ]
-   },
-   "type_hash": "63ca7d130072841c447d6fe71ffc6611e4f6da761b85ac8f64f1a2a2599cf06e",
-   "unfolded_hash": "8bc632a14d5494309ea80a0d4819436e7fc6a6c74cae4ef1e9bac3f34bacc0a3"
-  },
   "ResourceAccounting.SecurityProofs.Actual.SlowdownServerBlocksCapSlots": {
    "owner": "@lean",
    "signature": [
@@ -16827,42 +16774,6 @@
    "type_hash": "37367957b50fb032120d987f127fc94f99f0395715efb73ad8a2fffeeda69ea5",
    "unfolded_hash": "8047c81b2b963c88364aba47153802702b3913eff2b21addd96ac904c7b38603"
   },
-  "ResourceAccounting.SecurityProofs.Actual.ThreadedRate": {
-   "owner": "@lean",
-   "signature": [
-    "ResourceAccounting.SecurityProofs.Actual.ThreadedRate.{u_1, u_2} : ResourceAccounting.Guarantees.Actual.ThreadedRate"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [
-     "ResourceAccounting.Placed.Causal",
-     "ResourceAccounting.Placed.ComputeRate",
-     "ResourceAccounting.Placed.Links",
-     "Slowdown.Assumptions.WeightsIncompressible",
-     "Slowdown.Threading.Threaded",
-     "Verity.RegisteredCircuit.Contains"
-    ],
-    "reads": [
-     "ResourceAccounting.Placed",
-     "ResourceAccounting.Placed.cut",
-     "ResourceAccounting.Placed.declaration",
-     "ResourceAccounting.Placed.mk",
-     "ResourceAccounting.Placed.readOn",
-     "ResourceAccounting.Placed.region",
-     "ResourceAccounting.Placed.state",
-     "ResourceAccounting.Placed.t",
-     "ResourceAccounting.Placed.toCircuit",
-     "ResourceAccounting.Placed.work",
-     "ResourceAccounting.Placed.x",
-     "ResourceAccounting.boundary",
-     "ResourceAccounting.linkCapacity"
-    ]
-   },
-   "type_hash": "7fe548ffbe19cc1be1737a6518f5296eb920e26bc0aa38741852e17fc4ba9fed",
-   "unfolded_hash": "12d53fcaf2abf2300f5fc5c904391dcd4fdec82768ed3b7c586efedfd11c6e86"
-  },
   "ResourceAccounting.SecurityProofs.Actual.ThreadedRateSlots": {
    "owner": "@lean",
    "signature": [
@@ -16899,79 +16810,6 @@
    },
    "type_hash": "012817a055806342cc7e5ea836ece0c0ead59b52980a0447be2537fc90727405",
    "unfolded_hash": "b7e2a5c6120c4925aec90ba71e200f84498e3c357719b7eb2964bee4abb8b96d"
-  },
-  "ResourceAccounting.SecurityProofs.Actual.ThreadedRuntime": {
-   "owner": "@lean",
-   "signature": [
-    "ResourceAccounting.SecurityProofs.Actual.ThreadedRuntime.{u_1, u_2} :",
-    "  ResourceAccounting.Guarantees.Actual.ThreadedRuntime"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [
-     "ResourceAccounting.Placed.Causal",
-     "ResourceAccounting.Placed.ComputeRate",
-     "ResourceAccounting.Placed.Links",
-     "Slowdown.Assumptions.WeightsIncompressible",
-     "Slowdown.Threading.Threaded",
-     "Verity.RegisteredCircuit.Contains"
-    ],
-    "reads": [
-     "ResourceAccounting.Placed",
-     "ResourceAccounting.Placed.cut",
-     "ResourceAccounting.Placed.declaration",
-     "ResourceAccounting.Placed.mk",
-     "ResourceAccounting.Placed.readOn",
-     "ResourceAccounting.Placed.region",
-     "ResourceAccounting.Placed.state",
-     "ResourceAccounting.Placed.t",
-     "ResourceAccounting.Placed.toCircuit",
-     "ResourceAccounting.Placed.work",
-     "ResourceAccounting.Placed.x",
-     "ResourceAccounting.boundary",
-     "ResourceAccounting.linkCapacity"
-    ]
-   },
-   "type_hash": "5fc4bba2fc2d91b5a75f0f03a3204d1b29e5c153c73ae7385695cf871275aade",
-   "unfolded_hash": "69b6d60930be7356dd615986f154a8368c6e61a887073c346c8e4cf5aec68fe4"
-  },
-  "ResourceAccounting.SecurityProofs.Actual.ThreadedRuntimeDark": {
-   "owner": "@lean",
-   "signature": [
-    "ResourceAccounting.SecurityProofs.Actual.ThreadedRuntimeDark.{u_1, u_2} :",
-    "  ResourceAccounting.Guarantees.Actual.ThreadedRuntimeDark"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [
-     "ResourceAccounting.Placed.Causal",
-     "ResourceAccounting.Placed.ComputeRate",
-     "ResourceAccounting.Placed.Links",
-     "Slowdown.Assumptions.WeightsIncompressible",
-     "Slowdown.Threading.Threaded"
-    ],
-    "reads": [
-     "ResourceAccounting.Placed",
-     "ResourceAccounting.Placed.cut",
-     "ResourceAccounting.Placed.declaration",
-     "ResourceAccounting.Placed.mk",
-     "ResourceAccounting.Placed.readOn",
-     "ResourceAccounting.Placed.region",
-     "ResourceAccounting.Placed.state",
-     "ResourceAccounting.Placed.t",
-     "ResourceAccounting.Placed.toCircuit",
-     "ResourceAccounting.Placed.work",
-     "ResourceAccounting.Placed.x",
-     "ResourceAccounting.boundary",
-     "ResourceAccounting.linkCapacity"
-    ]
-   },
-   "type_hash": "30a3514b4115c12a4751222010338fa4785ec562b6d6fd983df489874eedd92f",
-   "unfolded_hash": "1f38038b24c534cbe650e6d1cc9a0f4a15a4087d58cdba79005d5bda4d04c3da"
   },
   "ResourceAccounting.SecurityProofs.Actual.ThreadedRuntimeDarkSlots": {
    "owner": "@lean",
@@ -26922,9 +26760,6 @@
    "Flock.SecurityProofs.recursiveZK_os_gap": "frozen (obligation,no-function,world-unlisted): RecursiveZK at the operating system's salts. It takes the outer proof's zero knowledge as an open obligation, as a simulation statement it has no acceptance of a function to take, and it takes A3 per test (UniformRandomBytesTest, slack eta) at the one event it bounds, a premise that isn't on the list.",
    "Flock.SecurityProofs.MaskedKS": "frozen (no-function): Claims.Flock.KS at the deployed masked record (deployZk at the deployed relation, SHA-512): a knowledge-soundness bound for every prover against the record's interaction, with no acceptance of a Lean function to take; it takes no premise, since the claim's collision finder is in its bound.",
    "Flock.SecurityProofs.MaskedZK": "frozen (no-function): Claims.Flock.ZK at the deployed masked record (zkDeployed at the deployed plan, SHA-512): as a simulation statement against every malicious verifier it has no acceptance of a function to take; stated at the hm96 hiding gap, it takes no premise beyond 0 < t.",
-   "ResourceAccounting.SecurityProofs.Actual.ThreadedRate": "frozen (no-function,world-unlisted): It is stated over an arbitrary actual circuit (ResourceAccounting.Placed) and a threaded reference circuit its developer's declaration contains, and takes the physical constraints Causal, ComputeRate and Links, a bound on the state at each wipe, and the named WeightsIncompressible on the reference circuit, per-run hypotheses rather than a function's acceptance.",
-   "ResourceAccounting.SecurityProofs.Actual.ThreadedRuntime": "frozen (no-function,world-unlisted): It is stated over an arbitrary actual circuit (ResourceAccounting.Placed) and a threaded reference circuit its developer's declaration contains, and takes the physical constraints Causal, ComputeRate and Links, a bound on the state at each window's start, and the named WeightsIncompressible on the reference circuit, per-run hypotheses rather than a function's acceptance.",
-   "ResourceAccounting.SecurityProofs.Actual.ThreadedRuntimeDark": "frozen (no-function,world-unlisted): It is stated over an arbitrary actual circuit (ResourceAccounting.Placed) and a threaded reference circuit its developer's declaration contains in part (a PartialContainment, security/Definitions/Slowdown/Dark.lean), and takes the physical constraints Causal, ComputeRate and Links, a bound on the state at each window's start, and the named WeightsIncompressible on the reference circuit, per-run hypotheses rather than a function's acceptance.",
    "ResourceAccounting.SecurityProofs.Actual.ServerBlocksAt": "frozen (no-function,world-unlisted): It is stated over an arbitrary actual circuit (ResourceAccounting.Placed) and arbitrary cuts of its run, and takes the physical constraints Causal, ComputeRate and Links about it, per-run hypotheses that are not on the premises list, rather than a function's acceptance.",
    "ResourceAccounting.SecurityProofs.Actual.ThreadedRateSlots": "frozen (no-function,world-unlisted): It is stated over an arbitrary actual circuit (ResourceAccounting.Placed) and a threaded reference circuit its developer's declaration contains, and takes the physical constraints Causal, ComputeRate and Links, a bound on the state at each wipe, and the named WeightsIncompressibleSlots on the reference circuit, weights charged per parameter slot, per-run hypotheses rather than a function's acceptance.",
    "ResourceAccounting.SecurityProofs.Actual.ThreadedRuntimeSlots": "frozen (no-function,world-unlisted): It is stated over an arbitrary actual circuit (ResourceAccounting.Placed) and a threaded reference circuit its developer's declaration contains, and takes the physical constraints Causal, ComputeRate and Links, a bound on the state at each window's start, and the named WeightsIncompressibleSlots on the reference circuit, weights charged per parameter slot, per-run hypotheses rather than a function's acceptance.",
@@ -27129,7 +26964,6 @@
    "ResourceAccounting.SecurityProofs.RatePooled": "frozen (no-function,hash): As ResourceAccounting.SecurityProofs.PooledSampling for the passes of a chained window of abstract chip programs in the random-oracle model (security/Definitions/Poub/RateAuditRemote.lean, Chain), each pass's correct receipts its good set, not the rate audit's code.",
    "ResourceAccounting.SecurityProofs.RateWindowSample": "frozen (no-function,hash): As ResourceAccounting.SecurityProofs.PooledSampling's one round at M = P * N, for a chained window of abstract chip programs in the random-oracle model whose single draw opens d of all its passes' receipts after the last root (security/Definitions/Poub/RateAuditHorizon.lean, WindowCoins, Chain.correctAll), not the rate audit's code.",
    "ResourceAccounting.SecurityProofs.RateRunSample": "frozen (no-function,hash): As ResourceAccounting.SecurityProofs.PooledSampling for a session of such windows, each a function of the earlier windows' coins and draws (security/Definitions/Poub/RateAuditHorizon.lean, Session), each window's correct receipts its good set, and again with every window's receipts good but the first holding at most K_w: abstract chip programs in the random-oracle model, not the rate audit's code.",
-   "ResourceAccounting.SecurityProofs.Actual.SlowdownServerBlocksCap": "frozen (no-function,world-unlisted): It is ThreadedRuntime's memory cap over an arbitrary actual circuit (ResourceAccounting.Placed) and a threaded reference circuit its developer's declaration contains, read as the compute dampener's windows hypothesis (Slowdown.Guarantees.SlowdownExecutionPhases) when one threading counts the residual and the declared computation together, under the physical constraints Causal, ComputeRate and Links, a bound on the state at each window's start and the named WeightsIncompressible, per-run hypotheses rather than a function's acceptance.",
    "ResourceAccounting.SecurityProofs.Actual.SlowdownServerBlocksCapSlots": "frozen (no-function,world-unlisted): It is ThreadedRuntimeSlots's memory cap over an arbitrary actual circuit (ResourceAccounting.Placed) and a threaded reference circuit its developer's declaration contains, read as the compute dampener's windows hypothesis (Slowdown.Guarantees.SlowdownExecutionPhases) when one threading counts the residual and the declared computation together, under the physical constraints Causal, ComputeRate and Links, a bound on the state at each window's start and the named WeightsIncompressibleSlots, weights charged per parameter slot, per-run hypotheses rather than a function's acceptance.",
    "ResourceAccounting.SecurityProofs.Remote.PooledSample": "frozen (no-function): It is about the verifier's opening draw as deployed (ResourceAccounting.Remote.Sample: Key.subset on the first SHA-512 blocks prf t gives window t's uniform openings coin, released after the window's size and correct receipts are fixed, the rejection sampler exact on each draw's first block and its fallbacks free) and a trace over the coins, not a function's acceptance (Poub.draws, Key.subset); the session is the one the prover plays, which holds no coin commitment while it runs (the challenger sends each coin as it releases it and its commitment to the session's coins only after the prover's last root, with the outcome: soundness's ruling of 27 Oct, no hiding premise on the root), so Live, Refused and Counted are stated on that session and no hiding term is charged (note:20261027T0118Z-report-coin-order-rbw), Refused lets an opened receipt through only correct or moved off the row its root holds (ResourceAccounting.Remote.Sample.Receipts.held, by definition the plurality of the rows the receipt shows over the window's continuations, so read off its cut: ResourceAccounting.SecurityProofs.Remote.Binding.held_cont, tally_le_held), charged as the receipts' binding term (ResourceAccounting.Remote.Sample.Receipts.binding), which ResourceAccounting.SecurityProofs.Remote.ReceiptsBindingOfCR bounds under claim cr/sha-512 for the fork finder that runs the prover twice from the window's cut, at sum_t sqrt(|L_t| s_t (q_t^2/2^513 + split_t)), split_t the chance that the two runs' roots differ, which is not bounded here: the prover sends window t's roots before it holds anything of window t's openings coin, but that they read only the cut is not a premise (the gap binding-split; note:20261024T2140Z-report-err-terms, note:20261025T0010Z-report-bind-fork, note:20261025T0115Z-report-bind-close), and the coin function enters as the advantage of each window's distinguisher (claim prf/sha-512: SHA-512's keyed stream as a PRF, a term of the statement's error that no premise assumes and nothing prices), one a window and fixed by the session (ResourceAccounting.Remote.Sample.Session.distinguisher, read by Pous.pr, which is not a shape.events probability; note:20261024T1346Z-report-draw-oracle), and that audit.pooled's greedy reaches the pooled bound's supremum is not stated (note:20261024T0920Z-report-draw-exact)",
    "ResourceAccounting.SecurityProofs.Remote.LiveCoinsSampled": "frozen (no-function): It is ResourceAccounting.SecurityProofs.Remote.PooledSample at a fixed W, about the verifier's opening draw as deployed (ResourceAccounting.Remote.Sample: Key.subset on the first SHA-512 blocks prf t gives window t's uniform openings coin, released after the window's size and correct receipts are fixed, the rejection sampler exact on each draw's first block and its fallbacks free) and a trace over the coins, not a function's acceptance (Poub.draws, Key.subset); the session is the one the prover plays, which holds no coin commitment while it runs (the challenger sends each coin as it releases it and its commitment to the session's coins only after the prover's last root, with the outcome: soundness's ruling of 27 Oct, no hiding premise on the root), so Live, Refused and Counted are stated on that session and no hiding term is charged (note:20261027T0118Z-report-coin-order-rbw), Refused lets an opened receipt through only correct or moved off the row its root holds (ResourceAccounting.Remote.Sample.Receipts.held, by definition the plurality of the rows the receipt shows over the window's continuations, so read off its cut: ResourceAccounting.SecurityProofs.Remote.Binding.held_cont, tally_le_held), charged as the receipts' binding term (ResourceAccounting.Remote.Sample.Receipts.binding), which ResourceAccounting.SecurityProofs.Remote.ReceiptsBindingOfCR bounds under claim cr/sha-512 for the fork finder that runs the prover twice from the window's cut, at sum_t sqrt(|L_t| s_t (q_t^2/2^513 + split_t)), split_t the chance that the two runs' roots differ, which is not bounded here: the prover sends window t's roots before it holds anything of window t's openings coin, but that they read only the cut is not a premise (the gap binding-split; note:20261024T2140Z-report-err-terms, note:20261025T0010Z-report-bind-fork, note:20261025T0115Z-report-bind-close), and the coin function enters as the advantage of each window's distinguisher, one a window and fixed by the session (ResourceAccounting.Remote.Sample.Session.distinguisher, read by Pous.pr, which is not a shape.events probability; note:20261024T1346Z-report-draw-oracle), and that audit.pooled's greedy reaches the pooled bound's supremum is not stated (note:20261024T0920Z-report-draw-exact)",
@@ -27262,7 +27096,11 @@
    "Spot.Sampling.audit_executionPhase_split_of_record": "frozen (obligation,no-function): It takes KnowledgeSound and BindSound (security/Proofs/Spot/Sampling/OneStage.lean:85, :94), open obligations of the backend, as hypotheses, and it is about the abstract one-stage audit rather than a Lean function.",
    "Pous.SecurityProofs.StreamedWipeResidual": "frozen (no-function): A bound in the streamed-label wipe's game (security/Definitions/Pous/Model/StreamedWipe.lean) at any fill of N labels of b bits and any k reads, at the wipe residual wipeResidual N k b s (security/Definitions/Pous/Model/StreamedWipeResidual.lean), whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryAttester.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict.",
    "Slowdown.SecurityProofs.RunSecure": "frozen (no-function): It is about an arbitrary run (a Verity.Game whose outcomes each have a computation behind them) at a public frame, and its premises are the four audits' soundness for their clauses of the computations consistent with the audits' amounts, each at an acceptance taken as a predicate, rather than a function's acceptance: the premises are the slots an audit's guarantee fills, and no audit's verifier is named in it.",
-   "Slowdown.SecurityProofs.Secure": "frozen (no-function): It is about an arbitrary computation (Slowdown.Security.Computation: a run of the machines with what each gate uses and the declared circuit's gates) at a public frame, and its premises are two sets of computations, the feasible ones and those consistent with the audits' amounts, rather than a function's acceptance. The theorems that state it of an audit's acceptance (security/Proofs/Slowdown/SecureAudit.lean) take that audit's soundness as hypotheses and are not listed."
+   "Slowdown.SecurityProofs.Secure": "frozen (no-function): It is about an arbitrary computation (Slowdown.Security.Computation: a run of the machines with what each gate uses and the declared circuit's gates) at a public frame, and its premises are two sets of computations, the feasible ones and those consistent with the audits' amounts, rather than a function's acceptance. The theorems that state it of an audit's acceptance (security/Proofs/Slowdown/SecureAudit.lean) take that audit's soundness as hypotheses and are not listed.",
+   "ResourceAccounting.Guarantees.Actual.ThreadedRuntime": "unstated: ThreadedRuntimeSlots at one slot per weight gate, which no proof reads and no guarantee states",
+   "ResourceAccounting.Guarantees.Actual.ThreadedRate": "unstated: ThreadedRateSlots at one slot per weight gate, which no proof reads and no guarantee states",
+   "ResourceAccounting.Guarantees.Actual.ThreadedRuntimeDark": "unstated: ThreadedRuntimeDarkSlots at one slot per weight gate, which no proof reads and no guarantee states",
+   "ResourceAccounting.Guarantees.Actual.SlowdownServerBlocksCap": "unstated: SlowdownServerBlocksCapSlots at one slot per weight gate, which no proof reads and no guarantee states"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -27889,14 +27727,6 @@
     "∀ (a : Fin A.N), SetLike.instMembership.mem θ a → Eq (A.isInput a) Bool.true": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (i j : Fin n), Ne i j → Disjoint (X i) (X j)": "a disequality, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
-   "ResourceAccounting.SecurityProofs.Actual.SlowdownServerBlocksCap": {
-    "∀ (a : Fin A.N), SetLike.instMembership.mem θ a → Eq (A.isInput a) Bool.true": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (i j : Fin n), Ne i j → Disjoint (X i) (X j)": "a disequality, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (i : Fin n), instLENat.le (instHMul.hMul (Φ (X i)) ω) Γ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (i : Fin n), Real.instLE.le (ResourceAccounting.linkCapacity ends β (X i)).cast (instHMul.hMul α F)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (i : Fin n) (k : Nat), instLTNat.lt (instHMul.hMul k ω) t → Real.instLE.le (A.state (X i) (instHMul.hMul k ω)).cast R": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "instLENat.le (instHAdd.hAdd Mr Md) T.M.card": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
    "ResourceAccounting.SecurityProofs.Actual.SlowdownServerBlocksCapSlots": {
     "∀ (a : Fin A.N), SetLike.instMembership.mem θ a → Eq (A.isInput a) Bool.true": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (i j : Fin n), Ne i j → Disjoint (X i) (X j)": "a disequality, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -27904,17 +27734,6 @@
     "∀ (i : Fin n), Real.instLE.le (ResourceAccounting.linkCapacity ends β (X i)).cast (instHMul.hMul α F)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (i : Fin n) (k : Nat), instLTNat.lt (instHMul.hMul k ω) t → Real.instLE.le (A.state (X i) (instHMul.hMul k ω)).cast R": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "instLENat.le (instHAdd.hAdd Mr Md) T.M.card": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "ResourceAccounting.SecurityProofs.Actual.ThreadedRate": {
-    "∀ (a : Fin A.N), SetLike.instMembership.mem θ a → Eq (A.isInput a) Bool.true": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (i j : Fin n), Ne i j → Disjoint (X i) (X j)": "a disequality, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (i : Fin n), instLENat.le (instHMul.hMul (Φ (X i)) ω) Γ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (i : Fin n), Real.instLE.le (ResourceAccounting.linkCapacity ends β (X i)).cast r": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (i : Fin n) (j : Nat), instLTNat.lt (instHMul.hMul j p) t → Real.instLE.le (A.state (X i) (instHMul.hMul j p)).cast R": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Nat.instDvd.dvd p ω": "Nat.instDvd.dvd taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Nat.instDvd.dvd ω t": "Nat.instDvd.dvd taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (instHMul.hMul r ω.cast) R": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Real.instLE.le e.cast (instHDiv.hDiv (instHMul.hMul T.reuse.cast (instHMul.hMul 2 R)) (instHMul.hMul (instHMul.hMul 4 d.cast) b_w))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "ResourceAccounting.SecurityProofs.Actual.ThreadedRateSlots": {
     "∀ (a : Fin A.N), SetLike.instMembership.mem θ a → Eq (A.isInput a) Bool.true": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -27926,20 +27745,6 @@
     "Nat.instDvd.dvd ω t": "Nat.instDvd.dvd taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (instHMul.hMul r ω.cast) R": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Real.instLE.le e.cast (instHDiv.hDiv (instHMul.hMul T.reuse.cast (instHMul.hMul 2 R)) (instHMul.hMul (instHMul.hMul 4 d.cast) b_w))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "ResourceAccounting.SecurityProofs.Actual.ThreadedRuntime": {
-    "∀ (a : Fin A.N), SetLike.instMembership.mem θ a → Eq (A.isInput a) Bool.true": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (i j : Fin n), Ne i j → Disjoint (X i) (X j)": "a disequality, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (i : Fin n), instLENat.le (instHMul.hMul (Φ (X i)) ω) Γ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (i : Fin n), Real.instLE.le (ResourceAccounting.linkCapacity ends β (X i)).cast r": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (i : Fin n) (k : Nat), instLTNat.lt (instHMul.hMul k ω) t → Real.instLE.le (A.state (X i) (instHMul.hMul k ω)).cast R": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "ResourceAccounting.SecurityProofs.Actual.ThreadedRuntimeDark": {
-    "∀ (a : Fin A.N), SetLike.instMembership.mem θ a → Eq (A.isInput a) Bool.true": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (i j : Fin n), Ne i j → Disjoint (X i) (X j)": "a disequality, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (i : Fin n), instLENat.le (instHMul.hMul (Φ (X i)) ω) Γ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (i : Fin n), Real.instLE.le (ResourceAccounting.linkCapacity ends β (X i)).cast r": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (i : Fin n) (k : Nat), instLTNat.lt (instHMul.hMul k ω) t → Real.instLE.le (A.state (X i) (instHMul.hMul k ω)).cast R": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "ResourceAccounting.SecurityProofs.Actual.ThreadedRuntimeDarkSlots": {
     "∀ (a : Fin A.N), SetLike.instMembership.mem θ a → Eq (A.isInput a) Bool.true": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -39906,19 +39711,15 @@
    }
   },
   "Definitions.Slowdown.Guarantees.Actual.Slowdown": {
-   "digest": "f2cc8c8c4d67679fa6d32e87fbfbebcf793b010b8876d3e4621c4565e4fe936b",
+   "digest": "5a8dea7a30e6242044b4e6f4a753f1eb5b3c4e30f4097168baf27136c21716ec",
    "definitions": {
-    "ResourceAccounting.Guarantees.Actual.SlowdownServerBlocksCap": "a998441ae63e2a478c13c95896735a77a61e428bde313a9f95a3c68e5c5aa0eb",
     "ResourceAccounting.Guarantees.Actual.SlowdownServerBlocksCapSlots": "570926a3e984d7c6facfbdc6d31de8386ca2b414ff09c4823187041a93edaa01"
    }
   },
   "Definitions.Slowdown.Guarantees.Actual.Threaded": {
-   "digest": "fbb6e9b36281bbb72e4828c7dfcabbbc656fcc1a2543d3cb6855b12589b3896b",
+   "digest": "1d667d8a25756bbdddfff3f554f22f42d6b810dbe43c6971cdc37233542687c5",
    "definitions": {
-    "ResourceAccounting.Guarantees.Actual.ThreadedRate": "8ebb95c1e0cb9fe6ba81cd57a18d2a165f9adec86704c2dd1052e2275408c729",
     "ResourceAccounting.Guarantees.Actual.ThreadedRateSlots": "ba3ce198d13500513939601f601890124e06c9b8b0ec5cff125bfd698d1f1054",
-    "ResourceAccounting.Guarantees.Actual.ThreadedRuntime": "6ab8d916aa239823597f3d722b1043597590a25c3ee6b2f613ef4fdcc54af1de",
-    "ResourceAccounting.Guarantees.Actual.ThreadedRuntimeDark": "bcc3364950f48a5560ea8b86157c69580be9b80106c5de0197ecbc6cf5cb19dd",
     "ResourceAccounting.Guarantees.Actual.ThreadedRuntimeDarkSlots": "40952fea53f6170cb6e2ff753154e6499d054c4d9d7d7a83fe101d2ff2c0e0a2",
     "ResourceAccounting.Guarantees.Actual.ThreadedRuntimeSlots": "4272f45b1572802db94b2645e7dd51456df652dca61ea70766cb4c6be073efce"
    }
