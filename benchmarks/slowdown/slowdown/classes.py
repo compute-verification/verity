@@ -231,8 +231,8 @@ def covering(k: float, c_w: float, c_a: float) -> float:
 
 
 def threaded(k: float, b_a: float, b_w: float, d: float, e: float, c: float) -> float:
-    """`ThreadedThrottled`: `b_a |M| ≤ α Λ(αΓ) size(d)`, so a block of `k` fresh input bits does at most `k Λ(k) / b_a` counted
-    multiplications, with `Λ = max(e, c k / (4 d b_w))` (`Threading.bound`)."""
+    """`ThreadedThrottledSlots`: `b_a |M| ≤ α Λ(αΓ) size(d)`, so a block of `k` fresh input bits does at most `k Λ(k) / b_a`
+    counted multiplications, with `Λ = max(e, c k / (4 d b_w))` (`Threading.bound`)."""
     return k * max(e, c * k / (4 * d * b_w)) / b_a
 
 
@@ -298,7 +298,7 @@ CLASSES: Mapping[str, Argument] = {a.name: a for a in (
     Formula("covering-two-costs", ("Slowdown.Guarantees.CoveringBoundTwoCosts", "Slowdown.Assumptions.ParameterHardAt",
                                    "Slowdown.Assumptions.ActivationChainedAt"),
             ("c_w", "c_a"), chained, counts="kappa_forward", share=chained_share, share_reads=("c_w", *DEPTH)),
-    Formula("threaded", ("Slowdown.Guarantees.ThreadedThrottled", "Slowdown.Assumptions.WeightsIncompressible",
+    Formula("threaded", ("Slowdown.Guarantees.ThreadedThrottledSlots", "Slowdown.Assumptions.WeightsIncompressibleSlots",
                          "InferenceOnly.Assumptions.ThetaRegistered", "Slowdown.Guarantees.ReferenceThreaded",
                          "Slowdown.Assumptions.ReferenceLayered"),
             ("b_a", "b_w", "thread_d", "thread_e", "thread_c", "thread_k"), threaded_checked),

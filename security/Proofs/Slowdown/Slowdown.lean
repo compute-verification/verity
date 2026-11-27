@@ -10,8 +10,7 @@ The arithmetic core is `sources_le`: the four sources' bounds, summed, with the 
 the declared computation together, give `η ≤ s + (1 − s) min(r, μ) + ν + χ`; the guarantee drops the factor `1 − s`.
 The window optimization is `executionPhase_quadratic` (and `executionPhase_quadratic_any` at every window length, with its rounding term
 exact) and `executionPhase_linear` (`Λ = e`, one window); `executionPhases_cap` turns the servers' windows into the memory cap's
-hypothesis. `SlowdownThreadedSlots` discharges the declared computation's bound with `ThreadedThrottledSlots`, and
-`SlowdownThreaded` is its instance at one slot per weight gate.
+hypothesis. `SlowdownThreadedSlots` discharges the declared computation's bound with `ThreadedThrottledSlots`.
 -/
 
 @[expose] public section
@@ -233,14 +232,6 @@ theorem SlowdownThreadedSlots_rate :
 
 theorem SlowdownThreadedSlots : Guarantees.SlowdownThreadedSlots :=
   SlowdownThreadedSlots_rate
-
-/-- `SlowdownThreadedSlots` at one slot per weight gate. -/
-theorem SlowdownThreaded : Guarantees.SlowdownThreaded := by
-  intro κ C U W χ M Mu Mr Mx n Γ F H L R α b_w b_a r d T dd e Mc hκ hC hU hH hL hR hα hbw hba hdd hcomp hB hT hW
-    hsize hM hu hr hx hnC hRL he hcap
-  exact SlowdownThreadedSlots κ C U W χ M Mu Mr Mx n Γ F H L R α b_w b_a r d T (Fit.idSlots T) dd e Mc hκ hC hU hH hL
-    hR hα hbw hba hdd hcomp hB hT (weightsIncompressibleSlots_of (Fit.idSlots T) hbw.le hW) hsize hM hu hr hx hnC hRL he
-    hcap
 
 /-- **The bound is attained** (completeness, not a claim): at `κ = 2`, `C = 4`, `U = 0`, `W_cert = 3`, `ρ = 4`, `μ = 1`
 and `χ = 1/4`, with one counted multiplication in each of the residual, the declared computation and an incorrect proof

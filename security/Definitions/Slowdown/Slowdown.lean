@@ -68,12 +68,12 @@ certificate `W_cert`. -/
 noncomputable def residualShare (W C : ℝ) : ℝ := 1 - W / C
 
 /-- **Counted multiplications per `b_a` bits read** at read cap `K` (Theorem 1 over threads,
-`Slowdown.Guarantees.ThreadedReads`): `Λ(K) = max(e, reuse · K/(4 d b_w))`, `max(e, K/(2 d b_w))` at `reuse = 2`. It is
-`Slowdown.Threading.bound` with real arguments: `T.bound K b_w d e = Lambda T.reuse e d b_w K`. -/
+`Slowdown.Guarantees.ThreadedReadsSlots`): `Λ(K) = max(e, reuse · K/(4 d b_w))`, `max(e, K/(2 d b_w))` at
+`reuse = 2`. It is `Slowdown.Threading.bound` with real arguments: `T.bound K b_w d e = Lambda T.reuse e d b_w K`. -/
 noncomputable def Lambda (reuse e d b_w K : ℝ) : ℝ := max e (reuse * K / (4 * d * b_w))
 
 /-- **Declared gates per counted multiplication** at the inference-only policy's thread bound, `ρ_T = b_a/(α Λ)`:
-`Slowdown.Guarantees.ThreadedThrottled` gives `b_a |M| ≤ α Λ size(d)`, that is `|M| ≤ size(d)/ρ_T`. -/
+`Slowdown.Guarantees.ThreadedThrottledSlots` gives `b_a |M| ≤ α Λ size(d)`, that is `|M| ≤ size(d)/ρ_T`. -/
 noncomputable def rhoT (α b_a Λ : ℝ) : ℝ := b_a / (α * Λ)
 
 /-- **The declared computation's share** `ν = (1 − s) · 2/(κ ρ)`: the monitored compute, at `ρ` declared gates per counted

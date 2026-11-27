@@ -13,15 +13,19 @@ import Proofs.ResourceAccounting.Actual.Split
 between them) are at most the device's state and memory (`Run.Memory`), and the memory link and side channels carry at
 most the device's bandwidth and side capacities. Summed over accounts, each charge is
 the device's whole (each gate has one account, `sum_width_filter`), and that is what compute rate, memory and links
-bound. `fits_of_feasible` takes links from the feasible set and memory from the run (`Feasible`'s `Memory` bounds the
-circuit's `state` only); the per-class rates stay a hypothesis, as `Feasible` prices compute one way only.
+bound. A computation of the feasible set (`Slowdown.Security.H`) has the memory and the links; the per-class rates stay
+a hypothesis, as the feasible set prices compute one way only.
 
 The converse, that the schedule charges everything an account's gates use: `covers_ingress`, when every wire into
 `chip` from outside it runs on the memory link or a side channel toward its device end, the chip's ingress from an
 account's gates at a tick is at most that account's `read` and `side` charges (a union bound); `covers_work`, when the
 work's pricing is `p` on each op class and nothing on gates of none, an account's work over a window is the schedule's
-`work p` (the window's gates split by tick, `sum_fiberwise_of_maps_to`). State needs nothing more: the device is
-`chip ∪ mem`, whose states the schedule charges.
+`work p` (the window's gates split by tick, `sum_fiberwise_of_maps_to`); `read_le_delivered`, an account's `read`
+charge at a tick is at most the bits of its gates the chip reads at that tick from outside it; `mem_le_state`, an
+account's `mem` charge at a tick is at most the bits of its gates in the device's state at the end of the tick (a
+location's state is in the state of any location that contains it, `state_subset`).
+
+`computeRate_of_classes`: one cap on a priced sum follows from a cap on each op class, at the classes' caps priced.
 -/
 
 @[expose] public section
@@ -73,19 +77,6 @@ theorem fits {ι α E : Type} [Fintype α] (R : Actual.Run L) (d : Device ι) (c
     exact (hM mem hmem (t + 1)).trans hMm
 
 open Classical in
-/-- **A feasible run's schedule fits the device**, when its locations `chip` and `mem` and its links are the device's,
-its memory per run is the hardware's and each op class runs at most at its rate. `Feasible`'s `Memory` bounds only the
-circuit's `state` (`memory_of_mem` derives it from the run's), so the run's memory is a hypothesis of its own. -/
-theorem fits_of_feasible {ι α E : Type} [Fintype α] (R : Actual.Run L) {H : Hardware L E} {usage : Usage R.A E}
-    (hF : Feasible H R.A usage) (hM : R.Memory H.units H.M) (d : Device ι) (chip mem : Finset L)
-    (cls : Fin R.A.N → Option OpClass) (acct : Fin R.A.N → α) (hbm : E × L) (side : ι → E × L)
-    (hΦ : ∀ o, R.A.ComputeRate {chip ∪ mem} (R.A.classPrice cls o) (fun _ => d.rate o))
-    (hchip : chip ∈ H.units) (hmem : mem ∈ H.units) (hMc : H.M chip ≤ d.chip) (hMm : H.M mem ≤ d.mem)
-    (hbw : H.β hbm.1 ≤ d.bw) (hcap : ∀ i, H.β (side i).1 ≤ d.cap i) :
-    (R.schedule chip mem cls acct usage.link hbm side).Fits d :=
-  fits R d chip mem cls acct hbm side hΦ hM hchip hmem hMc hMm hF.2.2.2.2 hbw hcap
-
-open Classical in
 /-- **The schedule charges the chip's ingress**: when every wire into `chip` from outside it runs on the memory link
 toward `hbm.2` or on a side channel toward its device end, what `chip` reads at `t` from outside it, from account `a`'s
 gates, is at most `a`'s `read` and `side` charges at `t`. -/
@@ -126,6 +117,40 @@ theorem covers_ingress {ι α E : Type} [Fintype ι] (R : Actual.Run L) (chip me
     exact Finset.sum_le_sum_of_subset Finset.inter_subset_right
 
 open Classical in
+/-- A gate the memory link delivers at `t` is in its account's `read` charge at `t`. -/
+theorem width_le_read {ι α E : Type} (R : Actual.Run L) (chip mem : Finset L) (cls : Fin R.A.N → Option OpClass)
+    (acct : Fin R.A.N → α) (link : Fin R.A.N → Fin R.A.N → E) (hbm : E × L) (side : ι → E × L) {t : ℕ}
+    {s : Fin R.A.N} (hs : s ∈ R.A.readOn link hbm.1 hbm.2 (Set.Ico t (t + 1))) :
+    R.A.w s ≤ (R.schedule chip mem cls acct link hbm side t).read (acct s) := by
+  simp only [Actual.Run.schedule]
+  exact Finset.single_le_sum (f := R.A.w) (fun _ _ => Nat.zero_le _) (Finset.mem_filter.2 ⟨hs, rfl⟩)
+
+open Classical in
+/-- **The schedule's read charge is delivered to the chip**: where the memory link's wires toward `hbm.2`, a leaf of
+`chip`, come from outside `chip`, account `a`'s `read` charge at `t` is at most the bits of `a`'s gates that `chip`'s
+gates placed at `t` read from outside it. -/
+theorem read_le_delivered {ι α E : Type} (R : Actual.Run L) (chip mem : Finset L)
+    (cls : Fin R.A.N → Option OpClass) (acct : Fin R.A.N → α) (link : Fin R.A.N → Fin R.A.N → E) (hbm : E × L)
+    (side : ι → E × L) (hchip : hbm.2 ∈ chip)
+    (hfar : ∀ g, ∀ s ∈ R.A.reads g, R.A.x s ≠ R.A.x g → link g s = hbm.1 → R.A.x g = hbm.2 → R.A.x s ∉ chip)
+    (t : ℕ) (a : α) :
+    (R.schedule chip mem cls acct link hbm side t).read a ≤
+      R.A.width (((R.A.into (R.A.region chip (Set.Ico t (t + 1)))).filter fun s => R.A.x s ∉ chip) ∩
+        Finset.univ.filter fun s => acct s = a) := by
+  simp only [Actual.Run.schedule]
+  refine width_mono R.A fun s hs => ?_
+  obtain ⟨hr, ha⟩ := Finset.mem_filter.1 hs
+  simp only [Placed.readOn, Finset.mem_filter, Finset.mem_univ, true_and] at hr
+  obtain ⟨g, hsg, hne, hl, hy, hgt⟩ := hr
+  have hsx := hfar g s hsg hne hl hy
+  have hgc : R.A.isInput g = false := by
+    by_contra hin
+    rw [R.A.input_reads g (by simpa using hin)] at hsg
+    exact absurd hsg (Finset.notMem_empty _)
+  exact Finset.mem_inter.2 ⟨Finset.mem_filter.2 ⟨(mem_into R.A).2 ⟨fun hreg => hsx ((mem_region R.A).1 hreg).2.1, g,
+    (mem_region R.A).2 ⟨hgc, hy ▸ hchip, hgt⟩, hsg⟩, hsx⟩, Finset.mem_filter.2 ⟨Finset.mem_univ _, ha⟩⟩
+
+open Classical in
 /-- **The schedule charges the work**: when the pricing `π` is `p` on each op class and nothing on gates of none,
 account `a`'s work over a window of the device's gates is the schedule's `work p` for `a`. -/
 theorem covers_work {ι α E : Type} (R : Actual.Run L) (chip mem : Finset L) (cls : Fin R.A.N → Option OpClass)
@@ -160,5 +185,59 @@ theorem covers_work {ι α E : Type} (R : Actual.Run L) (chip mem : Finset L) (c
     have : R.A.t g = u := by omega
     subst this
     exact ⟨⟨⟨⟨hc, hx, hu⟩, ha⟩, rfl⟩, ho⟩
+
+/-- **The priced cap is the functional units' caps, priced.** Where at each location of `𝒳` the gates of each op
+class number at most `rate X o` a tick (`classPrice`: one unit of class `o` does one op a tick), and the pricing `π`
+is `p` on each op class and nothing on gates of none, the compute rate holds at `π` with the cap `∑ o, p o · rate X o`
+(`Device.priced`). -/
+theorem computeRate_of_classes {𝒳 : Set (Finset L)} (cls : Fin A.N → Option OpClass) (p : Price)
+    (rate : Finset L → OpClass → ℕ) {π : Fin A.N → ℕ} (hπ : ∀ X ∈ 𝒳, ∀ g, A.x g ∈ X → π g = (cls g).elim 0 p)
+    (hΦ : ∀ o, A.ComputeRate 𝒳 (A.classPrice cls o) (fun X => rate X o)) :
+    A.ComputeRate 𝒳 π (fun X => ∑ o, p o * rate X o) := by
+  intro X hX a b
+  have split : ∀ g ∈ A.region X (Set.Ico a b), π g = ∑ o, p o * A.classPrice cls o g := fun g hg => by
+    rw [hπ X hX g ((mem_region A).1 hg).2.1]
+    unfold Placed.classPrice
+    cases cls g <;> simp
+  unfold Placed.work
+  rw [Finset.sum_congr rfl split, Finset.sum_comm, Finset.sum_mul]
+  refine Finset.sum_le_sum fun o _ => ?_
+  rw [← Finset.mul_sum, Nat.mul_assoc]
+  exact Nat.mul_le_mul_left _ (hΦ o X hX a b)
+
+/-- The state of a location is in the state of every location that contains it. -/
+theorem state_subset (R : Actual.Run L) {X Y : Finset L} (h : X ⊆ Y) (t : ℕ) : R.state X t ⊆ R.state Y t := by
+  classical
+  intro a ha
+  simp only [Actual.Run.state, Finset.mem_filter, Finset.mem_univ, true_and] at ha ⊢
+  rcases ha with ⟨y, hy, ha⟩ | ⟨ha, hx⟩
+  · exact Or.inl ⟨y, h hy, ha⟩
+  · obtain ⟨hna, g, hg, hr⟩ := (mem_into R.A).1 ha
+    obtain ⟨hgi, hgx, hgt⟩ := (mem_region R.A).1 hg
+    refine Or.inr ⟨(mem_into R.A).2 ⟨fun hin => hna ?_, g, (mem_region R.A).2 ⟨hgi, h hgx, hgt⟩, hr⟩, h hx⟩
+    obtain ⟨hai, -, hat⟩ := (mem_region R.A).1 hin
+    exact (mem_region R.A).2 ⟨hai, hx, hat⟩
+
+open Classical in
+/-- A gate in the memory's state at the end of tick `t` is in its account's `mem` charge at `t`. -/
+theorem width_le_mem {ι α E : Type} (R : Actual.Run L) (chip mem : Finset L) (cls : Fin R.A.N → Option OpClass)
+    (acct : Fin R.A.N → α) (link : Fin R.A.N → Fin R.A.N → E) (hbm : E × L) (side : ι → E × L) {t : ℕ}
+    {s : Fin R.A.N} (hs : s ∈ R.state mem (t + 1)) :
+    R.A.w s ≤ (R.schedule chip mem cls acct link hbm side t).mem (acct s) := by
+  simp only [Actual.Run.schedule]
+  exact Finset.single_le_sum (f := R.A.w) (fun _ _ => Nat.zero_le _) (Finset.mem_filter.2 ⟨hs, rfl⟩)
+
+open Classical in
+/-- **The schedule's memory charge is held on the device**: account `a`'s `mem` charge at `t` is at most the bits of
+`a`'s gates in the state of `chip ∪ mem` at the start of tick `t + 1`. -/
+theorem mem_le_state {ι α E : Type} (R : Actual.Run L) (chip mem : Finset L) (cls : Fin R.A.N → Option OpClass)
+    (acct : Fin R.A.N → α) (link : Fin R.A.N → Fin R.A.N → E) (hbm : E × L) (side : ι → E × L) (t : ℕ) (a : α) :
+    (R.schedule chip mem cls acct link hbm side t).mem a ≤
+      R.A.width (R.state (chip ∪ mem) (t + 1) ∩ Finset.univ.filter fun s => acct s = a) := by
+  simp only [Actual.Run.schedule]
+  refine width_mono R.A fun s hs => ?_
+  obtain ⟨hs, ha⟩ := Finset.mem_filter.1 hs
+  exact Finset.mem_inter.2 ⟨state_subset R Finset.subset_union_right _ hs,
+    Finset.mem_filter.2 ⟨Finset.mem_univ _, ha⟩⟩
 
 end ResourceAccounting.SecurityProofs.Actual

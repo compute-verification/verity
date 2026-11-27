@@ -341,7 +341,7 @@ per-window bound, `prob_le_of_update`: at most `p/ε'`); some window samples a f
 over windows: at most `∑_t ks t`); or no window does and some identity has more than `K` escaped blocks
 (`escape_tail`, over the identities: at most `J (1 − q)^(K+1)`). Outside them the incorrect windows hold at most `ε' C`,
 each identity's escaped blocks skip at most `K B`, so `VerdictLag` puts the faulty blocks' skipped work at most
-`(JΔ/H) C + J K B`, and the residual's hypothesis is `SlowdownThreaded`'s at
+`(JΔ/H) C + J K B`, and the residual's hypothesis is `SlowdownThreadedSlots`' at
 `(1 − ε_W) W_cert − ε' C − (JΔ/H) C − J K B`; each day's verdict bounds its MACs by `CountHE`, summed over the days into
 `X`; `remote_core` gives both forms, at `ρ = C/X` (`declaredShare_div`). -/
 theorem SlowdownRemoteMonitoringPeriod : Guarantees.SlowdownRemoteMonitoringPeriod := by

@@ -31,8 +31,9 @@ theorem threaded_reads_by (c : RegisteredCircuit) (T : Threading c) (ρ : Finset
     b_a * (T.mults R).card ≤ ρ R * T.bound S b_w d e :=
   threaded_count T R hbw hba hd (hT R hR) (hW R hR) hR.2.2
 
-example : Guarantees.ThreadedReads := by
-  intro c T Γ S b_w b_a d e hbw hba hd hT hW
-  exact threaded_reads_by c T (fun R => (freshInput c R : ℝ)) Γ S b_w b_a d e hbw hba hd hT hW
+example (c : RegisteredCircuit) (T : Threading c) (Γ : ℕ) (S b_w b_a : ℝ) (d e : ℕ) (hbw : 0 < b_w) (hba : 0 < b_a)
+    (hd : 0 < d) (hT : T.Threaded Γ S d e) (hW : Assumptions.WeightsIncompressible c T Γ S b_w b_a) :
+    ∀ R, Small c Γ S R → b_a * (T.mults R).card ≤ freshInput c R * T.bound S b_w d e :=
+  threaded_reads_by c T (fun R => (freshInput c R : ℝ)) Γ S b_w b_a d e hbw hba hd hT hW
 
 end Slowdown.SecurityProofs

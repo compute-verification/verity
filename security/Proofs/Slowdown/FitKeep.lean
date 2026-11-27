@@ -12,8 +12,9 @@ data filters). `keep T s` is `T` with its counted multiplications cut to the gat
 it. `fitBoundSlots_keep` is `fitBoundSlots_start` at `keep T s`, with the counted multiplications outside `s` added to
 the bound: a citation that leaves work out charges it.
 
-* `fitBoundSlots_init` cuts by window: `s` is every gate outside the windows in `I`. It asks `FitsSlots` of the other
-  windows only, and `ReachSlots`, counted outside `I`, of the threads started outside `I`. A thread an initialization
+* `fitBoundSlots_but` and `fitBoundSlots_init` cut by window: `s` is every gate outside the windows in `I`. They ask
+  `FitsSlots` of the other windows only (`fitBoundSlots_but`, their unregistered input's bound too), and
+  `ReachSlots`, counted outside `I`, of the threads started outside `I`. A thread an initialization
   window starts has every kept multiplication in a window it entered, whose entry fee pays for it, so it needs no
   `ReachSlots`. The charge is the counted multiplications inside `I` (`benchmarks/nci/fit.py`, `left_out`).
 * `fitBoundSlots_threads` cuts by thread: `s` is the counted multiplications of the threads in `K`, under `ReachSlots`
@@ -58,6 +59,16 @@ theorem mem_keep_threadMults (T : Threading c) (s R : Finset (Fin c.D.N)) (t : F
   simp only [Threading.threadMults, Threading.mults, keep, mem_filter, mem_inter]
   tauto
 
+/-- The weights a thread uses among the kept multiplications are those it uses inside `s`. -/
+theorem keep_threadWeights_univ (T : Threading c) (s : Finset (Fin c.D.N)) (t : Fin T.m) :
+    (keep T s).threadWeights univ t = T.threadWeights s t := by
+  have h : (keep T s).threadMults univ t = T.threadMults s t := by
+    ext g
+    rw [mem_keep_threadMults]
+    simp only [Threading.threadMults, Threading.mults, mem_filter, mem_inter, mem_univ, and_true]
+    tauto
+  exact congrArg (Finset.image T.weight) h
+
 theorem keep_mults_subset (T : Threading c) (s R : Finset (Fin c.D.N)) : (keep T s).mults R ⊆ T.mults R :=
   fun g hg => by
     simp only [Threading.mults, mem_inter, mem_filter] at hg ⊢
@@ -74,6 +85,16 @@ theorem keep_entered_subset (T : Threading c) (s : Finset (Fin c.D.N)) {k : ℕ}
   obtain ⟨⟨g, hg⟩, hj⟩ := ht
   exact ⟨⟨g, ((mem_keep_threadMults T s _ t g).1 hg).1⟩, hj⟩
 
+/-- A bound on the counted multiplications kept bounds all of them, with those outside `s` added. -/
+theorem add_left_out (T : Threading c) (s : Finset (Fin c.D.N)) {x B : ℝ} (hk : x * ((keep T s).M.card : ℝ) ≤ B) :
+    x * T.M.card ≤ B + x * (T.M.filter (· ∉ s)).card := by
+  have hM : (keep T s).M = T.M.filter (· ∈ s) := rfl
+  rw [hM] at hk
+  have hsplit : (T.M.card : ℝ) = ((T.M.filter (· ∈ s)).card : ℝ) + ((T.M.filter (· ∉ s)).card : ℝ) := by
+    exact_mod_cast (card_filter_add_card_filter_not (s := T.M) (· ∈ s)).symm
+  rw [hsplit, mul_add]
+  exact add_le_add hk le_rfl
+
 /-- **The fit bound with work left out**: under `fitBoundSlots_start`'s premises at `keep T s`, `T`'s counted
 multiplications number at most its bound plus those outside `s`, written multiplied out. -/
 theorem fitBoundSlots_keep (T : Threading c) (σ : T.Slots) (s : Finset (Fin c.D.N)) {k : ℕ} (P : Partition c.D k)
@@ -83,15 +104,8 @@ theorem fitBoundSlots_keep (T : Threading c) (σ : T.Slots) (s : Finset (Fin c.D
       Nstar ≤ ((keepSlots σ s).threadSlots univ t).card)
     (hF : Assumptions.FitsSlots c (keep T s) (keepSlots σ s) P start b_w w_e) :
     4 * w_e * (Nstar * b_w - S) * T.M.card ≤
-      k * T.reuse * Nstar * S ^ 2 + 4 * w_e * (Nstar * b_w - S) * (T.M.filter (· ∉ s)).card := by
-  have hk := fitBoundSlots_start (keepSlots σ s) P start Nstar S b_w w_e hgap hS hR hF
-  have hM : (keep T s).M = T.M.filter (· ∈ s) := rfl
-  have hr : (keep T s).reuse = T.reuse := rfl
-  rw [hM, hr] at hk
-  have hsplit : (T.M.card : ℝ) = ((T.M.filter (· ∈ s)).card : ℝ) + ((T.M.filter (· ∉ s)).card : ℝ) := by
-    exact_mod_cast (card_filter_add_card_filter_not (s := T.M) (· ∈ s)).symm
-  rw [hsplit, mul_add]
-  exact add_le_add hk le_rfl
+      k * T.reuse * Nstar * S ^ 2 + 4 * w_e * (Nstar * b_w - S) * (T.M.filter (· ∉ s)).card :=
+  add_left_out T s (fitBoundSlots_start (keepSlots σ s) P start Nstar S b_w w_e hgap hS hR hF)
 
 /-- The gates outside the windows in `I`. -/
 def outside {k : ℕ} (P : Partition c.D k) (I : Finset (Fin k)) : Finset (Fin c.D.N) :=
@@ -103,9 +117,64 @@ theorem keep_outside_mults {T : Threading c} {k : ℕ} (P : Partition c.D k) {I 
   simp only [Threading.mults, outside, mem_inter, mem_filter, mem_univ, true_and] at hg
   exact hg.1.2 j hj hg.2
 
+/-- **The fit bound with windows left out and nothing asked of them**: at every window outside `I`, `FitsSlots` and
+at most `S ≥ 0` bits of unregistered input; outside `I`, `ReachSlots` for the threads started outside `I` that do
+counted work in their start window. `T`'s counted multiplications are bounded by `FitBoundSlots`'s bound over the windows outside
+`I` plus those inside `I`. -/
+theorem fitBoundSlots_but (T : Threading c) (σ : T.Slots) {k : ℕ} (P : Partition c.D k) (I : Finset (Fin k))
+    (start : Fin T.m → Fin k) (Nstar : ℕ) (S b_w w_e : ℝ) (hbw : 0 ≤ b_w) (hwe : 0 ≤ w_e) (hgap : S < Nstar * b_w)
+    (hS0 : 0 ≤ S) (hS : ∀ j ∉ I, (freshInput c (P.gates j) : ℝ) ≤ S)
+    (hR : ∀ t, start t ∉ I → ((keep T (outside P I)).threadMults (P.gates (start t)) t).Nonempty →
+      Nstar ≤ ((keepSlots σ (outside P I)).threadSlots univ t).card)
+    (hF : ∀ j ∉ I, b_w * (σ.slotsUsed (P.gates j)).card + w_e * (T.entered P start j).card ≤
+      freshInput c (P.gates j)) :
+    4 * w_e * (Nstar * b_w - S) * T.M.card ≤
+      (k - I.card : ℕ) * T.reuse * Nstar * S ^ 2 +
+        4 * w_e * (Nstar * b_w - S) * (T.M.filter fun g => ∃ j ∈ I, g ∈ P.gates j).card := by
+  have hs : ∀ j ∈ I, (keepSlots σ (outside P I)).slotsUsed (P.gates j) = ∅ := fun j hI => by
+    rw [Threading.Slots.slotsUsed, Threading.weightsUsed, keep_outside_mults (T := T) P hI, image_empty, image_empty]
+  have hR' : ∀ t, ((keep T (outside P I)).threadMults (P.gates (start t)) t).Nonempty →
+      Nstar ≤ ((keepSlots σ (outside P I)).threadSlots univ t).card := by
+    intro t ⟨g, hg⟩
+    by_cases hI : start t ∈ I
+    · have hm : g ∈ (keep T (outside P I)).mults (P.gates (start t)) := (mem_filter.1 hg).1
+      rw [keep_outside_mults P hI] at hm
+      exact absurd hm (notMem_empty g)
+    · exact hR t hI ⟨g, hg⟩
+  have hF' : ∀ j, b_w * ((keepSlots σ (outside P I)).slotsUsed (P.gates j)).card +
+      w_e * ((keep T (outside P I)).entered P start j).card ≤ S := by
+    intro j
+    by_cases hI : j ∈ I
+    · have hm := keep_outside_mults (T := T) P hI
+      have he : (keep T (outside P I)).entered P start j = ∅ := by
+        refine eq_empty_of_forall_notMem fun t ht => ?_
+        simp only [Threading.entered, Threading.visits, mem_filter, mem_univ, true_and] at ht
+        obtain ⟨g, hg⟩ := ht.1
+        have hg' : g ∈ (keep T (outside P I)).mults (P.gates j) := (mem_filter.1 hg).1
+        rw [hm] at hg'
+        exact notMem_empty g hg'
+      rw [hs j hI, he, card_empty, card_empty, Nat.cast_zero, mul_zero, mul_zero, add_zero]
+      exact hS0
+    · have hp : ((keepSlots σ (outside P I)).slotsUsed (P.gates j)).card ≤ (σ.slotsUsed (P.gates j)).card :=
+        card_le_card (keepSlots_slotsUsed_subset σ _ _)
+      have he : ((keep T (outside P I)).entered P start j).card ≤ (T.entered P start j).card :=
+        card_le_card (keep_entered_subset T _ P start j)
+      have h1 := mul_le_mul_of_nonneg_left (Nat.cast_le.2 hp : (_ : ℝ) ≤ _) hbw
+      have h2 := mul_le_mul_of_nonneg_left (Nat.cast_le.2 he : (_ : ℝ) ≤ _) hwe
+      have h3 := hF j hI
+      have h4 := hS j hI
+      linarith
+  have hk := add_left_out T (outside P I)
+    (fitBoundSlots_core (keepSlots σ (outside P I)) P I start Nstar S b_w w_e hgap hS0 hs hR' hF')
+  have hout : T.M.filter (· ∉ outside P I) = T.M.filter fun g => ∃ j ∈ I, g ∈ P.gates j := by
+    refine filter_congr fun g _ => ?_
+    simp only [outside, mem_filter, mem_univ, true_and, not_forall, not_not, exists_prop]
+  rwa [hout] at hk
+
 /-- **The fit bound with initialization windows left out**: `FitsSlots` at every window outside `I`, and `ReachSlots`
 outside `I` for the threads started outside `I` that do counted work in their start window, bound `T`'s counted
-multiplications by `FitBoundSlots`'s bound plus those inside `I`. -/
+multiplications by `FitBoundSlots`'s bound plus those inside `I`. It is `fitBoundSlots_but` with every window's
+unregistered input at most `S`. -/
 theorem fitBoundSlots_init (T : Threading c) (σ : T.Slots) {k : ℕ} (P : Partition c.D k) (I : Finset (Fin k))
     (start : Fin T.m → Fin k) (Nstar : ℕ) (S b_w w_e : ℝ) (hbw : 0 ≤ b_w) (hwe : 0 ≤ w_e) (hgap : S < Nstar * b_w)
     (hS : ∀ j, (freshInput c (P.gates j) : ℝ) ≤ S)
@@ -116,42 +185,14 @@ theorem fitBoundSlots_init (T : Threading c) (σ : T.Slots) {k : ℕ} (P : Parti
     4 * w_e * (Nstar * b_w - S) * T.M.card ≤
       k * T.reuse * Nstar * S ^ 2 +
         4 * w_e * (Nstar * b_w - S) * (T.M.filter fun g => ∃ j ∈ I, g ∈ P.gates j).card := by
-  have hR' : ∀ t, ((keep T (outside P I)).threadMults (P.gates (start t)) t).Nonempty →
-      Nstar ≤ ((keepSlots σ (outside P I)).threadSlots univ t).card := by
-    intro t ⟨g, hg⟩
-    by_cases hI : start t ∈ I
-    · have hm : g ∈ (keep T (outside P I)).mults (P.gates (start t)) := (mem_filter.1 hg).1
-      rw [keep_outside_mults P hI] at hm
-      exact absurd hm (notMem_empty g)
-    · exact hR t hI ⟨g, hg⟩
-  have hF' : Assumptions.FitsSlots c (keep T (outside P I)) (keepSlots σ (outside P I)) P start b_w w_e := by
-    intro j
-    by_cases hI : j ∈ I
-    · have hm := keep_outside_mults (T := T) P hI
-      have hs : (keepSlots σ (outside P I)).slotsUsed (P.gates j) = ∅ := by
-        rw [Threading.Slots.slotsUsed, Threading.weightsUsed, hm, image_empty, image_empty]
-      have he : (keep T (outside P I)).entered P start j = ∅ := by
-        refine eq_empty_of_forall_notMem fun t ht => ?_
-        simp only [Threading.entered, Threading.visits, mem_filter, mem_univ, true_and] at ht
-        obtain ⟨g, hg⟩ := ht.1
-        have hg' : g ∈ (keep T (outside P I)).mults (P.gates j) := (mem_filter.1 hg).1
-        rw [hm] at hg'
-        exact notMem_empty g hg'
-      rw [hs, he, card_empty, card_empty, Nat.cast_zero, mul_zero, mul_zero, add_zero]
-      exact Nat.cast_nonneg _
-    · have hp : ((keepSlots σ (outside P I)).slotsUsed (P.gates j)).card ≤ (σ.slotsUsed (P.gates j)).card :=
-        card_le_card (keepSlots_slotsUsed_subset σ _ _)
-      have he : ((keep T (outside P I)).entered P start j).card ≤ (T.entered P start j).card :=
-        card_le_card (keep_entered_subset T _ P start j)
-      have h1 := mul_le_mul_of_nonneg_left (Nat.cast_le.2 hp : (_ : ℝ) ≤ _) hbw
-      have h2 := mul_le_mul_of_nonneg_left (Nat.cast_le.2 he : (_ : ℝ) ≤ _) hwe
-      have h3 := hF j hI
-      linarith
-  have hk := fitBoundSlots_keep T σ (outside P I) P start Nstar S b_w w_e hgap hS hR' hF'
-  have hout : T.M.filter (· ∉ outside P I) = T.M.filter fun g => ∃ j ∈ I, g ∈ P.gates j := by
-    refine filter_congr fun g _ => ?_
-    simp only [outside, mem_filter, mem_univ, true_and, not_forall, not_not, exists_prop]
-  rwa [hout] at hk
+  rcases T.M.eq_empty_or_nonempty with hM | ⟨g, hg⟩
+  · rw [hM, card_empty, filter_empty, card_empty, Nat.cast_zero, mul_zero, add_zero]
+    positivity
+  obtain ⟨j₀, -⟩ := exists_gates P (T.M_computed hg)
+  have hk : ((k - I.card : ℕ) : ℝ) ≤ k := Nat.cast_le.2 (Nat.sub_le _ _)
+  refine (fitBoundSlots_but T σ P I start Nstar S b_w w_e hbw hwe hgap ((Nat.cast_nonneg _).trans (hS j₀))
+    (fun j _ => hS j) hR hF).trans (add_le_add_left ?_ _)
+  gcongr
 
 /-- The counted multiplications of the threads in `K`. -/
 def threadGates (T : Threading c) (K : Finset (Fin T.m)) : Finset (Fin c.D.N) :=

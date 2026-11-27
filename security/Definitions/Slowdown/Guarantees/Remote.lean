@@ -10,8 +10,8 @@ public import Definitions.Assumptions
 
 The remote slowdown `1/ρ = s + (r̂ + ε' + JΔ/H + ν)/MFU₀` (`benchmarks/nci/tiers.py` at T1 and
 T2: `free_share`, `fit.free_with_lag` and `fit.slowdown`, and `benchmarks/slowdown`'s
-`theorem.multiple_bound`), with its two terms that `SlowdownThreaded` takes inside its residual's hypothesis derived,
-and the two that SPOT and PoUW's deficit add:
+`theorem.multiple_bound`), with its two terms that `SlowdownThreadedSlots` takes inside its residual's hypothesis
+derived, and the two that SPOT and PoUW's deficit add:
 
 * `CertificateSlack` ([CERTIFICATE-SLACK]): over `N` windows, each certificate incorrect with probability at most `p`
   (`PouwSound`), the windows whose certificates are incorrect hold more than `ε' C` of the capacity with probability at most
@@ -73,9 +73,9 @@ their proof, under `TerminalDetection` at a lag `Δ`, skip `w_b ≥ 0` of declar
 within any span of `Δ`, `Φ H ≤ C`, as in `VerdictLag`, and at most `B` each; each faulty block with no earlier detection
 of its identity is detected with probability at least `q ∈ (0, 1]` whatever came before (`SampledDetection`), so those
 accepted before their identity's first detection skip at most `((1 − q)/q) B` per identity in expectation. Its counted
-multiplications `M` are as in `SlowdownThreaded`, with no memory cap: unmonitored compute trains like the unconstrained
-developer, at model-FLOP utilization `MFU₀ ∈ (0, 1]` (`M_U ≤ MFU₀ κ U/2`); the residual trains at full efficiency on the
-monitored compute outside the work certified correctly and run, at least `(1 − ε_W) W_cert` less the incorrect windows'
+multiplications `M` are as in `SlowdownThreadedSlots`, with no memory cap: unmonitored compute trains like the
+unconstrained developer, at model-FLOP utilization `MFU₀ ∈ (0, 1]` (`M_U ≤ MFU₀ κ U/2`); the residual trains at full
+efficiency on the monitored compute outside the work certified correctly and run, at least `(1 − ε_W) W_cert` less the incorrect windows'
 capacity and the skipped work, `ε_W` PoUW's deficit (`M_r ≤ κ (C − (1 − ε_W) W_cert + incorrectCapacity + skipped)/2`); the
 declared computation is the charged work `W_d` (its `N_d` MACs, `O_d` output wires) of a declaration `d` whose count
 verdict is `CompliesAtMost c k n`, under (H) at the costs `β_w, β_x > 0` and the read cap `k` and (E) at `b > 0`, so

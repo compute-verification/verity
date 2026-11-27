@@ -14,7 +14,7 @@ whose expectation `expected_incorrect` swaps into the windows' marginals. `Verdi
 identity's faulty blocks at or after its first detected one all lie within `Δ` of it, so they skip at most `Φ Δ`.
 `escape_slack` is Markov's inequality again, on the escaped blocks' skipped work, whose expectation `expected_escaped`
 sums the per-identity bound `sampled_escape` derives from `SampledDetection`. `SlowdownRemote` reads the residual's
-hypothesis outside both events as `SlowdownThreaded`'s at `(1 − ε_W) W_cert − ε' C − (JΔ/H) C − θ C`, bounds the
+hypothesis outside both events as `SlowdownThreadedSlots`' at `(1 − ε_W) W_cert − ε' C − (JΔ/H) C − θ C`, bounds the
 declared computation by its count verdict (`Slowdown.Cut.SecurityProofs.CountHE`, read at `ρ = C/X`: `declaredShare_div`),
 and sums the sources with no memory cap (`sources_le_at`, unmonitored compute at efficiency `MFU₀`) into both the efficiency and the
 hardware-multiple forms (`remote_core`); the union of the two events has probability at most the sum of theirs

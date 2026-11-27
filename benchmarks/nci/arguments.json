@@ -127,7 +127,7 @@
    "statement": "Under threading, weight incompressibility and containment, slowdown >= kappa b_a / (2 alpha Lambda).",
    "refs": {
     "lean": [
-     "Slowdown.SecurityProofs.ThreadedReads",
+     "Slowdown.SecurityProofs.ThreadedReadsSlots",
      "Slowdown.SecurityProofs.ThreadedTraining"
     ]
    }
@@ -139,7 +139,7 @@
    "statement": "A small subcircuit of the reference training algorithm's circuit reads b_w bits per updated weight it uses and b_a per thread value. Stated over wiring; proofs recommends the support form. False at step 0 and for small-batch circuits of the reference training algorithm.",
    "refs": {
     "lean": [
-     "Slowdown.Assumptions.WeightsIncompressible"
+     "Slowdown.Assumptions.WeightsIncompressibleSlots"
     ],
     "estimates": [
      "b_w.pretrained/frontier-lossy",
@@ -154,7 +154,7 @@
    "statement": "The reference training algorithm's circuit is (d, e)-threaded with d the entry fee and e the fan-out. Lean derives only (1, 0)-threading from structure; with a committed corpus layer 1 needs no thread reads, and the unembedding needs e >= vocabulary.",
    "refs": {
     "lean": [
-     "Slowdown.SecurityProofs.ThreadedReads"
+     "Slowdown.SecurityProofs.ThreadedReadsSlots"
     ]
    }
   },
@@ -165,7 +165,7 @@
    "statement": "The declared circuit contains the reference training algorithm's circuit gate for gate (Declaration.Contains).",
    "refs": {
     "lean": [
-     "Slowdown.SecurityProofs.ThreadedThrottled"
+     "Slowdown.SecurityProofs.ThreadedThrottledSlots"
     ]
    }
   },

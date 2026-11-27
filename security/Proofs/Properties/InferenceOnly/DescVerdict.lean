@@ -23,10 +23,11 @@ import Proofs.Properties.InferenceOnly.Agrees
 /-!
 # What a verdict of the description-sized check carries, from `DescAgrees`
 
-Each statement of `Properties.InferenceOnly.Desc.Verdict` is its `Properties.InferenceOnly` counterpart carried to every expansion by
-`DescAgrees` (`onExpansions_of`): `descReports_of` and `descWitnesses_of` from `Reports` and `Witnesses`, and the four
-thread bounds from `Throttles` and its forms, which `Proofs.InferenceOnly.DescVerdict` (package `security_proofs`) supplies.
-`DescReports` and `DescWitnesses` are the guarantees, from `SecurityProofs.DescAgrees` (`Proofs.Properties.InferenceOnly.Agrees`).
+Each statement of `Properties.InferenceOnly.Desc.Verdict` is its `Properties.InferenceOnly` counterpart carried to every
+expansion by `DescAgrees` (`onExpansions_of`): `descReports_of` and `descWitnesses_of` from `Reports` and `Witnesses`,
+and the two thread bounds from `ThrottlesSlots` and `ThrottlesDarkSlots`, which `Proofs.InferenceOnly.DescVerdict`
+(package `security_proofs`) supplies. `DescReports` and `DescWitnesses` are the guarantees, from
+`SecurityProofs.DescAgrees` (`Proofs.Properties.InferenceOnly.Agrees`).
 -/
 
 @[expose] public section
@@ -59,13 +60,6 @@ theorem DescReports : Properties.DescReports :=
 /-- **A verdict of compliance of the description-sized check witnesses the policy.** -/
 theorem DescWitnesses : Properties.DescWitnesses :=
   descWitnesses_of DescAgrees
-
-theorem descThrottles_of (h : Properties.DescAgrees) (hT : Properties.Throttles) : Properties.DescThrottles :=
-  fun _ _ hev => onExpansions_of h hT hev
-
-theorem descThrottlesDark_of (h : Properties.DescAgrees) (hT : Properties.ThrottlesDark) :
-    Properties.DescThrottlesDark :=
-  fun _ _ hev => onExpansions_of h hT hev
 
 theorem descThrottlesSlots_of (h : Properties.DescAgrees) (hT : Properties.ThrottlesSlots) :
     Properties.DescThrottlesSlots :=

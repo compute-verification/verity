@@ -32,11 +32,11 @@ def ThreadedOfLayered : Prop :=
 /-- **Training is slowed, for keyed circuits**: `ThreadedTraining` with its threading premise discharged by
 `ThreadedOfLayered` at `S = α Γ`. -/
 def LayeredTraining : Prop :=
-  ∀ (Γ : ℕ) (α b_w b_a κ : ℝ) (r dcl : RegisteredCircuit) (T : Threading r) (d e eLk b E : ℕ)
+  ∀ (Γ : ℕ) (α b_w b_a κ : ℝ) (r dcl : RegisteredCircuit) (T : Threading r) (σ : T.Slots) (d e eLk b E : ℕ)
     (M : Containment r.D dcl.D),
     Layered T d e eLk b → 0 ≤ α → 0 < b_w → 0 < b_a → E < d → CompliesRate Γ α dcl →
     Assumptions.ThetaRegistered r dcl (PartialContainment.ofContainment M) →
-    Assumptions.CapBelowColumns (α * Γ) E b → Assumptions.WeightsIncompressible r T Γ (α * Γ) b_w b_a →
+    Assumptions.CapBelowColumns (α * Γ) E b → Assumptions.WeightsIncompressibleSlots r T σ Γ (α * Γ) b_w b_a →
     Assumptions.Coverage κ r (2 * T.M.card) →
       κ * b_a * r.D.size r.D.computed ≤
         2 * α * T.bound (α * Γ) b_w (d - E) (e + E * eLk) * dcl.D.size dcl.D.computed

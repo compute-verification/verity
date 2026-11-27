@@ -1,10 +1,10 @@
 """The physical layer's declaration: devices, blocks, links and datacenters, with every number a named assumption.
 
 This mirrors Lean's physical model (`security/Definitions/Registration/Physical.lean`, `Hardware`): a datacenter is a
-tree of locations whose leaves are devices; a block is a set of devices behind one boundary (`Hardware.SpatialUnit`);
-a link joins two devices, and a link that crosses a block boundary must pass a network attester (coverage,
-`ResourceAccounting.Covered`). Certifiers and challengers are the trusted devices: the auditor's hardware. Nothing here is
-proved: each number is an `Assumption` with its source, and the account reads them by name.
+tree of locations whose leaves are devices; a block is a set of devices behind one boundary; a link joins two devices,
+and a link that crosses a block boundary must pass a network attester (coverage, `ResourceAccounting.Covered`).
+Certifiers and challengers are the trusted devices: the auditor's hardware. Nothing here is proved: each number is an
+`Assumption` with its source, and the account reads them by name.
 """
 from __future__ import annotations
 
@@ -88,9 +88,9 @@ class Port:
 @dataclass(frozen=True)
 class Cadence:
     """The attesters' fixed parameters (W1) and the trusted clock. Frames are `frame_bits` long (Lean's B), a bucket is
-    `bucket_ticks` ticks (`Hardware.bucket` maps a tick to its bucket), and a record covers a window of `buckets`
-    buckets (T: a window's `NetTiming.Grid` is T buckets of slots). Each window picks one of `jitter_classes` public
-    clock-sync values (the real network attester's sync set, Lean's jitter classes), and `tick` is one tick's real duration."""
+    `bucket_ticks` ticks, and a record covers a window of `buckets` buckets (T: a window's `NetTiming.Grid` is T buckets
+    of slots). Each window picks one of `jitter_classes` public clock-sync values (the real network attester's sync set,
+    Lean's jitter classes), and `tick` is one tick's real duration."""
 
     frame_bits: int = 32
     bucket_ticks: int = 1

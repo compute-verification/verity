@@ -17,7 +17,7 @@ active weights outside the embedding and the LM head:
   SwiGLU, routing and the combine, residual adds, RoPE, the loss, the embedding (a lookup and a scatter-add), and the
   optimizer step spread over the batch's tokens.
 
-A frozen weight is committed in theta, where ``WeightsIncompressible`` fails, so its products are in the denominator
+A frozen weight is committed in theta, where ``WeightsIncompressibleSlots`` fails, so its products are in the denominator
 only, and it takes no weight gradient or optimizer step. A circuit may run several forwards per token (a zeroth-order
 step's two) and no backward (evolution strategies). Over a schedule kappa is a ratio of sums, the token-weighted harmonic
 mean of its phases' kappa.

@@ -3,7 +3,7 @@ module
 public import Proofs.Slowdown.Fit
 
 /-!
-# A window across optimizer steps: `FitBoundSlots` applies where `FitBound` can't
+# A window across optimizer steps: `FitBoundSlots` applies where one slot per weight gate can't
 
 A ten-gate reference training algorithm of two optimizer steps on two parameters. Gates 0 and 1 are the parameters' step-1
 versions (four-bit inputs), gates 2 and 3 one-bit activations, of thread 0 (a token at step 1) and thread 1 (a token at
@@ -18,8 +18,8 @@ and computes the step-2 version itself.
 
 Counted in slots, each window uses one parameter: `FitsSlots` holds at `b_w = 4`, `w_e = 1` (`4 ≤ 6`, and `4 + 2 ≤ 6`,
 tight), `ReachSlots` at `N* = 2`, and `S = 6 < N* b_w = 8`, so `FitBoundSlots` applies. Counted in weight gates, each
-window uses two, so `Fits` charges window 0 `2 b_w ≤ 6 ≤ S`, while `Reach` allows only `N* ≤ 2` and `FitBound` needs
-`S < N* b_w ≤ 2 b_w`: no choice of `N*`, `S`, `b_w`, `w_e` meets `FitBound`'s hypotheses here (`not_fits`).
+window uses two, so `Fits` charges window 0 `2 b_w ≤ 6 ≤ S`, while `Reach` allows only `N* ≤ 2` and the bound needs
+`S < N* b_w ≤ 2 b_w`: no choice of `N*`, `S`, `b_w`, `w_e` meets its hypotheses per weight gate here (`not_fits`).
 -/
 
 @[expose] public section
@@ -101,8 +101,8 @@ theorem executionPhase0 :
     (threading.weightsUsed (executionPhases.gates 0)).card = 2 ∧ (slots.slotsUsed (executionPhases.gates 0)).card = 1 := by
   decide +kernel
 
-/-- **`Fits` fails wherever the rest of `FitBound`'s hypotheses hold**: `Reach` allows `N* ≤ 2`, so `S < N* b_w` needs
-`b_w > 0` and `S < 2 b_w`, while `Fits` charges window 0 `2 b_w ≤ 6 ≤ S`. -/
+/-- **`Fits` fails wherever the rest of the per-weight-gate hypotheses hold**: `Reach` allows `N* ≤ 2`, so
+`S < N* b_w` needs `b_w > 0` and `S < 2 b_w`, while `Fits` charges window 0 `2 b_w ≤ 6 ≤ S`. -/
 theorem not_fits (Nstar : ℕ) (S b_w w_e : ℝ) (hgap : S < Nstar * b_w)
     (hS : ∀ j, (freshInput decl (executionPhases.gates j) : ℝ) ≤ S) (hR : Assumptions.Reach decl threading Nstar) :
     ¬ Assumptions.Fits decl threading executionPhases start b_w w_e := by
@@ -124,8 +124,9 @@ theorem not_fits (Nstar : ℕ) (S b_w w_e : ℝ) (hgap : S < Nstar * b_w)
   · linarith [mul_le_mul_of_nonneg_right hN' hb]
   · nlinarith [mul_nonneg hN0 (neg_nonneg.2 hb.le)]
 
-/-- **`FitBoundSlots` strictly generalizes `FitBound`**: here, with counted multiplications to count, all of
-`FitBoundSlots`'s hypotheses hold, and no `N*`, `S`, `b_w`, `w_e` meets all of `FitBound`'s. -/
+/-- **`FitBoundSlots` strictly generalizes its case of one slot per weight gate**: here, with counted multiplications
+to count, all of `FitBoundSlots`'s hypotheses hold, and no `N*`, `S`, `b_w`, `w_e` meets all of that case's (`Reach`
+and `Fits`). -/
 theorem strict : threading.M.Nonempty ∧ (6 : ℝ) < ((2 : ℕ) : ℝ) * 4 ∧
     (∀ j, (freshInput decl (executionPhases.gates j) : ℝ) ≤ 6) ∧ Assumptions.ReachSlots decl threading slots 2 ∧
     Assumptions.FitsSlots decl threading slots executionPhases start 4 1 ∧

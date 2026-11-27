@@ -260,8 +260,8 @@ theorem ThreadedOfLayered : Guarantees.ThreadedOfLayered := by
 
 /-- **Training is slowed, for keyed circuits.** -/
 theorem LayeredTraining : Guarantees.LayeredTraining := by
-  intro Γ α b_w b_a κ r dcl T d e eLk b E M L hα hbw hba hE hd hB hS hW hκ
-  exact ThreadedTraining Γ α b_w b_a κ r dcl T (d - E) (e + E * eLk) M hα hbw hba (Nat.sub_pos_of_lt hE) hd hB
+  intro Γ α b_w b_a κ r dcl T σ d e eLk b E M L hα hbw hba hE hd hB hS hW hκ
+  exact ThreadedTraining Γ α b_w b_a κ r dcl T σ (d - E) (e + E * eLk) M hα hbw hba (Nat.sub_pos_of_lt hE) hd hB
     (threaded_of_layered L Γ (α * Γ) E hS) hW hκ
 
 /-- **The reference training algorithm is threaded, at Kimi K2's shapes.** -/

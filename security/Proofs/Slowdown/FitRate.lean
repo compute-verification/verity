@@ -2,7 +2,7 @@ module
 
 public import Definitions.Slowdown.Guarantees.FitRate
 public import Proofs.ResourceAccounting.Actual.ServerBlocks
-public import Proofs.Slowdown.Fit
+public import Proofs.Slowdown.FitKeep
 
 /-!
 # Proof of the fit bound on a run
@@ -10,9 +10,9 @@ public import Proofs.Slowdown.Fit
 `ServerBlocksAt` at the run's cuts divides the developer's declaration into the windows `A[X i, [τ j, τ (j + 1))]`, each
 reading in `G` at most the part in `G` of its server's state at `τ j` plus `β_{X i} (τ (j + 1) − τ j)`. At `G` the image
 of `c`'s novel gates, the windows pulled into `c` (`pull`) read at most that (`freshInput_pull_le_readsIn_compl`), so at
-most `R + r ω`, and `FitBound` gives the count over the `n J` windows. Its compute-rate hypothesis holds at `Φ = A.N`
-(`computeRate_N`), and the count does not read `Φ`. Windows of at least `ω₀` ticks number at most `t / ω₀`
-(`cuts_mul_le`), which gives the rate.
+most `R + r ω`, and the fit bound (`fitBound_idSlots`) gives the count over the `n J` windows. Its compute-rate
+hypothesis holds at `Φ = A.N` (`computeRate_N`), and the count does not read `Φ`. Windows of at least `ω₀` ticks number
+at most `t / ω₀` (`cuts_mul_le`), which gives the rate.
 -/
 
 @[expose] public section
@@ -91,7 +91,8 @@ theorem FitRate : Guarantees.FitRate := by
           ((linkCapacity ends β (X i) : ℕ) : ℝ) * ((κ.τ j.succ - κ.τ j.castSucc : ℕ) : ℝ) := by
       exact_mod_cast h1
     linarith [hR i j]
-  have hbound := FitBound c T (n * κ.J) (pull M P) start Nstar (R + r * ω) b_w w_e hgap hread hReach (hFits _ hQ)
+  have hbound :=
+    fitBound_idSlots c T (n * κ.J) (pull M P) start Nstar (R + r * ω) b_w w_e hgap hread hReach (hFits _ hQ)
   refine ⟨hbound, fun ω₀ hω₀ => ?_⟩
   have hJ : ((κ.J * ω₀ : ℕ) : ℝ) ≤ t := Nat.cast_le.2 (cuts_mul_le κ hω₀)
   have hY : (0 : ℝ) ≤ n * T.reuse * Nstar * (R + r * ω) ^ 2 := by positivity

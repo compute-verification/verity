@@ -896,12 +896,6 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Slowdown.Assumptions.WeightsIncompressible": {
-   "owner": "@lean",
-   "digest": "992c852103a0d8cee942980d4fe7141b22a2516b816ef2090b00f59e11f9d3b7",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
   "Slowdown.Assumptions.WeightsIncompressibleSlots": {
    "owner": "@lean",
    "digest": "d6e434b3bed5d4cd3385ffbbf2d4244535dbf98347ecbc869f52a3a2d9ba771f",
@@ -1717,14 +1711,6 @@
    "type_hash": "217b2bac105294e010459c6582b0e080e8e32fcd6f9983949f04979b180521da",
    "unfolded_hash": "1ae40e4a661aa1ed549a1b9fad5100d72ee2c1be942c9f384e7a25f12380d5a0"
   },
-  "InferenceOnlyVerifier.Properties.SecurityProofs.DescThrottles": {
-   "type_hash": "99fb1fd3fd37226f5736107c6436f788100d2fc786fe19043883ea67c472fbec",
-   "unfolded_hash": "36b039fa9ec15f77ca06213195f99c0d425c54b4fdf3d44143e83a02e2fcdbf7"
-  },
-  "InferenceOnlyVerifier.Properties.SecurityProofs.DescThrottlesDark": {
-   "type_hash": "cc6cbb03201f3bda0fc8a555af450d396c9aedc67733c8554dac71f955ea0f13",
-   "unfolded_hash": "147f32c18609f8e81387cb47d45300bdf02379084e1ec357024973bff9879755"
-  },
   "InferenceOnlyVerifier.Properties.SecurityProofs.DescThrottlesDarkSlots": {
    "type_hash": "9df9d364d9d7c94b86ae05e98fe537a7e05dfee4fa1e451fe0dbb9950021cc88",
    "unfolded_hash": "75e2d383777a7e6e5e83a0eadeb04a135195edc95b34f1c09baa8c49dfcd9f43"
@@ -1754,14 +1740,6 @@
   "InferenceOnlyVerifier.Properties.SecurityProofs.ThetaProvenance": {
    "type_hash": "ad52bd22548a899546dd01dd825f1cd827b2381c926db3148489033b2ba859e2",
    "unfolded_hash": "beafcc76e749d0df81b78efc5a07802fc8d6e49fd091845516d18e775a3659a6"
-  },
-  "InferenceOnlyVerifier.Properties.SecurityProofs.Throttles": {
-   "type_hash": "79637db8c0725c5ce3602114821b102fa71e4b704812c6dfe33adb5eef6f7a60",
-   "unfolded_hash": "b5209fa98941e82bbd42fcac17931873183c4950ea209d097f97c34cdc48fcf5"
-  },
-  "InferenceOnlyVerifier.Properties.SecurityProofs.ThrottlesDark": {
-   "type_hash": "805866bbd208ec38fab7930488a682d4670cfc89d339315f021d0ff6ed719f17",
-   "unfolded_hash": "d3ff771c33f033b565c7ba0ec8576c5823fe778a94a6e6df4703b689e7706ceb"
   },
   "InferenceOnlyVerifier.Properties.SecurityProofs.ThrottlesDarkSlots": {
    "type_hash": "4c912c2b99c28364f76ce6cb734fceb81010ce224ab5b247d82061bc767a0b8e",
@@ -3127,52 +3105,6 @@
    "type_hash": "217b2bac105294e010459c6582b0e080e8e32fcd6f9983949f04979b180521da",
    "unfolded_hash": "1ae40e4a661aa1ed549a1b9fad5100d72ee2c1be942c9f384e7a25f12380d5a0"
   },
-  "InferenceOnlyVerifier.Properties.SecurityProofs.DescThrottles": {
-   "owner": "@training",
-   "signature": [
-    "InferenceOnlyVerifier.Properties.SecurityProofs.DescThrottles : InferenceOnlyVerifier.Properties.DescThrottles"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [
-     "InferenceOnly.Assumptions.ThetaRegistered",
-     "InferenceOnlyVerifier.Properties.Expands",
-     "InferenceOnlyVerifier.Properties.LaysOut",
-     "InferenceOnlyVerifier.Properties.Names",
-     "InferenceOnlyVerifier.Properties.Parses",
-     "Slowdown.Assumptions.WeightsIncompressible",
-     "Slowdown.Threading.Threaded"
-    ],
-    "reads": []
-   },
-   "type_hash": "99fb1fd3fd37226f5736107c6436f788100d2fc786fe19043883ea67c472fbec",
-   "unfolded_hash": "36b039fa9ec15f77ca06213195f99c0d425c54b4fdf3d44143e83a02e2fcdbf7"
-  },
-  "InferenceOnlyVerifier.Properties.SecurityProofs.DescThrottlesDark": {
-   "owner": "@training",
-   "signature": [
-    "InferenceOnlyVerifier.Properties.SecurityProofs.DescThrottlesDark : InferenceOnlyVerifier.Properties.DescThrottlesDark"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [
-     "InferenceOnly.Assumptions.ThetaRegistered",
-     "InferenceOnlyVerifier.Properties.Expands",
-     "InferenceOnlyVerifier.Properties.LaysOut",
-     "InferenceOnlyVerifier.Properties.Names",
-     "InferenceOnlyVerifier.Properties.Parses",
-     "Slowdown.Assumptions.WeightsIncompressible",
-     "Slowdown.Threading.Threaded"
-    ],
-    "reads": []
-   },
-   "type_hash": "cc6cbb03201f3bda0fc8a555af450d396c9aedc67733c8554dac71f955ea0f13",
-   "unfolded_hash": "147f32c18609f8e81387cb47d45300bdf02379084e1ec357024973bff9879755"
-  },
   "InferenceOnlyVerifier.Properties.SecurityProofs.DescThrottlesDarkSlots": {
    "owner": "@training",
    "signature": [
@@ -3330,48 +3262,6 @@
    },
    "type_hash": "ad52bd22548a899546dd01dd825f1cd827b2381c926db3148489033b2ba859e2",
    "unfolded_hash": "beafcc76e749d0df81b78efc5a07802fc8d6e49fd091845516d18e775a3659a6"
-  },
-  "InferenceOnlyVerifier.Properties.SecurityProofs.Throttles": {
-   "owner": "@lean",
-   "signature": ["InferenceOnlyVerifier.Properties.SecurityProofs.Throttles : InferenceOnlyVerifier.Properties.Throttles"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [
-     "InferenceOnly.Assumptions.ThetaRegistered",
-     "InferenceOnlyVerifier.Properties.LaysOut",
-     "InferenceOnlyVerifier.Properties.Names",
-     "InferenceOnlyVerifier.Properties.Parses",
-     "Slowdown.Assumptions.WeightsIncompressible",
-     "Slowdown.Threading.Threaded"
-    ],
-    "reads": []
-   },
-   "type_hash": "79637db8c0725c5ce3602114821b102fa71e4b704812c6dfe33adb5eef6f7a60",
-   "unfolded_hash": "b5209fa98941e82bbd42fcac17931873183c4950ea209d097f97c34cdc48fcf5"
-  },
-  "InferenceOnlyVerifier.Properties.SecurityProofs.ThrottlesDark": {
-   "owner": "@lean",
-   "signature": [
-    "InferenceOnlyVerifier.Properties.SecurityProofs.ThrottlesDark : InferenceOnlyVerifier.Properties.ThrottlesDark"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [
-     "InferenceOnly.Assumptions.ThetaRegistered",
-     "InferenceOnlyVerifier.Properties.LaysOut",
-     "InferenceOnlyVerifier.Properties.Names",
-     "InferenceOnlyVerifier.Properties.Parses",
-     "Slowdown.Assumptions.WeightsIncompressible",
-     "Slowdown.Threading.Threaded"
-    ],
-    "reads": []
-   },
-   "type_hash": "805866bbd208ec38fab7930488a682d4670cfc89d339315f021d0ff6ed719f17",
-   "unfolded_hash": "d3ff771c33f033b565c7ba0ec8576c5823fe778a94a6e6df4703b689e7706ceb"
   },
   "InferenceOnlyVerifier.Properties.SecurityProofs.ThrottlesDarkSlots": {
    "owner": "@lean",
@@ -15058,14 +14948,6 @@
     "function": "InferenceOnlyVerifier.evaluate",
     "outcome": "accept"
    },
-   "InferenceOnlyVerifier.Properties.SecurityProofs.Throttles": {
-    "function": "InferenceOnlyVerifier.evaluate",
-    "outcome": "accept"
-   },
-   "InferenceOnlyVerifier.Properties.SecurityProofs.ThrottlesDark": {
-    "function": "InferenceOnlyVerifier.evaluate",
-    "outcome": "accept"
-   },
    "InferenceOnlyVerifier.Properties.SecurityProofs.ThrottlesDarkSlots": {
     "function": "InferenceOnlyVerifier.evaluate",
     "outcome": "accept"
@@ -15086,10 +14968,6 @@
     "function": "InferenceOnlyVerifier.Desc.evaluate",
     "outcome": "accept"
    },
-   "InferenceOnlyVerifier.Properties.SecurityProofs.DescThrottlesDark": {
-    "function": "InferenceOnlyVerifier.Desc.evaluate",
-    "outcome": "accept"
-   },
    "InferenceOnlyVerifier.Properties.SecurityProofs.DescThrottlesDarkSlots": {
     "function": "InferenceOnlyVerifier.Desc.evaluate",
     "outcome": "accept"
@@ -15099,10 +14977,6 @@
     "outcome": "accept"
    },
    "InferenceOnlyVerifier.Properties.SecurityProofs.DescWitnesses": {
-    "function": "InferenceOnlyVerifier.Desc.evaluate",
-    "outcome": "accept"
-   },
-   "InferenceOnlyVerifier.Properties.SecurityProofs.DescThrottles": {
     "function": "InferenceOnlyVerifier.Desc.evaluate",
     "outcome": "accept"
    },
@@ -19353,9 +19227,8 @@
    }
   },
   "Definitions.Slowdown.Assumptions.Threads": {
-   "digest": "3edd87a3f6081e34961b59a8fc0355bc1b33932928a46a6d424eb1bcfd66cb97",
+   "digest": "58817e7b3b800fb16534eaa9f95e853150b4295cc5c348a06ba80c00e2736417",
    "definitions": {
-    "Slowdown.Assumptions.WeightsIncompressible": "992c852103a0d8cee942980d4fe7141b22a2516b816ef2090b00f59e11f9d3b7",
     "Slowdown.Assumptions.WeightsIncompressibleSlots": "d6e434b3bed5d4cd3385ffbbf2d4244535dbf98347ecbc869f52a3a2d9ba771f"
    }
   },
@@ -27018,11 +26891,9 @@
    }
   },
   "Properties.InferenceOnly.Desc.Verdict": {
-   "digest": "55d795a1ff2f62c6fae2d1e38015be5262e50254ddef3962cdd6be1629a7e0c3",
+   "digest": "5c9a189f6f1360f293140223c1ff9a129d16b6492d7de801282fed4bff0704d0",
    "definitions": {
     "InferenceOnlyVerifier.Properties.DescReports": "e8dac6343adce1d0691b231bda6f0cab72a3f63d39e7f7f05102b5843c6dcc2b",
-    "InferenceOnlyVerifier.Properties.DescThrottles": "f2dee4c4396df58c156e6f1f2bf2e32eacb02e35a8422f135fe10d17cbc8d973",
-    "InferenceOnlyVerifier.Properties.DescThrottlesDark": "96e87c869c85bdbdf3f73298b0c43f01ed41aa2ae3114791cb147c1d95e40f0a",
     "InferenceOnlyVerifier.Properties.DescThrottlesDarkSlots": "990ccd2d59df3925b75c2ef16bbc2ec06469a1b9b600ad0624ec24c2ac9d1b88",
     "InferenceOnlyVerifier.Properties.DescThrottlesSlots": "3f2ca47e3e8e4754130a56f5c1f9660e5ddbeb8d59462e6eb73025d6e3665ed1",
     "InferenceOnlyVerifier.Properties.DescWitnesses": "c92601feffe75071093ae982f1ddef99553d8686128c6b8ecc05de50f3e7bf5f",
@@ -27103,14 +26974,10 @@
    }
   },
   "Properties.InferenceOnly.Threads": {
-   "digest": "740a6b597509b6e2ccf3b82761841c67827f1abd0df260e6ea55fc0cbdf3e802",
+   "digest": "0f1fcf9ff355a60c01ba3925ca6151b0176cec52d93499518a93445389d5fbd0",
    "definitions": {
-    "InferenceOnlyVerifier.Properties.Throttled": "8e9dc8d228fa4b1093c4c930a78a4472d4b0bbb646db475b2789fd817bb5d28f",
-    "InferenceOnlyVerifier.Properties.ThrottledDark": "b770003139227ed51efb08649de64e84f83b1afe33e99788a0137ee5b07558ed",
     "InferenceOnlyVerifier.Properties.ThrottledDarkSlots": "6d75191d6baee51ea81f4cac4a61f954cd122de66ae6e3cfe6eaefe5cb2d65e3",
     "InferenceOnlyVerifier.Properties.ThrottledSlots": "c41cea7b3265a3e6c707415a71e6853fa5b71e145de1b7658f56dad335c4a8c6",
-    "InferenceOnlyVerifier.Properties.Throttles": "2958c9bc6a7901363f72a8c1eaa0f4108a54ac30a8762e989c259d4831138e47",
-    "InferenceOnlyVerifier.Properties.ThrottlesDark": "1f6bf6f4b2cde98418a06c091c9cd9e43b507cbdc5393916933082866dab728b",
     "InferenceOnlyVerifier.Properties.ThrottlesDarkSlots": "1f7458dc4025a71b87dfcaa8159c35e37627531f3557837ccbf74e9ba17d13ab",
     "InferenceOnlyVerifier.Properties.ThrottlesSlots": "3baa69975cbbfe38ba716b957f0197b94a87a77f36af27dda7928cb96f6a0a36"
    }

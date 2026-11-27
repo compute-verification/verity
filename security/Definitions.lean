@@ -25,6 +25,8 @@ public import Definitions.Slowdown.Dark
 public import Definitions.Slowdown.Factor
 public import Definitions.Slowdown.Covering
 public import Definitions.Slowdown.Cut
+public import Definitions.Slowdown.Security
+public import Definitions.Slowdown.SecurityWitness
 public import Definitions.Pous
 public import Definitions.Pous.Guarantees.StreamedWipeFamily
 public import Definitions.Pous.Guarantees.StreamedWipeReads
@@ -45,6 +47,7 @@ public import Definitions.Certifier.RecordRows
 public import Definitions.Certifier.MonitoringPeriod
 public import Definitions.Certifier.Witness
 public import Definitions.Certifier.ResponseTie
+public import Definitions.Registration.Server
 public import Definitions.Registration.Sheets
 public import Definitions.Registration.View
 public import Definitions.Registration.Guarantees
@@ -78,6 +81,8 @@ public import Definitions.Slowdown.Guarantees.Threads
 public import Definitions.Slowdown.Guarantees.Layered
 public import Definitions.Slowdown.Guarantees.Fit
 public import Definitions.Slowdown.Guarantees.FitRate
+public import Definitions.Slowdown.Guarantees.Secure
+public import Definitions.Slowdown.Guarantees.Run
 public import Definitions.Slowdown.Guarantees.Slowdown
 public import Definitions.Slowdown.Guarantees.Remote
 public import Definitions.Slowdown.Guarantees.RemoteMonitoringPeriod

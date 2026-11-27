@@ -341,8 +341,8 @@ statement.
 block's boundary count by the bits they represent; a compressed code counts as the code, and decoding it spends gates;
 values reconstructed inside the block spend gates. For decoding, whether cached keys and values cost fresh bits or gates
 is a question of the cheapest admissible placement and reconstruction, not of which data the argument elects to
-charge. The threaded read costs (`Slowdown.Threading.Threaded`, `Slowdown.Assumptions.WeightsIncompressible`), under which
-`Slowdown.Guarantees.ThreadedReads` proves q(c, k) = (k/β)·max(a_out, w_out·k/(4·a_in·b_w)), assume read costs rather than
+charge. The threaded read costs (`Slowdown.Threading.Threaded`, `Slowdown.Assumptions.WeightsIncompressibleSlots`), under which
+`Slowdown.Guarantees.ThreadedReadsSlots` proves q(c, k) = (k/β)·max(a_out, w_out·k/(4·a_in·b_w)), assume read costs rather than
 derive them; they are a candidate sufficient condition, not part of the repertoire.
 
 ### Part 3: the protocol forces most physical compute into those blocks
@@ -452,8 +452,8 @@ None of these is assumed silently; each would restate the conclusion:
 | Structure | not in Lean | Open |
 | The repertoire | not in Lean | Open |
 | Theorem 3 | `Verity.Guarantees.Counting` | Proved |
-| The threaded refinement | `Slowdown.Threading.Threaded`, `Slowdown.Assumptions.WeightsIncompressible`, `Slowdown.Guarantees.ThreadedReads` | Proved for the circuit in hand under assumed read costs |
-| Device model | `ResourceAccounting.Placed.ComputeRate`, `ResourceAccounting.Placed.Links`, `ResourceAccounting.Placed.Memory`, `ResourceAccounting.Placed.Causal`; hosts carry no compute, `OneClock` and the inventory not yet in Lean | Defined; three premises unstated |
+| The threaded refinement | `Slowdown.Threading.Threaded`, `Slowdown.Assumptions.WeightsIncompressibleSlots`, `Slowdown.Guarantees.ThreadedReadsSlots` | Proved for the circuit in hand under assumed read costs |
+| Device model | `ResourceAccounting.Placed.ComputeRate`, `ResourceAccounting.Placed.Links`, `ResourceAccounting.Actual.Run.Memory`, `ResourceAccounting.Placed.Causal`; hosts carry no compute, `OneClock` and the inventory not yet in Lean | Defined; three premises unstated |
 | The composites | `Core.Remote.protocol`, `Core.Onsite.protocol`, `Properties.Composition.AcceptMeans` | Proved for the product rule `check`, which both run |
 | The utilization policy | not yet in Lean | Not a policy yet |
 | Protocol soundness | `Verity.soundness_of_subprotocols`, `Verity.remote_soundness_of_subprotocols` | Proved from each subprotocol's target, each a hypothesis until discharged (`Properties/Verity/README.md`) |
@@ -465,7 +465,8 @@ None of these is assumed silently; each would restate the conclusion:
 | Rate ceiling ζ̄ | the inline hypotheses of `Slowdown.Guarantees.SlowdownRemote`; a named Prop not yet in Lean | Open |
 | The floor | not in Lean | Open |
 | Slowdown | not in Lean | Open |
-| The bounds | `Slowdown.Guarantees.SlowdownRemote`, `Slowdown.Guarantees.SlowdownThreaded` | Proved as arithmetic over inline hypotheses, not over the definition above |
+| The bounds | `Slowdown.Guarantees.SlowdownRemote`, `Slowdown.Guarantees.SlowdownThreadedSlots` | Proved as arithmetic over inline hypotheses, not over the definition above |
+| Feasible, accounted for, not prohibited | `Slowdown.Security.H`, `Slowdown.Security.A`, `Slowdown.Security.B`, `Slowdown.Guarantees.Secure`, `Slowdown.Guarantees.RunAccounted`, `Slowdown.Guarantees.RunSecure`, `Slowdown.SecurityProofs.RunComplete`, `Slowdown.SecurityProofs.held_slot`, `Slowdown.SecurityProofs.pous_slot`, `Slowdown.SecurityProofs.work_slot`, `Slowdown.SecurityProofs.w1_slot`, `Slowdown.SecurityProofs.delivered_slot`, `Slowdown.SecurityProofs.poub_slot`, `Slowdown.SecurityProofs.secure_compute`, `Slowdown.SecurityProofs.secure_bandwidth`, `Slowdown.SecurityProofs.secure_capacity`, `Slowdown.SecurityProofs.secure_device` | `Secure` is proved over the run at any training bound that holds (`Slowdown.Security.Training`, with `Training.Holds` its one obligation; the fit bound is `Training.fit`, sound by `fit_holds`), and in the lock with its witnesses (its premises hold together, and it is false with any one of the feasible set, the audits' amounts, the count or the training bound's proof dropped). That training puts a run in `B` is a premise. `H` is four clauses: latency, the compute rate, memory on what is held, the links. `Secure` is `M ∈ H hw ∧ M ∈ A F … → M ∉ B F tb sh Y`; `A` and `B` read the frame and no hardware, so the hardware and the training bound are chosen after a run has established `M ∈ A`. `RunAccounted` is that statement over a run's coins, in `Verity.Sound`, and in the lock with its witnesses: where each of the four audits is sound for its clause of `A` at each window it covers, at the amounts it certifies at the outcome, the verifier accepts a run whose computation is outside `A` with probability at most the audits' errors added over the windows. `RunSecure` is `Secure` applied to it, at a hardware every outcome's computation is feasible on: the same bound on accepting a run whose computation is in `B`. The four soundness premises are the audits' slots. Three are filled, proved and not in the lock, at the run of the audits' coins and where the audit's schedule is the one the run induces on the device: memory's by the capacity audit's per-run guarantee over one tick (`held_slot`; `pous_slot` from `periodCapacity`), work's by the compute audit's on the priced sum (`work_slot`; `w1_slot` from Pearl-C's gap property at W1 priced), bandwidth's by the bandwidth audit's (`delivered_slot`; `poub_slot` from `BandwidthOfAuditPerRun`). The count's slot has no audit: it is filled at the links' capacity. `RunComplete` is the union bound for a strategy each audit accepts, proved and not in the lock. `secure_compute`, `secure_bandwidth`, `secure_capacity` and `secure_device` are `RunSecure` at these slots on a frame of one device; the bandwidth audit is on another server (the chip) than work and memory (the device), so no frame of one server takes all three audits' amounts |
 
 ## Three trees
 

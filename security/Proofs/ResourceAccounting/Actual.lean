@@ -2,6 +2,7 @@ module
 
 public import Proofs.ResourceAccounting.Actual.Split
 public import Proofs.ResourceAccounting.Actual.Physical
+public import Proofs.ResourceAccounting.Actual.Outside
 public import Proofs.ResourceAccounting.Actual.ServerBlocks
 public import Proofs.ResourceAccounting.Actual.Threaded
 public import Proofs.ResourceAccounting.Actual.Slowdown
@@ -14,6 +15,7 @@ public import Proofs.ResourceAccounting.Actual.RegisteredSite
 public import Proofs.ResourceAccounting.Actual.RegisteredWitness
 public import Proofs.ResourceAccounting.Actual.LinkEnds
 public import Proofs.ResourceAccounting.Actual.Transducer
+public import Proofs.ResourceAccounting.Actual.ConfidenceDraw
 public import Proofs.ResourceAccounting.Defs.Actual.Source
 public import Proofs.ResourceAccounting.Actual.Sampler
 
@@ -29,17 +31,16 @@ The model of `security/Definitions/ResourceAccounting/Actual.lean`:
   gates; the state is its part in a set of gates plus its part outside.
 * `Actual/ServerBlocks.lean`: `ServerBlocksAt`, the capacity form at any cuts and with no memory constraint: the windows divide
   the developer's region into inference blocks of at most `Φ_X (τ (j + 1) − τ j)` gates, each reading in a set `G` at
-  most the state's part in `G` at its cut plus `β_X (τ (j + 1) − τ j)`; `Windows`, its instance at the cuts `kω` and
-  `G = univ`, inference blocks of at most `Φ_X ω` gates, each reading at most `M_X + β_X ω` fresh input bits.
-* `Actual/Threaded.lean`: `ThreadedRuntime`, the memory cap over threads: when the developer's region over `[0, t)`
-  contains a threaded reference training algorithm, `b_a |M| ≤ n ⌈t/ω⌉ K Λ(K)` with `K = R + r ω` the state at a window's start
-  plus its ingress, from `ServerBlocksAt` pulled back through the containment and the inference-only policy's `ThreadedReads` per window;
-  `ThreadedRate`, at the window `ω = R/r` in the quadratic regime, at most `reuse · n R r / (d b_w b_a)` counted
-  multiplications a tick; `ThreadedRuntimeDark`, the cap through a partial containment, with every counted
-  multiplication the declaration doesn't compute a dark gate.
-* `Actual/Slowdown.lean`: `SlowdownServerBlocksCap`, the slowdown's windows hypothesis
-  (`Slowdown.Guarantees.SlowdownExecutionPhases`) from `ThreadedRuntime` at a whole-tick window, when one threading counts the
-  residual and the declared computation together.
+  most the state's part in `G` at its cut plus `β_X (τ (j + 1) − τ j)`; `uniformCuts`, the cuts `kω`.
+* `Actual/Threaded.lean`: `ThreadedRuntimeSlots`, the memory cap over threads: when the developer's region over `[0, t)`
+  contains a threaded reference training algorithm, `b_a |M| ≤ n ⌈t/ω⌉ K Λ(K)` with `K = R + r ω` the state at a
+  window's start plus its ingress, from `ServerBlocksAt` pulled back through the containment and the inference-only
+  policy's `ThreadedReadsSlots` per window; `ThreadedRateSlots`, at the window `ω = R/r` in the quadratic regime, at
+  most `reuse · n R r / (d b_w b_a)` counted multiplications a tick; `ThreadedRuntimeDarkSlots`, the cap through a
+  partial containment, with every counted multiplication the declaration doesn't compute a dark gate.
+* `Actual/Slowdown.lean`: `SlowdownServerBlocksCapSlots`, the slowdown's windows hypothesis
+  (`Slowdown.Guarantees.SlowdownExecutionPhases`) from `ThreadedRuntimeSlots` at a whole-tick window, when one threading
+  counts the residual and the declared computation together.
 * `Actual/Localization.lean`: `Localization`, over strategies causal from every tick: with what the rest can tell at
   the window's start and what it hears from the verifier fixed, what the rest does is a prefix-causal table keyed by
   what `X` sent it, of at most `2^e` entries; `localization_wires`, the per-run lemma on wires; memory per run on the
@@ -48,7 +49,7 @@ The model of `security/Definitions/ResourceAccounting/Actual.lean`:
   (`and_causal`); `Recall`, B2's count: what a location does is a function of its state's content, at most `mem`
   bits; `zero_link` fails `Alphabet` at capacity 0 while meeting `Links` (`zero_link_alphabet`, `zero_links`).
 * `Actual/Device.lean`: the bridge to the device model: the schedule a run induces, its chip and memory charges what
-  those locations hold, fits the device (`fits`, `fits_of_feasible`) and charges what an account's gates use
+  those locations hold, fits the device (`fits`) and charges what an account's gates use
   (`covers_ingress`, `covers_work`).
 * `Actual/Confidence.lean`: `Composition`, protocols sound alone compose into the confidence set at `∑ δ i`, and
   `Fit`, `req_μ(P) ≤ res_μ` when `μ` adds; at tick 0 the state is the inputs (`state_zero`), and causality's global

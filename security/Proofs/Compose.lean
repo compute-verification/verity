@@ -6,6 +6,7 @@ public import Proofs.Compose.Compose
 public import Proofs.Compose.ComposeMonitoringPeriod
 public import Proofs.Compose.ComposeMonitoringPeriod.Honest
 public import Proofs.Compose.Additive
+public import Proofs.Compose.JointPeriodDraw
 
 /-!
 # The proofs of the composed audits' guarantees

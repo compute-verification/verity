@@ -22,7 +22,7 @@ of no class (a send, a move) is charged no op. The schedule a run `R` induces (`
 
 A gate is charged once, to its own account, so at each tick the accounts' charges partition the device's: the induced
 schedule fits the device under the run's memory, links and a compute rate for each op class
-(`ResourceAccounting.SecurityProofs.Actual.fits`, and `fits_of_feasible` from the feasible set). Charging each gate to one
+(`ResourceAccounting.SecurityProofs.Actual.fits`). Charging each gate to one
 account is where additivity enters: what a guarantee says of one account's charge, it says of that account's gates
 alone. The schedule also covers what the device's gates use when every wire into `chip` from outside runs on the
 memory link or a side channel, and the work's pricing is `p` on each class (`covers_ingress`, `covers_work`).

@@ -27,7 +27,7 @@ beyond = "contested"
 credible_bits = { value = 1.1e9, unit = "bit", source = "as premise.update-hardness: one step's data replays the step (E1 P0)", status = "derived" }
 
 [premise.weights-incompressible]
-lean = "Slowdown.Assumptions.WeightsIncompressible"
+lean = "Slowdown.Assumptions.WeightsIncompressibleSlots"
 standing = "assumed"
 beyond = "contested"
 credible_bits = { value = 1.1e9, unit = "bit", source = "as premise.update-hardness: one step's data replays the step (E1 P0)", status = "derived" }
